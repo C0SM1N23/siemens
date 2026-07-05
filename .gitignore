@@ -1,0 +1,14 @@
+plan.md
+DOCUMENTATIE.md
+Wavedrom.txt
+*.zip
+poze random/
+
+# ModelSim artifacts
+debug/sim/work/
+debug/sim/wlft*
+debug/sim/vsim.wlf
+debug/sim/modelsim.ini
+debug/sim/transcript
+debug/sim/*.vstf
+debug/sim/*.wlf
