@@ -1,25 +1,50 @@
-// S1 fetch — PC + AXI4-Lite read master on ibus, AR/R channels only.
-// REQ# = spec requirement, D# = design decision; both indexed in the README.
+// S1 fetch — PC + AXI4-Lite read master on ibus (AR/R channels only).
+// REQ# = spec requirement, D# = design choice; both are tracked in the README.
 //
-// Spec requirements met here:
-//   REQ5   S1 stalls while the AXI read response isn't valid yet.
-//   REQ12  all response codes are handled — OKAY, and SLVERR/DECERR (see D8).
+// What this block is responsible for:
+// - Owns the PC and issues one instruction read at a time on ibus.
+// - Asks the predictor where to fetch next.
+// - Parks a finished fetch when S2 stalls, drops it on a redirect.
+// - Passes fetch bus errors downstream instead of trapping here.
 //
-// Design decisions:
-//   D6  the ibus master is fully independent of the dbus and keeps one
-//     outstanding transaction, issued back-to-back — the next ARVALID goes up
-//     the same cycle the current R beat is accepted, so a latency-1 memory
-//     sustains 1 instruction/cycle. The next address is the predictor's (BTB
-//     hit & taken -> target, else PC+4); the prediction rides into IF/DX so S2
-//     can check it.
-//   D7  if S2 stalls, a finished fetch parks in a holding register and no new
-//     fetch is issued until it drains, so S1 never runs ahead. A redirect
-//     (mispredict/trap/MRET) drops S1; an in-flight read can't be cancelled, so
-//     it's marked discard, its beat accepted and ignored, then fetch restarts
-//     at redirect_pc. This is where "flush beats stall" actually happens.
-//   D8  a fetch bus error (RRESP = SLVERR/DECERR) doesn't stop S1 — the word is
-//     delivered with fetch_fault set and traps as instruction-access-fault in
-//     S2, so a wrong-path fetch error gets flushed before it can trap.
+// Spec coverage:
+//
+// - REQ5
+//   S1 stalls while the AXI read response isn't valid yet.
+//
+// - REQ12
+//   All response codes handled: OKAY, and SLVERR/DECERR (see D8).
+//
+// Design choices:
+//
+// - D6
+//   The ibus master is fully independent of the dbus, one outstanding
+//   transaction, issued back-to-back: the next ARVALID goes up in the same
+//   cycle the current R beat is accepted. On a latency-1 memory that
+//   sustains 1 instruction/cycle.
+//   The next address comes from the predictor (BTB hit & taken -> target,
+//   else PC+4), and the prediction rides into IF/DX so S2 can check it.
+//
+// - D7
+//   If S2 stalls, a finished fetch parks in a holding register and no new
+//   fetch is issued until it drains — S1 never runs ahead.
+//   On a redirect (mispredict/trap/MRET):
+//   - an in-flight read can't be cancelled, so it is marked "discard"
+//   - its beat is accepted and thrown away
+//   - fetch restarts at redirect_pc
+//   This is where "flush beats stall" actually happens.
+//
+// - D8
+//   A fetch bus error (RRESP = SLVERR/DECERR) doesn't stop S1. The word is
+//   delivered with fetch_fault set and traps as instruction-access-fault in
+//   S2 — so a wrong-path fetch error gets flushed before it can trap.
+//
+// Notes:
+//
+// - State lives in small per-purpose always blocks.
+// - Only control bits and architectural addresses get a reset; the holding
+//   payload doesn't need one (never believed unless hold_valid_q is set,
+//   and that is only set in the same cycle the payload is written).
 
 module fetch_unit #(
     parameter RESET_PC = 32'h0000_0000  // reset vector (pending the global memory map)
@@ -109,45 +134,69 @@ assign ibus_araddr  = ar_pending_q ? issued_pc_q : issue_addr;
 
 wire ar_hs = ibus_arvalid && ibus_arready;
 
+// ARVALID pending: set on an unaccepted issue, cleared by ARREADY
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
+    if (~rst_n)
         ar_pending_q <= 1'b0;
-        inflight_q   <= 1'b0;
-        discard_q    <= 1'b0;
-        issued_pc_q  <= RESET_PC;
-        hold_valid_q <= 1'b0;
-        hold_instr_q <= 32'b0;
-        hold_pc_q    <= 32'b0;
-        hold_fault_q <= 1'b0;
-        npc_q        <= RESET_PC;
-    end else begin
-        // AR: once VALID is up the address holds (issued_pc_q) until ARREADY
+    else
         ar_pending_q <= issue_now ? !ibus_arready : (ar_pending_q && !ibus_arready);
-        inflight_q   <= ar_hs ? 1'b1 : (inflight_q && !beat);
-        if (issue_now)
-            issued_pc_q <= issue_addr;
+end
 
-        // redirect with a transaction still out -> ignore its future beat
-        if (redirect && !slot_free)
-            discard_q <= 1'b1;
-        else if (beat)
-            discard_q <= 1'b0;
+// in-flight: address accepted, R beat still owed to us
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        inflight_q <= 1'b0;
+    else
+        inflight_q <= ar_hs ? 1'b1 : (inflight_q && !beat);
+end
 
-        // holding: filled on an S2 stall, drained on consume, dropped on redirect
-        if (redirect)
-            hold_valid_q <= 1'b0;
-        else if (beat_ok && !s2_ready) begin
-            hold_valid_q <= 1'b1;
-            hold_instr_q <= ibus_rdata;
-            hold_pc_q    <= issued_pc_q;
-            hold_fault_q <= ibus_rresp[1];
-        end else if (hold_valid_q && s2_ready)
-            hold_valid_q <= 1'b0;
+// address of the outstanding fetch — once VALID is up this must hold stable
+// on ARADDR until ARREADY
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        issued_pc_q <= RESET_PC;
+    else if (issue_now)
+        issued_pc_q <= issue_addr;
+end
 
-        // deferred address, used only when nothing is being delivered
-        if (redirect)
-            npc_q <= redirect_pc;
+// discard: a redirect with a transaction still out means its future beat is
+// wrong-path and must be swallowed
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        discard_q <= 1'b0;
+    else if (redirect && !slot_free)
+        discard_q <= 1'b1;
+    else if (beat)
+        discard_q <= 1'b0;
+end
+
+// holding control: filled on an S2 stall, drained on consume, dropped on redirect
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        hold_valid_q <= 1'b0;
+    else if (redirect)
+        hold_valid_q <= 1'b0;
+    else if (beat_ok && !s2_ready)
+        hold_valid_q <= 1'b1;
+    else if (hold_valid_q && s2_ready)
+        hold_valid_q <= 1'b0;
+end
+
+// holding payload: written together with the fill above, no reset needed
+always @(posedge clk) begin
+    if (beat_ok && !s2_ready) begin
+        hold_instr_q <= ibus_rdata;
+        hold_pc_q    <= issued_pc_q;
+        hold_fault_q <= ibus_rresp[1];
     end
+end
+
+// deferred address: consumed only when nothing is being delivered
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        npc_q <= RESET_PC;
+    else if (redirect)
+        npc_q <= redirect_pc;
 end
 
 endmodule

@@ -1,35 +1,47 @@
 // RV32I CPU — 3-stage pipeline, top level.
-// REQ# = spec requirement (implemented to spec), D# = intern design decision.
+// REQ# = spec requirement (implemented to spec), D# = intern design choice.
 // Both families are indexed in the README; grep REQ or D<n> to navigate.
 //
-//   S1 fetch      AXI4-Lite master on ibus (AR/R) + BTB/BHT branch predictor
-//   S2 dec+exec   decode, regfile, ALU, branch, CSR; load/store on dbus with
+// The three stages:
+// - S1 fetch      AXI4-Lite master on ibus (AR/R) + BTB/BHT branch predictor
+// - S2 dec+exec   decode, regfile, ALU, branch, CSR; load/store on dbus with
 //                 the pipeline stalled for the whole AXI round-trip; traps,
 //                 interrupts and mispredicts all resolve here (precise traps)
-//   S3 writeback  rd write into the regfile, no-op for everything else
+// - S3 writeback  rd write into the regfile, no-op for everything else
 //
-// Spec requirements met here:
-//   REQ1  the 3-stage pipeline above (Fetch / Decode+Execute / Writeback)
-//   REQ2  two AXI4-Lite master ports — ibus (read only), dbus (read + write)
-//   REQ3  top interface: one sync clock, async active-low reset, and the PIC
+// Spec coverage:
+//
+// - REQ1  the 3-stage pipeline above (Fetch / Decode+Execute / Writeback)
+// - REQ2  two AXI4-Lite master ports — ibus (read only), dbus (read + write)
+// - REQ3  top interface: one sync clock, async active-low reset, and the PIC
 //         lines cpu_irq / cpu_irq_id / cpu_irq_ack / cpu_in_trap
-//   REQ4  interrupts sampled only under mstatus.MIE, at instruction boundaries;
-//         cpu_irq_ack pulses one cycle; cpu_in_trap held from entry until MRET
+// - REQ4  interrupts sampled only under mstatus.MIE, at instruction
+//         boundaries; cpu_irq_ack pulses one cycle; cpu_in_trap held from
+//         trap entry until MRET
 //
-// Design decisions:
-//   D1  pipeline registers carry a valid bit — valid=0 is a guaranteed safe
-//       bubble, independent of the NOP encoding. (S3->S2 forwarding removes the
-//       load-use stall; the two ports are independent, 1 outstanding each, so a
-//       fetch and a load/store can be in flight at once.)
-//   D2  S2 priority interrupt > sync exception > mispredict, as a sequential
-//       check — the interrupt is tested before the instruction issues any data
-//       transaction, and a preempted instruction reruns after MRET. Trap/MRET
-//       redirects (mtvec/mepc) bypass the predictor.
-//   D4  trap return address: for exceptions mepc = the offending instruction;
-//       for interrupts mepc = the instruction to resume at.
-//   D5  RESET_PC and HART_ID parameters make the core instantiable N times —
-//       HART_ID feeds mhartid so software can tell instances apart (beyond
-//       spec). A single-core SoC leaves both at 0.
+// Design choices:
+//
+// - D1
+//   Pipeline registers carry a valid bit — valid=0 is a guaranteed safe
+//   bubble, independent of the NOP encoding.
+//   (S3->S2 forwarding removes the load-use stall; the two ports are
+//   independent, 1 outstanding each, so a fetch and a load/store can be
+//   in flight at once.)
+//
+// - D2
+//   S2 priority: interrupt > sync exception > mispredict, as a sequential
+//   check. The interrupt is tested before the instruction issues any data
+//   transaction, so a preempted instruction can safely rerun after MRET.
+//   Trap/MRET redirects (mtvec/mepc) bypass the predictor.
+//
+// - D4
+//   Trap return address: exceptions -> the offending instruction,
+//   interrupts -> the instruction to resume at.
+//
+// - D5
+//   RESET_PC and HART_ID parameters make the core instantiable N times —
+//   HART_ID feeds mhartid so software can tell instances apart (beyond
+//   spec). A single-core SoC leaves both at 0.
 
 module cpu_top #(
     parameter RESET_PC = 32'h0000_0000,  // reset vector; pending the global memory map
@@ -140,19 +152,24 @@ branch_predictor branch_predictor_inst (
     .update_target (actual_target)
 );
 
-// IF/DX
+// IF/DX valid — the only bit that needs a reset; valid=0 makes whatever the
+// payload holds a safe bubble (D1)
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         ifdx_valid_q <= 1'b0;
-    else if (if_dx_we) begin
+    else if (if_dx_we)
         ifdx_valid_q <= ~if_dx_bubble;
-        if (~if_dx_bubble) begin
-            ifdx_pc_q    <= f_pc;
-            ifdx_instr_q <= f_instr;
-            ifdx_ptk_q   <= f_ptk;
-            ifdx_ptg_q   <= f_ptg;
-            ifdx_fault_q <= f_fault;
-        end
+end
+
+// IF/DX payload — loads only on a real instruction, so bubbles and stalls
+// leave the whole S2 datapath quiet (no reset needed, valid gates it)
+always @(posedge clk) begin
+    if (if_dx_we && !if_dx_bubble) begin
+        ifdx_pc_q    <= f_pc;
+        ifdx_instr_q <= f_instr;
+        ifdx_ptk_q   <= f_ptk;
+        ifdx_ptg_q   <= f_ptg;
+        ifdx_fault_q <= f_fault;
     end
 end
 
@@ -383,10 +400,14 @@ wire mispredict = dec_live && !exception && !ctrl_mret &&
 // predictor learns every committed branch/jump at resolution (D11)
 assign bp_update_en = dec_live && (Branch | Jump) && !exception && s2_advance;
 
+// one shared PC+4 adder for S2: mispredict fall-through and the JAL/JALR
+// link value are the same number
+wire [31:0] s2_pc4 = ifdx_pc_q + 32'd4;
+
 // redirect target: trap > MRET > corrected path after a mispredict
 assign redirect_pc = trap_take ? trap_vector :
                      mret_exec ? mepc_out    :
-                     ctl_taken ? actual_target : ifdx_pc_q + 32'd4;
+                     ctl_taken ? actual_target : s2_pc4;
 
 hazard_unit hazard_unit_inst (
     .fetch_valid  (f_valid),
@@ -408,37 +429,48 @@ hazard_unit hazard_unit_inst (
     .fwd_rs2      (fwd_rs2)
 );
 
-// ack pulses one cycle at acceptance; cpu_in_trap holds until MRET, and a
-// nested sync trap inside the handler keeps it asserted (REQ4)
+// ack pulses one cycle at acceptance (REQ4)
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
+    if (~rst_n)
         cpu_irq_ack <= 8'b0;
-        cpu_in_trap <= 1'b0;
-    end else begin
+    else
         cpu_irq_ack <= (irq_take && s2_advance) ? (8'h01 << cpu_irq_id) : 8'b0;
-        if (trap_take && s2_advance)
-            cpu_in_trap <= 1'b1;
-        else if (mret_exec && s2_advance)
-            cpu_in_trap <= 1'b0;
-    end
 end
 
-// DX/WB
+// cpu_in_trap holds until MRET; a nested sync trap inside the handler keeps
+// it asserted (REQ4)
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        cpu_in_trap <= 1'b0;
+    else if (trap_take && s2_advance)
+        cpu_in_trap <= 1'b1;
+    else if (mret_exec && s2_advance)
+        cpu_in_trap <= 1'b0;
+end
+
+// DX/WB valid — trap squash: the offending instruction never commits (D3);
+// while S2 stalls, S3 gets bubbles so nothing commits twice
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         dxwb_valid_q <= 1'b0;
-    else if (s2_advance) begin
-        // trap squash: the offending instruction never commits (D3)
-        dxwb_valid_q    <= ifdx_valid_q && !dx_squash;
+    else if (s2_advance)
+        dxwb_valid_q <= ifdx_valid_q && !dx_squash;
+    else
+        dxwb_valid_q <= 1'b0;
+end
+
+// DX/WB payload — captured only when a real instruction leaves S2. Bubbles
+// don't touch these ~130 flops (everything downstream is gated by valid),
+// which also means no reset is needed here.
+always @(posedge clk) begin
+    if (s2_advance && ifdx_valid_q) begin
         dxwb_rd_q       <= rd;
         dxwb_regwrite_q <= RegWrite && !ifdx_fault_q;
         dxwb_wbsel_q    <= MemtoReg;
         dxwb_result_q   <= csr_instr ? csr_rdata : alu_result;
         dxwb_mem_q      <= lsu_rdata;
-        dxwb_pc4_q      <= ifdx_pc_q + 32'd4;
-    end else
-        dxwb_valid_q <= 1'b0;   // S2 stalled -> bubble into S3, one commit only
-
+        dxwb_pc4_q      <= s2_pc4;
+    end
 end
 
 // S3: writeback

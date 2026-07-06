@@ -1,26 +1,58 @@
-// Load/store unit — AXI4-Lite master on dbus.
-// REQ# = spec requirement, D# = design decision; both indexed in the README.
+// Load/store unit — drives AXI4-Lite transactions on dbus.
+// REQ# = spec requirement, D# = design choice; both are tracked in the README.
 //
-// Spec requirements met here:
-//   REQ5   S2 stalls for the whole data round-trip (busy stays up until the
-//     R/B response is accepted).
-//   REQ11  WSTRB byte-lane write enables for SB/SH/SW, matching what the
-//     DP-SRAM slave expects, so stores/loads interoperate with no adapter:
-//       SB  WSTRB = 0001 << addr[1:0], byte replicated across lanes
-//       SH  WSTRB = 0011 << addr[1:0] (addr[0]=0 guaranteed), half replicated
-//       SW  WSTRB = 1111
-//     Loads select the byte/half by addr[1:0] and sign/zero-extend per funct3.
-//   REQ12  SLVERR/DECERR on the response -> access fault in S2 (load 5/store 7).
+// What this block is responsible for:
+// - Keeps S2 stalled for the whole load/store round-trip.
+// - Builds the right WSTRB pattern for SB/SH/SW.
+// - Picks the correct byte/half on loads and applies sign/zero extension.
+// - Turns AXI SLVERR/DECERR responses into access faults.
 //
-// Design decision:
-//   D12  one outstanding transaction. Address and write data latch at start —
-//     the forwarded operands are only valid in the first cycle (S3 bubbles
-//     while S2 stalls) and AXI needs them stable until the handshake anyway.
-//     Per-channel handshake tracking keeps a later step to AXI4-Full additive
-//     rather than a rewrite.
+// Spec coverage:
 //
-// req only asserts for a legal, aligned, non-squashed op (misalignment traps
-// upstream with no transaction). err=1 on SLVERR/DECERR -> access fault (5/7).
+// - REQ5
+//   S2 stays stalled for the entire data transaction.
+//   `busy` only drops once the read/write response handshake is actually done.
+//
+// - REQ11
+//   Store byte enables are generated to match the DP-SRAM slave directly,
+//   so loads/stores work without needing any extra adapter layer.
+//
+//   WSTRB layout:
+//   - SB: `0001 << addr[1:0]`
+//     The byte is replicated across all lanes, WSTRB picks the active one.
+//   - SH: `0011 << addr[1:0]`
+//     `addr[0]` is guaranteed 0 for aligned halfword stores.
+//     The halfword is replicated so the selected 2-byte lane gets the data.
+//   - SW: `1111`
+//
+//   Loads use `addr[1:0]` to select the requested byte / halfword and then
+//   sign-extend or zero-extend based on `funct3`.
+//
+// - REQ12
+//   If AXI returns `SLVERR` or `DECERR`, an access fault is raised in S2:
+//   - load fault  -> cause 5
+//   - store fault -> cause 7
+//
+// Design choice:
+//
+// - D12
+//   Only one outstanding transaction at a time.
+//   Address and write data are latched when the request starts.
+//
+//   Why this is done:
+//   - forwarded operands are only guaranteed valid in the first cycle
+//     (S3 bubbles while S2 stalls)
+//   - AXI expects address/write data to stay stable until the handshake
+//
+//   Handshake tracking is kept per AXI channel, so moving later to AXI4-Full
+//   is an extension, not a rewrite.
+//
+// Notes:
+//
+// - `req` is only raised for a legal, aligned, non-squashed memory op.
+// - Misaligned accesses trap earlier, so no AXI transaction is issued here.
+// - The command latch has no reset on purpose: it is only read while a
+//   transaction is active, and every new transaction overwrites it first.
 
 module lsu (
     input             clk,
@@ -109,10 +141,12 @@ assign err    = rd_done ? dbus_rresp[1] : dbus_bresp[1];
 assign active = (state_q != S_IDLE);
 assign busy   = (start || active) && !done;
 
-// load extract: pick the lane by address, extend per funct3
+// load extract: one shifter serves both widths. Halves are always 16-bit
+// aligned (a misaligned LH/LHU traps before the bus), so shifting by the
+// byte offset leaves the wanted half in [15:0] too.
 wire [31:0] ld_shift = dbus_rdata >> {addr_q[1:0], 3'b000};
 wire [7:0]  lbyte    = ld_shift[7:0];
-wire [15:0] lhalf    = addr_q[1] ? dbus_rdata[31:16] : dbus_rdata[15:0];
+wire [15:0] lhalf    = ld_shift[15:0];
 
 reg [31:0] ld_ext;
 always @(*) begin
@@ -126,34 +160,58 @@ always @(*) begin
 end
 assign ld_data = ld_ext;
 
+// FSM: idle -> RD/WR at start, back to idle when the response is accepted
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-        state_q   <= S_IDLE;
+    if (~rst_n)
+        state_q <= S_IDLE;
+    else if (start)
+        state_q <= we ? S_WR : S_RD;
+    else if (done)
+        state_q <= S_IDLE;
+end
+
+// per-channel handshake progress, one tracker per channel. A handshake can
+// already land in the start cycle, so start captures it instead of clearing
+// blindly; done rearms the tracker for the next transaction.
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
         ar_sent_q <= 1'b0;
+    else if (start)
+        ar_sent_q <= dbus_arvalid && dbus_arready;
+    else if (done)
+        ar_sent_q <= 1'b0;
+    else if (dbus_arvalid && dbus_arready)
+        ar_sent_q <= 1'b1;
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
         aw_sent_q <= 1'b0;
-        w_sent_q  <= 1'b0;
-        addr_q    <= 32'b0;
-        wdata_q   <= 32'b0;
-        wstrb_q   <= 4'b0;
-    end else begin
-        if (start) begin
-            state_q   <= we ? S_WR : S_RD;
-            ar_sent_q <= dbus_arvalid && dbus_arready;
-            aw_sent_q <= dbus_awvalid && dbus_awready;
-            w_sent_q  <= dbus_wvalid  && dbus_wready;
-            addr_q    <= addr;
-            wdata_q   <= st_lanes;
-            wstrb_q   <= st_strb;
-        end else if (done) begin
-            state_q   <= S_IDLE;
-            ar_sent_q <= 1'b0;
-            aw_sent_q <= 1'b0;
-            w_sent_q  <= 1'b0;
-        end else begin
-            if (dbus_arvalid && dbus_arready) ar_sent_q <= 1'b1;
-            if (dbus_awvalid && dbus_awready) aw_sent_q <= 1'b1;
-            if (dbus_wvalid  && dbus_wready)  w_sent_q  <= 1'b1;
-        end
+    else if (start)
+        aw_sent_q <= dbus_awvalid && dbus_awready;
+    else if (done)
+        aw_sent_q <= 1'b0;
+    else if (dbus_awvalid && dbus_awready)
+        aw_sent_q <= 1'b1;
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        w_sent_q <= 1'b0;
+    else if (start)
+        w_sent_q <= dbus_wvalid && dbus_wready;
+    else if (done)
+        w_sent_q <= 1'b0;
+    else if (dbus_wvalid && dbus_wready)
+        w_sent_q <= 1'b1;
+end
+
+// command latch (no reset — see header)
+always @(posedge clk) begin
+    if (start) begin
+        addr_q  <= addr;
+        wdata_q <= st_lanes;
+        wstrb_q <= st_strb;
     end
 end
 

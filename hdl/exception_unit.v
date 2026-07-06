@@ -1,21 +1,31 @@
 // Sync exception detect in S2 — precise traps.
-// D# = design decision; indexed in the README.
+// D# = design choice; tracked in the README.
 //
-// D3   supported mcause set, resolved at the end of S2 so the offending
-//   instruction never reaches writeback. A priority chain picks one cause (the
-//   causes are mutually exclusive over an instruction's life anyway):
-//     0 instr addr misaligned  (taken branch/jump with target[1]=1)
-//     1 instr access fault     (ibus SLVERR/DECERR, carried via IF/DX)
-//     2 illegal instruction    3 breakpoint    11 env call (M-mode)
-//     4/6 load/store addr misaligned    5/7 load/store access fault
+// Design choices:
+//
+// - D3
+//   The supported mcause set, resolved at the end of S2 so the offending
+//   instruction never reaches writeback. A priority chain picks one cause
+//   (they are mutually exclusive over an instruction's life anyway):
+//   -  0    instr addr misaligned (taken branch/jump with target[1]=1)
+//   -  1    instr access fault (ibus SLVERR/DECERR, carried via IF/DX)
+//   -  2    illegal instruction
+//   -  3    breakpoint
+//   - 11    env call (M-mode)
+//   -  4/6  load/store addr misaligned
+//   -  5/7  load/store access fault
 //   (The 8 external-interrupt causes 16..23 live in csr_file, also D3.)
-// D17  load/store misalignment is checked BEFORE the access, so a misaligned
-//   op (cause 4/6) never issues an AXI transaction.
-// D18  a bus error becomes an access fault, not "illegal instruction" — fetch
-//   SLVERR/DECERR -> cause 1, load -> 5, store -> 7.
 //
-// Interrupts don't come through here: cpu_top evaluates them before execution
-// and delivers valid=0 for a preempted instruction.
+// - D17
+//   Load/store misalignment is checked BEFORE the access — a misaligned op
+//   (cause 4/6) never issues an AXI transaction.
+//
+// - D18
+//   A bus error becomes an access fault, not "illegal instruction":
+//   fetch SLVERR/DECERR -> cause 1, load -> 5, store -> 7.
+//
+// Note: interrupts don't come through here — cpu_top evaluates them before
+// execution and delivers valid=0 for a preempted instruction.
 
 module exception_unit (
     input             valid,          // real, non-preempted instruction in S2
@@ -42,7 +52,7 @@ module exception_unit (
     output            mem_misaligned  // blocks the AXI issue (D17)
 );
 
-// alignment by size: LH/SH need addr[0]=0, LW/SW need addr[1:0]=00 (5.9.1).
+// alignment by size: LH/SH need addr[0]=0, LW/SW need addr[1:0]=00.
 // Only checked pre-issue; once the op is out, the address was already good
 // (and the ALU result may drift during the stall since S3 bubbles out).
 wire misal = (funct3[1:0] == 2'b01 && mem_addr[0]) ||

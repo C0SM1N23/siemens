@@ -10,13 +10,14 @@ in the free edition), so the methodology leans on four pillars:
    TB. Trap handling is verified by *using* it (handlers dispatch on mcause,
    fix mepc, return), not by poking signals.
 2. **Exact-count properties**: the sync-trap handler counts every entry
-   (must be exactly 13) and x29 accumulates one bit per cause (must be
+   (must be exactly 15) and x29 accumulates one bit per cause (must be
    exactly 0x1FF). A missing trap, a double trap, or a spurious one cannot
    cancel out — order-independent and airtight against "it passed by luck".
 3. **Passive protocol monitors** (`hdl/axi_lite_monitor.v`) on both AXI
-   buses, every run: VALID/payload stability under stalled READY, response
-   ordering, the CPU's 1-outstanding contract, X hygiene, no EXOKAY.
-   Protocol legality is a checked property, not an assumption.
+   master buses and on the PIC's slave port, every run: VALID/payload
+   stability under stalled READY, response ordering, the CPU's 1-outstanding
+   contract, X hygiene, no EXOKAY. Protocol legality is a checked property,
+   not an assumption.
 4. **Configuration sweep** (`sim/regress.do`): the same suite runs under
    default latencies, high fixed latencies, and seeded random READY
    backpressure (reproducible by seed), plus the dual-core TB. Each run
@@ -50,14 +51,18 @@ code.
 | REQ11 | WSTRB lanes + load extract for SB/SH/SW/LB(U)/LH(U) | DP-SRAM compatibility contract | dmem word checks + sign/zero-extend reg checks |
 | REQ8,D9-D11 | Predictor learns taken loops; not-taken default; alias eviction stays correct | predictor may only affect *time*, never results | BNE loop sum; 3 branches sharing index 0x12 with different tags (0x448/0x648/0x848), sum = 18 |
 | D7 | Mispredict recovery incl. JALR, rd==rs1 | link write must use pre-jump value, 1-cycle flush path | JAL/JALR round-trip; `jalr x30,x30` link check; skipped-word poison jumps to a hang loop |
-| D3 | Every sync cause: 0,1,2,3,4,5,6,7,11 | trap table complete, mepc per cause | x29 = 0x1FF, trap count = 13, handler returns resume execution |
+| D3 | Every sync cause: 0,1,2,3,4,5,6,7,11 | trap table complete, mepc per cause | x29 = 0x1FF, trap count = 15, handler returns resume execution |
 | REQ7,D3 | Illegal instruction has **no side effects** | an illegal store must not reach the bus | `.word 0x04D73023` targets dmem[64]; word must stay 0 (this check caught a real RTL bug) |
 | D17 | Misaligned access issues **no** AXI transaction | must trap before issuing any transaction | LH/SH @odd trap cause 4/6; dmem[0] untouched; monitors see no extra transaction |
 | D8,D18 | SLVERR/DECERR on fetch/load/store -> mcause 1/5/7 | bus errors must be precise traps | jumps/accesses into unmapped space; cause-1 handler resumes via mscratch (its intended purpose) |
 | REQ9,D15 | CSRRW/S/C + immediate forms; read-only CSR write and unimplemented CSR -> illegal; CSRRS x0 = pure read | CSR access rules, incl. negatives | mscratch round-trip 21/31; csrrs 0x7C0, csrrw mip/mhartid all trap; csrrs mip with x0 does *not* trap |
 | D16 | Vectored mtvec: irq -> BASE+4*cause, exception -> BASE | the two vectored paths differ | irq lands at 0x348 slot (cause 18); ecall in vectored mode records at BASE |
-| REQ4 | irq sampled only under MIE, only enabled channels, held through AXI stalls, taken at instruction boundaries | the PIC contract | ch5 pending whole run, never acked; ch2 raised mid-load: ack timestamp > R-beat timestamp, mepc = boundary instruction, load value intact |
-| REQ4 | ack = 1-cycle pulse on the right bit; cpu_in_trap spans entry..MRET | PIC handshake shape | pulse-width invariant, ack count = 2 = handler entry count, in_trap sampled in handler and after |
+| REQ4 | irq sampled only under MIE, only enabled channels, held through AXI stalls, taken at instruction boundaries | the CPU side of the PIC contract | src5 pending whole run, never acked; ch2 raised mid-load: ack timestamp > R-beat timestamp, mepc = boundary instruction, load value intact |
+| REQ4 | ack = 1-cycle pulse on the right bit; cpu_in_trap spans entry..MRET | PIC handshake shape | pulse-width invariant, ack counts (ch2=2, ch3=1) = handler entry count (3), in_trap sampled in handler and after |
+| D20 | PIC priority: two channels pending together are served lowest-first | "highest-priority pending" must be deterministic | src2+src3 raised in the same cycle: ack2 timestamp < ack3 timestamp; per-cycle invariant `cpu_irq_id` = lowest set `cpu_irq` bit |
+| D21 | In-service suppression: an acked channel with its line still high disappears from `cpu_irq` until MRET | a handler that re-enables MIE must not be re-entered by its own interrupt | src3 held high through its whole handler; invariant checks `cpu_irq[3]`=0 in that window; ack3 count stays 1 |
+| D19,D22 | PIC software interface: ENABLE write+readback, RAW/PENDING/ACTIVE reads; PIC enable and `mie` are independent masks | the programmable half of the PIC, over real AXI | scoreboard: ENABLE=0x2C, RAW=PENDING=0x20 (src5), ACTIVE=0x04 read *inside* the handler; ch5 visible in mip yet never taken |
+| D22 | Unmapped PIC register read and read-only register write answer SLVERR -> precise access faults | error responses from a real peripheral, not just the TB model | both accesses trap (causes 5 and 7, counted in the exact 15); PIC-port monitor stays clean |
 | REQ10 | x0 hardwired, regfile reset | | `addi x0,x0,5` then read; regs[0] === 0 |
 | D6 | Back-to-back fetch: 1 instr/cycle on a latency-1 memory | the throughput claim, measured not asserted | mcycle delta across 33 straight-line instrs = 33 (gated to the latency-1 config) |
 | REQ2,REQ12 | AXI4-Lite legality on both master ports | interoperability with DMA/DP-SRAM | protocol monitors, all runs, all configs |
@@ -104,10 +109,13 @@ demonstrates it end to end.
   broad but hand-picked. Next step once toolchain access exists.
 - No functional coverage metrics (not supported by ModelSim ASE); the
   test-plan table above is the manual coverage argument.
-- PIC is stubbed to the interface contract (REQ4); re-verify against the real
-  PIC when it exists, esp. `cpu_irq_id` changing while lines move.
-- Interconnect behaviors beyond 1 slave per bus (out-of-order completion is
-  N/A for AXI4-Lite, but multi-slave decode/DECERR paths come from the real
-  fabric).
+- The PIC is now the real `pic.v`, exercised in-system (the TB plays the
+  peripherals on `irq_src`); a standalone PIC unit bench with randomized
+  line movement would still add value, esp. many channels toggling at once.
+- Nested interrupt handlers (a handler that sets MIE=1 and takes a *different*
+  channel) are not exercised; the PIC's in-service clear is tied to the single
+  `cpu_in_trap` bit, so nesting is documented as out of scope (D21).
+- The dbus decoder covers 2 slaves; richer fabrics (more slaves, DECERR from
+  the fabric's own decoder) come with the real interconnect.
 - Reset assertion mid-transaction is not exercised (models and CPU reset
   together); relevant once the SoC defines its reset controller.

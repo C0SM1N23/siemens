@@ -1,29 +1,44 @@
 // M-mode CSR file.
-// REQ# = spec requirement, D# = design decision; both indexed in the README.
+// REQ# = spec requirement, D# = design choice; both are tracked in the README.
 //
-// Spec requirement met here:
-//   REQ9  the 7 required CSRs at their addresses — mstatus 0x300, mie 0x304,
-//     mtvec 0x305, mscratch 0x340, mepc 0x341, mcause 0x342, mip 0x344 — with
-//     mip read-only and driven by the PIC lines. Live fields only, the rest
-//     read 0/WPRI:  mstatus MIE(3), MPIE(7), MPP(12:11) hardwired 2'b11 (M-mode);
-//     mtvec BASE[31:2] + MODE[1:0];  mepc bits [1:0] forced to 0.
+// Spec coverage:
 //
-// Design decisions:
-//   D3   the 8 PIC channels map to mie/mip bits 16..23 (external-interrupt
-//     causes 16..23) — the interrupt half of the supported-cause set.
-//   D5   read-only mhartid (0xF14) from the HART_ID parameter (multi-core);
-//     read-only mcycle/minstret counters are kept as verification aids.
-//   D15  any access to an unimplemented CSR, or an effective write to a
-//     read-only one, raises illegal instruction in S2 (not a bus DECERR — CSRs
-//     are internal). csr_wen already drops the "CSRRS/C with x0/uimm=0 = pure
-//     read" case, so those don't trap.
-//   D16  vectored mtvec sends interrupts to BASE + 4*cause and exceptions to
-//     BASE; direct mode sends everything to BASE.
+// - REQ9
+//   The 7 required CSRs at their addresses: mstatus 0x300, mie 0x304,
+//   mtvec 0x305, mscratch 0x340, mepc 0x341, mcause 0x342, mip 0x344 —
+//   with mip read-only, driven by the PIC lines.
+//   Live fields only, the rest read 0/WPRI:
+//   - mstatus: MIE(3), MPIE(7); MPP(12:11) hardwired 2'b11 (M-mode)
+//   - mtvec:   BASE[31:2] + MODE[1:0]
+//   - mepc:    bits [1:0] forced to 0
 //
-// Trap entry / MRET are sequenced by cpu_top: trap_set commits
-// mepc/mcause/MPIE<-MIE/MIE<-0 atomically; mret does MIE<-MPIE, MPIE<-1.
-// trap_set wins over a same-cycle software write — the trapping instruction
-// never commits its own write.
+// Design choices:
+//
+// - D3
+//   The 8 PIC channels map to mie/mip bits 16..23 (external-interrupt
+//   causes 16..23) — the interrupt half of the supported-cause set.
+//
+// - D5
+//   Read-only mhartid (0xF14) from the HART_ID parameter (multi-core).
+//   Read-only mcycle/minstret counters kept as verification aids.
+//
+// - D15
+//   Any access to an unimplemented CSR, or an effective write to a
+//   read-only one, raises illegal instruction in S2 (not a bus DECERR —
+//   CSRs are internal). csr_wen already drops the "CSRRS/C with x0/uimm=0
+//   = pure read" case, so those don't trap.
+//
+// - D16
+//   Vectored mtvec: interrupts -> BASE + 4*cause, exceptions -> BASE.
+//   Direct mode sends everything to BASE.
+//
+// Notes:
+//
+// - Trap entry / MRET are sequenced by cpu_top:
+//   - trap_set commits mepc / mcause / MPIE<-MIE / MIE<-0 atomically
+//   - mret does MIE<-MPIE, MPIE<-1
+// - trap_set wins over a same-cycle software write — the trapping
+//   instruction never commits its own write.
 
 module csr_file #(
     parameter HART_ID = 32'd0
@@ -127,45 +142,93 @@ wire [31:0] mstatus_nv = csr_new_val(mstatus_rd, csr_wdata, csr_op);
 wire [31:0] mie_nv     = csr_new_val({8'b0, mie_q, 16'b0}, csr_wdata, csr_op);
 wire [31:0] mepc_nv    = csr_new_val(mepc_q, csr_wdata, csr_op);
 
+// committed software write. Note it can never coincide with trap_set or mret:
+// an interrupt kills csr_wen (dec_live drops), the only exception a CSR op can
+// raise is its own illegal access (blocked right here), and MRET is a
+// different instruction entirely. The trap arms below still come first so
+// each register reads as "hardware beats software".
+wire csr_wr = csr_wen && !csr_illegal;
+
+wire wr_mstatus  = csr_wr && (csr_addr == MSTATUS);
+wire wr_mie      = csr_wr && (csr_addr == MIE);
+wire wr_mtvec    = csr_wr && (csr_addr == MTVEC);
+wire wr_mscratch = csr_wr && (csr_addr == MSCRATCH);
+wire wr_mepc     = csr_wr && (csr_addr == MEPC);
+wire wr_mcause   = csr_wr && (csr_addr == MCAUSE);
+
+// mstatus.MIE/MPIE — the pair swaps on trap entry and swaps back on MRET
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
         mstatus_mie_q  <= 1'b0;      // interrupts off at boot
         mstatus_mpie_q <= 1'b0;
-        mie_q          <= 8'b0;
-        mtvec_q        <= 32'b0;
-        mscratch_q     <= 32'b0;
-        mepc_q         <= 32'b0;
-        mcause_q       <= 32'b0;
-        mcycle_q       <= 32'b0;
-        minstret_q     <= 32'b0;
-    end else begin
-        mcycle_q <= mcycle_q + 1;
-        if (retire)
-            minstret_q <= minstret_q + 1;
-
-        if (trap_set) begin
-            mepc_q         <= {trap_pc[31:2], 2'b00};
-            mcause_q       <= {trap_is_irq, 26'b0, trap_code};
-            mstatus_mpie_q <= mstatus_mie_q;
-            mstatus_mie_q  <= 1'b0;
-        end else if (mret) begin
-            mstatus_mie_q  <= mstatus_mpie_q;
-            mstatus_mpie_q <= 1'b1;
-        end else if (csr_wen && !csr_illegal) begin
-            case (csr_addr)
-                MSTATUS: begin
-                    mstatus_mie_q  <= mstatus_nv[3];
-                    mstatus_mpie_q <= mstatus_nv[7];
-                end
-                MIE:      mie_q      <= mie_nv[23:16];
-                MTVEC:    mtvec_q    <= csr_new_val(mtvec_q, csr_wdata, csr_op);
-                MSCRATCH: mscratch_q <= csr_new_val(mscratch_q, csr_wdata, csr_op);
-                MEPC:     mepc_q     <= {mepc_nv[31:2], 2'b00};
-                MCAUSE:   mcause_q   <= csr_new_val(mcause_q, csr_wdata, csr_op);
-                default:  ;   // mip/mcycle/minstret are RO, filtered by csr_illegal
-            endcase
-        end
+    end else if (trap_set) begin
+        mstatus_mpie_q <= mstatus_mie_q;
+        mstatus_mie_q  <= 1'b0;
+    end else if (mret) begin
+        mstatus_mie_q  <= mstatus_mpie_q;
+        mstatus_mpie_q <= 1'b1;
+    end else if (wr_mstatus) begin
+        mstatus_mie_q  <= mstatus_nv[3];
+        mstatus_mpie_q <= mstatus_nv[7];
     end
+end
+
+// mepc — trap entry records the return address, bits [1:0] always 0
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mepc_q <= 32'b0;
+    else if (trap_set)
+        mepc_q <= {trap_pc[31:2], 2'b00};
+    else if (wr_mepc)
+        mepc_q <= {mepc_nv[31:2], 2'b00};
+end
+
+// mcause — interrupt flag in bit 31, code in the low bits
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mcause_q <= 32'b0;
+    else if (trap_set)
+        mcause_q <= {trap_is_irq, 26'b0, trap_code};
+    else if (wr_mcause)
+        mcause_q <= csr_new_val(mcause_q, csr_wdata, csr_op);
+end
+
+// software-only CSRs
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mie_q <= 8'b0;
+    else if (wr_mie)
+        mie_q <= mie_nv[23:16];
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mtvec_q <= 32'b0;
+    else if (wr_mtvec)
+        mtvec_q <= csr_new_val(mtvec_q, csr_wdata, csr_op);
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mscratch_q <= 32'b0;
+    else if (wr_mscratch)
+        mscratch_q <= csr_new_val(mscratch_q, csr_wdata, csr_op);
+end
+
+// free-running cycle counter
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mcycle_q <= 32'b0;
+    else
+        mcycle_q <= mcycle_q + 1;
+end
+
+// retired-instruction counter
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        minstret_q <= 32'b0;
+    else if (retire)
+        minstret_q <= minstret_q + 1;
 end
 
 endmodule

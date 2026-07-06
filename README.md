@@ -3,7 +3,14 @@
 The CPU block of the SoC project (CPU + DMA + DP-SRAM), in Verilog
 (IEEE 1364-2005). The original single-cycle core became a 3-stage pipeline with
 two AXI4-Lite master ports, a branch predictor, precise traps, an M-mode CSR
-file, and a PIC interrupt interface.
+file, and a PIC interrupt interface. The repo also ships the PIC itself
+([pic.v](hdl/pic.v)): the system interrupt controller every peripheral brief
+points at, which no block brief assigned to anyone.
+
+Want to *learn* the design? Start with [ARCHITECTURE.md](ARCHITECTURE.md) —
+module by module, how the system runs, and the full data flow. Recent code
+changes are documented in [CHANGELOG.md](CHANGELOG.md); verification lives in
+[debug/VERIFICATION.md](debug/VERIFICATION.md).
 
 ## Architecture
 
@@ -70,6 +77,10 @@ each in full. These two tables are the index.
 | D16 | Vectored mtvec: interrupts → BASE+4·cause, exceptions → BASE | [csr_file.v](hdl/csr_file.v) |
 | D17 | Misalignment checked pre-access → no AXI transaction issued | [exception_unit.v](hdl/exception_unit.v) |
 | D18 | Bus error → access fault (load 5 / store 7) | [exception_unit.v](hdl/exception_unit.v) |
+| D19 | PIC built here (unassigned in the briefs): level-sensitive aggregator, no latching; `cpu_irq`/`cpu_irq_id` registered from one pending vector | [pic.v](hdl/pic.v) |
+| D20 | PIC priority fixed, channel 0 highest (id = lowest pending channel) | [pic.v](hdl/pic.v) |
+| D21 | In-service suppression: acked channel masked from ack until MRET (`cpu_in_trap` low); sized for non-nested handlers | [pic.v](hdl/pic.v) |
+| D22 | PIC register map (ENABLE / PENDING / RAW / ACTIVE); unmapped or read-only-write access answers SLVERR | [pic.v](hdl/pic.v) |
 
 ## AXI4-Lite interface (SoC integration)
 
@@ -84,13 +95,24 @@ DMA config port and DP-SRAM Port A see a standard master.
   precise access-fault traps (D8, D18). DP-SRAM only emits OKAY/SLVERR; DECERR
   comes from the interconnect on an unmapped address — the CPU covers both.
 
-## Interrupts (PIC interface)
+## Interrupts (PIC)
 
-`cpu_irq[7:0]` in, `cpu_irq_id[2:0]` in (highest-priority pending channel),
-`cpu_irq_ack[7:0]` out (1-cycle pulse), `cpu_in_trap` out (held until MRET).
-Channels map to mcause 16..23; `mip[16+i]` mirrors `cpu_irq[i]`, `mie[16+i]`
-enables. An irq is taken only at an instruction boundary, only under
-`mstatus.MIE`, and is held through a multi-cycle AXI stall (REQ4; priority D2).
+The CPU side: `cpu_irq[7:0]` in, `cpu_irq_id[2:0]` in (highest-priority
+pending channel), `cpu_irq_ack[7:0]` out (1-cycle pulse), `cpu_in_trap` out
+(held until MRET). Channels map to mcause 16..23; `mip[16+i]` mirrors
+`cpu_irq[i]`, `mie[16+i]` enables. An irq is taken only at an instruction
+boundary, only under `mstatus.MIE`, and is held through a multi-cycle AXI
+stall (REQ4; priority D2).
+
+The PIC side ([pic.v](hdl/pic.v), D19–D22): 8 level-sensitive source lines
+(planned: DMA ch0..3, DP-SRAM on 4), `pending = src & enable & ~in_service`,
+fixed priority with channel 0 highest. The acked channel is held out of
+`cpu_irq` until MRET — that is what the brief's "suppress re-assertion of the
+same interrupt" via `cpu_in_trap` means. Software programs it over an
+AXI4-Lite slave port: `0x0 IRQ_ENABLE` (R/W), `0x4 IRQ_PENDING`, `0x8
+IRQ_RAW`, `0xC IRQ_ACTIVE` (RO); anything else answers SLVERR. The PIC enable
+and the CPU's `mie` stack as two independent masks. Full walkthrough in
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Multi-core
 
@@ -114,18 +136,22 @@ hdl/
   control.v            decoder (RV32I, FENCE=NOP, SYSTEM)       (REQ7)
   csr_file.v           M-mode CSRs + trap/MRET sequencing       (REQ9; D3,D5,D15,D16)
   exception_unit.v     sync exception detect                    (D3,D17,D18)
+  pic.v                system interrupt controller              (D19-D22)
   regfile.v            32x32 register file                      (REQ10)
   branch_unit.v        real branch/jump direction + target
   decode.v  imm_gen.v  alu.v  alu_top.v  writeback_mux.v   (reused, combinational)
 debug/
   VERIFICATION.md      test plan: what is checked, why, and known gaps
 debug/hdl/
-  tb_cpu_axi.v         self-checking TB: CPU + 2 AXI slaves + monitors + PIC stub
+  tb_cpu_axi.v         self-checking TB: CPU + real PIC @ 0x3000_0000 + AXI
+                       memories + monitors; the TB plays the peripherals
   tb_dual_core.v       2 CPUs + shared memory behind an arbiter (scalability proof)
-  axi_lite_monitor.v   passive AXI4-Lite protocol checker (both buses, every run)
+  axi_lite_monitor.v   passive AXI4-Lite protocol checker (ibus, dbus, PIC port)
   axi_lite_mem_model.v behavioral AXI4-Lite slave (OKAY/DECERR, latency + seeded
                        random READY backpressure)
   axi_lite_arb2.v      2:1 AXI4-Lite arbiter (TB stand-in for the interconnect)
+  axi_lite_dec2.v      1-master/2-slave address decoder (TB interconnect for
+                       the PIC window)
   ck_rst_tb.v          clock/reset generator
 debug/sim/
   program_axi.s        main test program   (py asm.py program_axi.s program_axi.hex)
@@ -144,13 +170,21 @@ vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
 
 Coverage, per-case reasoning and the evidence trail are in
 [debug/VERIFICATION.md](debug/VERIFICATION.md): every mcause exercised with
-exact trap counting, CSR negative tests, interrupt masking and an interrupt held
+exact trap counting, CSR negative tests, PIC priority / in-service suppression /
+double masking / register access incl. SLVERR negatives, an interrupt held
 through an AXI stall, BTB aliasing, measured CPI = 1.00 on a latency-1 memory,
-AXI protocol monitors on every run, seeded random backpressure, and the
-dual-core handshake.
+AXI protocol monitors on every run (ibus, dbus, PIC port), seeded random
+backpressure, and the dual-core handshake.
 
 ## Open points (system level)
 
-- Global memory map undecided — the reset vector is the `RESET_PC` parameter (default 0x0).
-- PIC has no spec of its own — the CPU-side interface is fixed; the TB uses a stub.
+- Global memory map undecided — the reset vector is the `RESET_PC` parameter
+  (default 0x0), and the PIC's base address is a TB decoder parameter
+  (0x3000_0000 for now).
+- PIC has no spec of its own — the CPU-side interface is fixed by the CPU
+  brief and implemented; the internals (priority order, register map, D19–D22)
+  are our proposal to confirm with the team/mentor. The final source-to-channel
+  mapping (5 sources / 8 channels) is also open.
 - Reset type differs between blocks (CPU/DMA async, DP-SRAM sync).
+- With more than one core, "which PIC channel targets which core" is undefined
+  — the current PIC serves one CPU.

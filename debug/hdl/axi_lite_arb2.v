@@ -1,11 +1,16 @@
-// 2-master -> 1-slave AXI4-Lite arbiter — testbench model only. Stands in for
-// the SoC interconnect (someone else's block) so the dual-core TB can share
-// one memory between two CPUs. Round-robin, one transaction locked at a time:
-// grant on AR/AW+W request, release on the R or B beat. The parked master
-// just sees its READYs low, which AXI allows indefinitely.
+// 2-master -> 1-slave AXI4-Lite arbiter — testbench model only.
 //
-// Relies on the CPUs' own contract (1 outstanding, never read+write at once),
-// which the protocol monitor checks separately.
+// Stands in for the SoC interconnect (someone else's block) so the
+// dual-core TB can share one memory between two CPUs.
+//
+// How it arbitrates:
+// - round-robin, one transaction locked at a time
+// - grant on an AR / AW+W request, release on the R or B beat
+// - the parked master just sees its READYs low — AXI allows that
+//   indefinitely, so no master is ever protocol-starved
+//
+// Relies on the CPUs' own contract (1 outstanding, never read+write at
+// once); the protocol monitor checks that contract separately.
 
 module axi_lite_arb2 (
     input             clk,

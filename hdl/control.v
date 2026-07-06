@@ -1,16 +1,19 @@
 // RV32I control decoder.
-// REQ# = spec requirement, D# = design decision; both indexed in the README.
+// REQ# = spec requirement, D# = design choice; both are tracked in the README.
 //
-// Spec requirement met here:
-//   REQ7  RV32I control signals for every instruction group; FENCE decodes as
-//     a NOP (single hart, in-order, no reordering store buffer, so no real
-//     barrier is needed); ECALL/EBREAK/CSR are trap- or CSR-handled downstream.
-//     SYSTEM is decoded strictly: ECALL / EBREAK / MRET plus CSR* including the
-//     immediate forms; any other SYSTEM encoding is illegal.
+// Spec coverage:
 //
-// Illegal-instruction detection feeds decision D3 (the supported trap causes):
-// unknown opcodes or bad funct fields set illegal=1 and leave every other
-// control signal inactive, so an illegal op has no side effects — it becomes an
+// - REQ7
+//   Control signals for every RV32I instruction group.
+//   - FENCE decodes as a NOP (single hart, in-order, no reordering store
+//     buffer — there is nothing to fence)
+//   - ECALL/EBREAK/CSR are trap- or CSR-handled downstream
+//   - SYSTEM is decoded strictly: ECALL / EBREAK / MRET plus CSR* incl. the
+//     immediate forms; any other SYSTEM encoding is illegal
+//
+// Note: illegal detection feeds D3 (the supported trap causes). Unknown
+// opcodes or bad funct fields set illegal=1 and leave every other control
+// signal inactive — an illegal op has no side effects, it just becomes an
 // illegal-instruction trap in S2.
 
 module control (

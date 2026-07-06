@@ -1,13 +1,24 @@
-// Dual-core smoke test: two cpu_top instances (HART_ID 0 and 1) with private
-// instruction memories running the same binary, and one shared data memory
-// behind a 2:1 arbiter — the "2-3 cores in a bigger SoC" scenario in
-// miniature. The program splits on mhartid and completes a flag handshake
-// through the shared memory; a protocol monitor watches the arbitrated link.
+// Dual-core smoke test — the "2-3 cores in a bigger SoC" scenario in
+// miniature.
 //
-// What this proves: the core is instantiable (no shared state between
-// instances), mhartid differentiates the software paths, and two blocking
-// AXI4-Lite masters make progress through one arbitrated slave without
-// deadlock or data corruption.
+// Setup:
+// - two cpu_top instances (HART_ID 0 and 1), private instruction memories,
+//   both running the same binary
+// - one shared data memory behind a 2:1 arbiter
+// - a protocol monitor on the arbitrated link
+//
+// What the test does:
+// - the program splits on mhartid (each core takes a different path)
+// - the cores complete a flag handshake through the shared memory
+// - each core leaves its own result word; the TB checks both, plus the flags
+//
+// Why this proves scalability:
+// - the core is instantiable — no shared state between instances
+// - mhartid actually differentiates the software paths
+// - two blocking AXI4-Lite masters make progress through one arbitrated
+//   slave with no deadlock and no data corruption (the handshake is sound
+//   because each core is in-order with blocking memory ops — sequentially
+//   consistent — so no LR/SC is needed)
 
 module tb_dual_core;
 

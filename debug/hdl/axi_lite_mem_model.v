@@ -1,12 +1,17 @@
-// Behavioral AXI4-Lite slave with internal memory — testbench only, not part
-// of the CPU. Stands in for interconnect + slave in one:
-//   address in [BASE, BASE + WORDS*4)  -> OKAY, memory access (WSTRB byte lanes)
-//   anything else                      -> DECERR (unmapped address)
-// READ_LAT / WRITE_LAT insert wait cycles before RVALID / BVALID to exercise
-// the pipeline's multi-cycle AXI stalls.
-// STALL_PROB > 0 turns on seeded random backpressure: READYs drop out with
-// the given percentage and responses pick up 0..3 extra wait cycles. Same
-// SEED = same run, so failures reproduce.
+// Behavioral AXI4-Lite slave with internal memory — testbench only, not
+// part of the CPU. Stands in for interconnect + slave in one.
+//
+// Behavior:
+// - address in [BASE, BASE + WORDS*4) -> OKAY, memory access (WSTRB lanes)
+// - anything else                     -> DECERR (unmapped address)
+//
+// Knobs, and why they exist:
+// - READ_LAT / WRITE_LAT: wait cycles before RVALID / BVALID — exercises
+//   the pipeline's multi-cycle AXI stalls
+// - STALL_PROB > 0: seeded random backpressure — READYs drop out with the
+//   given percentage and responses pick up 0..3 extra wait cycles, which
+//   shakes out timing assumptions no fixed latency would hit
+// - same SEED = same run, so a failure always reproduces
 
 module axi_lite_mem_model #(
     parameter WORDS      = 1024,

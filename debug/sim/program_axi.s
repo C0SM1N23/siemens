@@ -1,17 +1,23 @@
 # Test program for the pipelined RV32I CPU (run by tb_cpu_axi).
-# TB map: imem @ 0x0000 (4KB), dmem @ 0x2000 (4KB), anything else on the
-# dbus answers DECERR (unmapped). TB preloads dmem[256] = 0xCAFE0001.
+# TB map: imem @ 0x0000 (4KB), dmem @ 0x2000 (4KB), PIC registers @
+# 0x3000_0000; anything else on the dbus answers DECERR (unmapped).
+# TB preloads dmem[256] = 0xCAFE0001.
 #
 # Coverage on top of the basics (arith/forwarding, byte lanes, predictor
 # loop, JAL/JALR):
 #   - every sync trap cause: 0,1,2,3,4,5,6,7,11 (bitmask in x29, exact trap
-#     count in dmem[192])
+#     count in dmem[192] — 15 entries: 13 CPU-side + 2 PIC SLVERR accesses)
 #   - illegal ops must have no side effects (illegal store leaves mem alone)
 #   - CSR negatives: unimplemented address, writes to RO mip/mhartid
 #   - CSR immediate forms + mscratch round-trip + mhartid read
-#   - irq masking: channel 5 pending the whole run but never enabled -> never
-#     taken; channel 2 taken twice, incl. once DURING an AXI data stall
-#     (the interrupt is held to the instruction boundary)
+#   - PIC software interface: program IRQ_ENABLE over AXI, read back ENABLE/
+#     RAW/PENDING, read IRQ_ACTIVE inside the irq handler; a read of an
+#     unmapped PIC register and a write to a read-only one answer SLVERR ->
+#     precise access faults (causes 5 and 7 again, from a real peripheral)
+#   - irq masking: source 5 pending the whole run, enabled in the PIC but
+#     never in mie -> never taken; ch2+ch3 raised together -> PIC priority
+#     serves ch2 first; ch2 also taken DURING an AXI data stall (the
+#     interrupt is held to the instruction boundary)
 #   - vectored mtvec: irq -> BASE+4*cause, exception -> BASE
 #   - BTB aliasing: three branches sharing an index, different tags
 #   - CPI evidence: 32 dependent ALU ops in ~33 cycles (checked when imem
@@ -83,6 +89,12 @@ back:
     lui  x28, 8              # reload: the handler trashes x28
     sw   x0, 0(x28)          # cause 7  -> x29 |= 16  (DECERR on write)
 
+    # same two causes again, but as SLVERR from a real peripheral (the PIC)
+    lui  x28, 0x30000        # PIC config window
+    lw   x30, 16(x28)        # unmapped PIC register -> SLVERR -> cause 5
+    lui  x28, 0x30000        # reload: the handler trashes x28
+    sw   x0, 4(x28)          # IRQ_PENDING is read-only -> SLVERR -> cause 7
+
     csrrs x30, 0x7C0, x0     # unimplemented CSR, even a read -> cause 2
     csrrw x0, mip, x28       # write to RO mip -> cause 2
     csrrw x0, mhartid, x28   # write to RO mhartid -> cause 2
@@ -106,10 +118,22 @@ back:
 ff_resume:
 
     # ---- interrupts + vectored mtvec ------------------------------------
+    # program the PIC over AXI: enable ch2, ch3, ch5 (0x2C) and read back.
+    # ch5 stays masked at the CPU (mie) to prove the two masks are independent.
+    lui  x28, 0x30000
+    addi x30, x0, 0x2C
+    sw   x30, 0(x28)         # IRQ_ENABLE = 0x2C
+    lw   x30, 0(x28)
+    sw   x30, 180(x14)       # [180] = 0x2C readback
+    lw   x30, 8(x28)         # IRQ_RAW: source 5 held high by the TB
+    sw   x30, 184(x14)       # [184] = 0x20
+    lw   x30, 4(x28)         # IRQ_PENDING: ch5 enabled + pending, MIE still 0
+    sw   x30, 188(x14)       # [188] = 0x20
+
     addi x28, x0, vec_base
     ori  x28, x28, 1         # MODE = 01 (vectored)
     csrrw x0, mtvec, x28
-    lui  x28, 0x40           # mie bit 18 = PIC channel 2 (ch5 stays masked)
+    lui  x28, 0xC0           # mie bits 18+19 = PIC ch2+ch3 (ch5 stays masked)
     csrrw x0, mie, x28
     addi x31, x0, 0
     addi x28, x0, 8
@@ -212,18 +236,23 @@ vec_base:
     csrrw x0, mepc, x30
     mret
 
-# vectored slot for cause 18 (PIC channel 2): BASE + 4*18 = BASE + 0x48
+# vectored slots for causes 18 and 19 (PIC ch2 @ BASE+0x48, ch3 @ BASE+0x4C)
 .org 0x348
     jal  x0, irq_handler
+    jal  x0, irq_handler
 
-# ---- irq handler: preserves x30 through mscratch, counts entries --------
+# ---- irq handler: preserves x30 through mscratch, counts entries,
+# snapshots the PIC's in-service mask (proves the ack was registered) ------
 .org 0x380
 irq_handler:
     csrrw x30, mscratch, x30
-    csrrs x31, mcause, x0    # x31 = 0x80000012
+    csrrs x31, mcause, x0    # x31 = 0x800000(16+ch)
     lw   x30, 196(x14)
     addi x30, x30, 1
     sw   x30, 196(x14)       # [196] = irq entry count
+    lui  x30, 0x30000
+    lw   x30, 12(x30)        # PIC IRQ_ACTIVE = 1 << current channel
+    sw   x30, 164(x14)       # [164] = in-service mask of the last irq taken
     csrrw x30, mscratch, x30
     mret                     # rerun the preempted instruction
 

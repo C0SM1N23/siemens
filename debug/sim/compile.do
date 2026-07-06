@@ -21,11 +21,13 @@ vlog ../../hdl/fetch_unit.v
 vlog ../../hdl/lsu.v
 vlog ../../hdl/hazard_unit.v
 vlog ../../hdl/cpu_top.v
+vlog ../../hdl/pic.v
 
 # testbench collateral
 vlog ../hdl/ck_rst_tb.v
 vlog ../hdl/axi_lite_mem_model.v
 vlog ../hdl/axi_lite_monitor.v
 vlog ../hdl/axi_lite_arb2.v
+vlog ../hdl/axi_lite_dec2.v
 vlog ../hdl/tb_cpu_axi.v
 vlog ../hdl/tb_dual_core.v

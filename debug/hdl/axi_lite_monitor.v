@@ -1,18 +1,23 @@
-// Passive AXI4-Lite protocol monitor — testbench only. One instance watches
-// one bus and flags violations as they happen, so protocol legality is a
-// checked property of every run instead of something we trust by inspection.
+// Passive AXI4-Lite protocol monitor — testbench only.
 //
-// Checks, per the AXI4-Lite handshake rules plus this CPU's own contract:
-//   1. stability: once VALID is high with READY low, VALID must stay high and
-//      the payload must not change until the handshake (all 5 channels)
-//   2. ordering: R only with a read outstanding, B only after AW and W both
-//      accepted; a second AR/AW/W before the response = violation of the
-//      "max 1 outstanding per port" contract
-//   3. no X on VALID/READY out of reset, no X on a payload while its VALID=1
-//   4. RRESP/BRESP = EXOKAY (2'b01) is not legal in AXI4-Lite
+// One instance watches one bus and flags violations as they happen, so
+// protocol legality is a checked property of every run, not something we
+// trust by inspection.
 //
-// err_cnt must read 0 at the end of the test; rd_cnt/wr_cnt let the TB prove
-// traffic actually flowed.
+// What it checks (AXI4-Lite handshake rules + this CPU's own contract):
+// - stability: once VALID is high with READY low, VALID must stay high and
+//   the payload must not change until the handshake (all 5 channels)
+// - ordering: R only with a read outstanding, B only after AW and W both
+//   accepted; a second AR/AW/W before the response breaks the
+//   "max 1 outstanding per port" contract
+// - X hygiene: no X on VALID/READY out of reset, no X on a payload while
+//   its VALID is high
+// - responses: EXOKAY (2'b01) is not legal in AXI4-Lite
+//
+// How results come back:
+// - err_cnt must read 0 at the end of the test
+// - rd_cnt / wr_cnt let the TB prove traffic actually flowed
+//   (a silent bus would otherwise look like a pass)
 
 module axi_lite_monitor #(
     parameter NAME      = "bus",
