@@ -1,26 +1,17 @@
-# How this CPU works — module by module, and the data flow
+# Architecture
 
-A guide for learning the design, not just using it. Read top to bottom the
-first time; afterwards each section stands on its own. Tag references
-(`REQ#`, `D#`) point to the requirement/decision index in the README.
+RV32I CPU, 3-stage pipeline, two AXI4-Lite master ports. This file describes
+the block structure, the pipeline timing and the implementation choices per
+module. Requirement tags (`REQ#`) and design-decision tags (`D#`) match the
+index in the README and the comments in the code.
 
----
-
-## 1. The big picture
-
-This is an RV32I processor with a 3-stage pipeline. It talks to the rest of
-the SoC through two AXI4-Lite master buses (one for instructions, one for
-data) and to an interrupt controller (PIC) through four dedicated signals.
-The PIC itself lives in this repo too (`hdl/pic.v`): every peripheral brief
-points its interrupt line at a "system interrupt controller", but no brief
-assigns building one — so the CPU block ships it (section 6 covers how it
-works).
+## 1. Top level
 
 ```
              ┌─────────────────────── cpu_top ───────────────────────┐
              │                                                       │
   ibus_axi   │  ┌────────────┐   ┌─────────────────────┐   ┌──────┐  │
- ◄──────────►│  │ fetch_unit │──►│  IF/DX pipeline reg  │──►│      │  │
+ ◄──────────►│  │ fetch_unit │──►│  IF/DX pipeline reg │──►│      │  │
  (AR/R only) │  │  PC + AXI  │   └─────────────────────┘   │  S2  │  │
              │  └─────▲──────┘                             │      │  │
              │        │ predict                            │decode│  │
@@ -40,369 +31,360 @@ works).
   ◄─ in_trap └───────────────────────────────────────────────────────┘
 ```
 
-The three stages (REQ1):
+Interfaces (REQ2, REQ3):
 
-| Stage | Name | What happens there |
-|-------|------|--------------------|
-| S1 | Fetch | Read the instruction word over `ibus_axi`; predict the next PC |
-| S2 | Decode + Execute | Decode, read registers, ALU, branch resolve, CSR access, load/store over `dbus_axi`, all trap/interrupt decisions |
-| S3 | Writeback | Write the result into the register file |
+| Signal | Dir | Description |
+|---|---|---|
+| `ibus_axi_*` | master | instruction fetch, AR/R channels only |
+| `dbus_axi_*` | master | load/store, all 5 channels, WSTRB per byte lane |
+| `clk`, `rst_n` | in | one clock domain, async active-low reset |
+| `cpu_irq[7:0]` | in | pending interrupt per PIC channel |
+| `cpu_irq_id[2:0]` | in | highest-priority pending channel |
+| `cpu_irq_ack[7:0]` | out | 1-cycle pulse on the accepted channel |
+| `cpu_in_trap` | out | high from trap entry until MRET |
 
-Almost everything interesting happens in S2 — that's deliberate. With one
-stage doing decode+execute+memory, every instruction resolves completely
-before the next one commits, which is what makes the traps *precise* (an
-instruction either fully happens or fully doesn't).
+Parameters: `RESET_PC` (boot address) and `HART_ID` (drives `mhartid`, D5).
+The port list has not changed since the first pipeline version; all later
+features (WFI, RAS, counters) are internal, and the PIC/mtimer are separate
+blocks.
 
----
+The repo also contains two blocks that are not part of the CPU but that the
+system needs and no other block owns: the interrupt controller `pic.v`
+(section 7) and the machine timer `mtimer.v` (section 8).
 
-## 2. Life of an instruction
+## 2. Pipeline
 
-### A plain ALU op (`add x3, x1, x2`)
+| Stage | Name | Work done there |
+|---|---|---|
+| S1 | Fetch | AXI read on `ibus`, next-PC prediction |
+| S2 | Decode + Execute | decode, regfile read, ALU, branch resolve, CSR access, load/store on `dbus`, all trap/interrupt decisions |
+| S3 | Writeback | register file write |
+
+Everything interesting is in S2 on purpose: with decode+execute+memory in
+one stage, an instruction either completes fully or not at all, which is
+what makes the traps precise (REQ1).
+
+Pipeline registers (D1): each one is a `valid` bit plus a payload. Only the
+valid bit has a reset; the payload is ignored whenever valid=0, so a flush
+or a reset produces a guaranteed safe bubble without caring what the
+payload holds.
+
+### Timing of the common cases
+
+ALU op — 1 instruction per cycle, measured CPI = 1.00:
+
+| cycle | S1 | S2 | S3 |
+|---|---|---|---|
+| 1 | fetch `add` | | |
+| 2 | fetch next | decode+execute | |
+| 3 | ... | next instr | write rd |
+
+Load/store — S2 stalls for the whole AXI round-trip (REQ5):
+
+| cycle | activity |
+|---|---|
+| 1 | ALU computes the address, alignment check, LSU issues AR (or AW+W) |
+| 2..n-1 | S2 stalled, S1 may finish its own fetch and park it |
+| n | response beat arrives, data extracted, instruction leaves S2 |
+| n+1 | writeback |
+
+Mispredict — costs exactly 1 cycle:
+
+| cycle | activity |
+|---|---|
+| 1 | S2 resolves the branch, direction/target differ from the prediction |
+| 1 | hazard_unit: redirect, the wrong-path fetch in S1 is dropped |
+| 2 | S1 fetches the correct target, S2 executes a bubble |
+| 3 | correct-path instruction in S2 |
+
+### Stall / bubble / flush
+
+Three different mechanisms, all owned by `hazard_unit` (REQ6):
+
+- **stall** — S2 holds its instruction. Sources: data AXI in flight
+  (`lsu_busy`) and WFI sleep (`wfi_wait`, D23). S1 freezes with it.
+- **bubble** — a pipeline register loads valid=0. Happens when fetch has
+  not delivered yet and behind every flush.
+- **flush** — S2 decided the younger instruction is wrong-path
+  (mispredict, trap entry, MRET). Exactly one fetch is dropped.
+
+Priority (D14): flush beats stall, and an S2 stall finishes before S2 can
+raise a flush that depends on the result of the stalled op (e.g. a bus
+error only known when the response lands). Both rules come from gating
+everything with one signal, `s2_advance`.
+
+## 3. Module descriptions
+
+### fetch_unit.v — S1 (REQ5, REQ12; D6, D7, D8)
+
+Owns the PC and the `ibus` AXI master. One transaction in flight, next
+ARVALID raised in the same cycle the current R beat is accepted, so a
+latency-1 memory sustains 1 fetch/cycle (D6).
+
+Implementation choices:
+- **Holding register** (D7): if S2 stalls, the finished fetch parks in a
+  1-entry buffer and no new fetch is issued. S1 never runs ahead of S2.
+  This is also why WFI needs no extra logic to silence the bus: once the
+  holding register is full, no AR is issued.
+- **Redirect with a read in flight** (D7): AXI reads cannot be cancelled.
+  A `discard` flag is set, the stale beat is accepted and dropped, then
+  fetching restarts at the redirect address.
+- **Fetch bus errors** (D8): SLVERR/DECERR does not trap in S1. The word
+  is tagged `fetch_fault` and traps as instruction access fault (cause 1)
+  only if it reaches S2 — a wrong-path faulting fetch just gets flushed.
+- **ARVALID is gated with `rst_n`**: the issue logic is combinational and
+  would otherwise request `RESET_PC` while reset is still asserted, which
+  AXI forbids (found by the SVA layer, see debug/VERIFICATION.md).
+
+### branch_predictor.v — BHT + BTB + RAS (REQ8; D9, D10, D11, D24)
 
 ```
-cycle 1  S1: AR handshake on ibus with the PC; R beat returns the word
-cycle 2  S2: decode → read x1,x2 → ALU adds → result into DX/WB
-cycle 3  S3: DX/WB.result written into x3
+lookup (S1):  PC ──► index [8:2] ──► {valid, tag, dir bit, is_ret, target}
+                                          │
+              hit && dir ──► pred_taken   ├─ is_ret && RAS not empty ─► RAS top
+                                          └─ otherwise ─────────────► stored target
+update (S2 commit): PC, taken, real target, is_ret, push/pop
 ```
-One instruction enters S2 per cycle, so throughput is 1 instruction/cycle
-(CPI = 1.00, measured by the testbench) as long as nothing stalls.
 
-### A load (`lw x5, 8(x2)`)
+- 128 direct-mapped entries, index PC[8:2], tag PC[31:9] (D9). The stored
+  target exists because at fetch time the immediate is not decoded yet; a
+  direction bit alone could not redirect anything.
+- 1-bit direction = last outcome (REQ8). Miss predicts not-taken (D10).
+- Updates happen only when a branch/jump commits in S2 (D11). Nothing is
+  speculative and entries survive traps (trap/MRET redirects are
+  architectural, they bypass the predictor).
+- **RAS** (D24): 8 entries (parameter, 0 disables). The BTB stores the
+  last target, which is wrong for a return called from several places.
+  Committed calls (rd = x1/x5, the JALR hint convention from the ISA
+  spec) push pc+4, committed returns pop, and a BTB entry learned from a
+  return is flagged `is_ret` so its prediction comes from the RAS top.
+  Overflow wraps, underflow falls back to the stored target. Both cases
+  only cost accuracy — correctness always comes from branch_unit.
 
+### decode.v / imm_gen.v / control.v (REQ7; D23)
+
+`decode` slices the fixed RV32I fields, `imm_gen` builds the immediate for
+the 5 encoding formats, `control` turns the opcode into S2's control
+lines. Anything unknown sets `illegal` and forces every other control line
+inactive, so an illegal instruction has no side effects — it traps.
+
+- FENCE = NOP: single hart, in-order, blocking memory, nothing to order.
+- SYSTEM decodes exact encodings only: ECALL, EBREAK, MRET, WFI
+  (imm12 = 0x105, D23) and the six CSR forms. funct3=100 is reserved →
+  illegal.
+
+### regfile.v (REQ10)
+
+32×32, x0 hardwired to zero, two combinational read ports (S2), one write
+port (S3), reset to zero.
+
+### alu.v / alu_top.v / branch_unit.v
+
+`alu_top` selects the operands (register vs immediate, PC for AUIPC) and
+derives the ALU opcode from funct3/funct7. `branch_unit` computes the real
+direction and target of every control transfer; that result is compared
+against the prediction, trains the predictor and masks bit 0 for JALR as
+the ISA requires.
+
+### csr_file.v (REQ9; D3, D5, D15, D16, D25)
+
+| CSR | Addr | Implemented fields |
+|---|---|---|
+| mstatus | 0x300 | MIE(3), MPIE(7); MPP fixed 2'b11 |
+| mie | 0x304 | bits 16..23 = the 8 PIC channels (D3) |
+| mtvec | 0x305 | BASE[31:2], MODE[1:0] direct/vectored (D16) |
+| mscratch | 0x340 | full 32 bits |
+| mepc | 0x341 | [1:0] forced to 0 |
+| mcause | 0x342 | bit31 = interrupt, code in the low bits |
+| mip | 0x344 | read-only, mirrors `cpu_irq` on 16..23 |
+| mcycle / minstret | 0xB00/0xB02 | read-only counters (D5) |
+| mhpmcounter3..7 | 0xB03..07 | read-only event counters (D25) |
+| mhartid | 0xF14 | read-only, `HART_ID` parameter (D5) |
+
+- Reads are combinational, software writes commit at the end of S2.
+- Trap entry writes mepc/mcause/MPIE←MIE/MIE←0 in one clock edge, MRET
+  swaps back — hardware sequences always win over a software write.
+- Access to a missing CSR or an effective write to a read-only one raises
+  illegal instruction (D15). CSRs are inside the core, so a bus error
+  code would be the wrong abstraction. CSRRS/C with rs1=x0 counts as a
+  pure read and does not trap on read-only CSRs.
+- Vectored mode (D16): interrupts jump to BASE + 4×cause, exceptions to
+  BASE.
+- Performance counters (D25): 3 = mispredicts, 4 = cycles with S2 empty,
+  5 = dbus stall cycles, 6 = trap entries, 7 = WFI sleep cycles. These
+  pair with the DP-SRAM bandwidth registers and the DMA throttling knobs,
+  so software can measure contention instead of guessing.
+
+### exception_unit.v (D3, D17, D18)
+
+Watches the instruction in S2 and raises at most one cause:
+fetch fault (1) → illegal (2) → EBREAK (3) → ECALL (11) → misaligned jump
+target (0) → misaligned load/store (4/6) → load/store bus fault (5/7).
+
+- Alignment is checked before the access, so a misaligned address never
+  produces an AXI transaction (D17).
+- Bus errors are checked after the response and become access faults, not
+  illegal instruction (D18).
+
+### lsu.v — S2's data AXI master (REQ5, REQ11, REQ12; D12)
+
+Gets a command only for a legal, aligned, not-squashed memory op. Address
+and store data are latched in the first cycle: forwarded operands are only
+guaranteed valid then, and AXI wants a stable payload anyway (D12).
+
+- FSM: IDLE → RD or WR → IDLE, one transaction in flight. Handshake
+  progress is tracked per AXI channel (`ar_sent`, `aw_sent`, `w_sent`),
+  which keeps a later AXI4-Full upgrade additive.
+- WSTRB (REQ11): SB = `0001 << addr[1:0]`, SH = `0011 << addr[1:0]`,
+  SW = `1111`, data replicated across lanes — the exact convention the
+  DP-SRAM expects.
+- Loads: one right-shifter serves both byte and halfword extraction
+  (misaligned halves already trapped, so addr[0]=0 holds), then
+  sign/zero-extension by funct3.
+
+### hazard_unit.v (REQ6; D13, D14, D23)
+
+```verilog
+s2_advance   = ~lsu_busy & ~wfi_wait;
+redirect     = (trap_take | mret_exec | mispredict) & s2_advance;
+if_dx_we     = s2_advance;
+if_dx_bubble = redirect | ~fetch_valid;
+dx_squash    = trap_take;
 ```
-cycle 1  S2: ALU computes x2+8 → alignment checked → lsu issues AR on dbus
-cycle 2+ S2: pipeline STALLED (REQ5) — lsu waits for the R beat
-cycle n  S2: R beat arrives → byte-lane extract → instruction leaves S2
-cycle n+1 S3: loaded value written into x5
-```
-While S2 waits, S1 may quietly finish its own fetch and park it in the
-holding register (the two buses are independent, D6) — but nothing enters
-or leaves S2 until the data response lands.
 
-### A taken branch, predicted correctly
-
-```
-cycle 1  S1: fetch the branch; BTB hit says "taken, target T" → next fetch
-             starts at T immediately
-cycle 2  S2: branch resolves; prediction was right → no flush, no bubble
-```
-Zero cost. On a mispredict, S2 redirects the fetch and throws away the one
-wrong-path instruction sitting in S1 — exactly one lost cycle.
-
----
-
-## 3. Module guide
-
-### cpu_top.v — the assembly of everything
-Owns the two pipeline registers, wires all blocks together and makes the
-three decisions that need a global view, in this priority order (D2):
-
-1. **Interrupt?** Checked at the instruction boundary, before the
-   instruction is allowed to issue any data transaction. If taken, the
-   instruction in S2 is squashed and will re-run after MRET.
-2. **Synchronous exception?** From `exception_unit` — if yes, squash and
-   jump to the handler.
-3. **Mispredict?** Compare what the predictor claimed (carried in IF/DX)
-   with what `branch_unit` actually computed; on mismatch redirect fetch.
-
-The pipeline registers each split into a *valid* bit (reset, drives all the
-gating) and a *payload* (no reset — it is never believed when valid=0, D1).
-
-### fetch_unit.v — S1, the instruction AXI master
-A small machine around three questions:
-
-- **What to fetch next?** Ask the predictor: BTB hit & taken → stored
-  target; otherwise PC+4. On a redirect from S2, that address wins instead.
-- **When to fetch?** Whenever its single transaction slot is free and the
-  result will have somewhere to go. Back-to-back: the next ARVALID rises in
-  the same cycle the current R beat is accepted (D6), which is what
-  sustains 1 fetch/cycle on a fast memory.
-- **What if S2 can't take it?** The finished word parks in a one-entry
-  *holding register* and no new fetch starts (D7) — S1 never runs ahead.
-
-One AXI subtlety lives here: an in-flight read cannot be cancelled. On a
-redirect the unit sets a `discard` flag, politely accepts the stale beat
-when it arrives, drops it, and only then fetches from the new address.
-Fetch bus errors don't act here either — the word is delivered with a
-`fetch_fault` tag and becomes a trap only if it actually reaches S2 (D8);
-wrong-path fetch errors just get flushed.
-
-### branch_predictor.v — BHT + BTB in one table
-128 direct-mapped entries (D9), each: `valid`, `tag` (PC[31:9]), one
-direction bit = last outcome (REQ8), and the 32-bit target. The stored
-target is the whole point: at fetch time the immediate isn't decoded yet,
-so a direction bit alone couldn't redirect anything. Misses predict
-not-taken (D10). Entries are written only when a branch/jump actually
-commits in S2 (D11) — never speculatively — and survive traps.
-
-### decode.v / imm_gen.v / control.v — instruction cracking
-`decode` slices the fixed RV32I fields (opcode/rd/rs1/rs2/funct3/funct7).
-`imm_gen` rebuilds the immediate for each of the five encoding formats.
-`control` (REQ7) turns the opcode into the set of control lines the rest of
-S2 consumes — and polices legality: any unknown opcode or bad funct field
-raises `illegal` while forcing every other control line inactive, so an
-illegal instruction can't have side effects (it traps instead). FENCE
-decodes to a NOP: one hart, in-order, blocking memory — there is nothing to
-order.
-
-### regfile.v — the architectural registers (REQ10)
-32×32 bits, x0 hardwired to zero, two combinational read ports used by S2,
-one write port driven by S3.
-
-### The forwarding path (in cpu_top + hazard_unit)
-S2 reads the regfile combinationally, but the instruction one step ahead
-(in S3) hasn't written its result yet. If S3's destination matches one of
-S2's sources, the S3 result is *bypassed* directly into the operand mux
-(D13). That single bypass removes the classic load-use stall entirely,
-because a load's data is already in S3 by the time any consumer sits in S2.
-
-### alu.v / alu_top.v / branch_unit.v — the execute datapath
-`alu_top` picks operands (register vs immediate; PC for AUIPC) and derives
-the ALU opcode from funct3/funct7; `alu` does the arithmetic. `branch_unit`
-computes the *real* direction and target of any control transfer — that
-truth is compared against the prediction, feeds the predictor's learning
-port, and (for JALR) masks bit 0 of the target as the ISA requires.
-
-### csr_file.v — machine-mode state (REQ9)
-The seven required CSRs plus read-only `mcycle`/`minstret`/`mhartid` (D5).
-Reads are combinational; software writes commit at the end of S2. Two
-hardware sequences override software:
-
-- **Trap entry**: `mepc ← return address`, `mcause ← cause`,
-  `MPIE ← MIE`, `MIE ← 0` — all in one edge, so the state can never be
-  half-updated.
-- **MRET**: `MIE ← MPIE`, `MPIE ← 1`.
-
-Each CSR sits in its own always block; `mstatus.MIE/MPIE` stay paired
-because they swap as a unit. Accessing a CSR that doesn't exist, or writing
-a read-only one, is an illegal-instruction trap (D15) — CSRs are inside the
-core, so a bus error code would be the wrong abstraction. `mtvec` supports
-vectored mode (D16): interrupts land at `BASE + 4×cause`, exceptions at
-`BASE`.
-
-### exception_unit.v — the synchronous trap causes (D3)
-Watches the instruction in S2 and raises exactly one cause through a
-priority chain: fetch fault, illegal, EBREAK, ECALL, misaligned jump
-target, misaligned load/store, load/store bus fault. Misalignment is
-checked *before* the access, so a bad address never even reaches the bus
-(D17); bus errors are checked *after* the response and become access
-faults, not "illegal instruction" (D18).
-
-### lsu.v — S2's data AXI master
-Gets a command only when the op is legal, aligned and not squashed. Latches
-address and write data in the first cycle (the forwarded operands are only
-valid then, and AXI wants them stable anyway — D12), issues AR (load) or
-AW+W (store), and holds `busy` until the response beat. Store data is
-replicated across byte lanes with the matching WSTRB (REQ11) — exactly the
-convention the DP-SRAM expects. Loads pass the returned word through one
-right-shifter and sign/zero-extend the byte or half.
-
-### hazard_unit.v — the one place stall/flush is decided (REQ6)
-Everything about pipeline motion is expressed in five signals computed
-here: does S2 advance, does fetch redirect, does IF/DX load, is it a
-bubble, does the S2 instruction commit. Two rules fall out of a single gate
-(`s2_advance`) (D14):
-
-- *flush beats stall* — a redirect reaches S1 even if S1 is mid-fetch;
-- *an S2 stall finishes before S2 can flush* — an access fault, known only
-  when the response lands, waits for that exact cycle.
-
-The forwarding compare (S3.rd vs S2.rs1/rs2) also lives here.
+Also computes the forwarding hits (S3.rd vs S2.rs1/rs2, x0 excluded).
+Load-use costs zero cycles (D13): a load's data is already in S3 when its
+consumer sits in S2, so a single S3→S2 bypass covers it.
 
 ### writeback_mux.v — S3
-Selects what goes into rd: ALU result, load data, PC+4 (the JAL/JALR link),
-or the CSR read value. The write itself is gated by DX/WB's valid bit, so
-bubbles and squashed instructions write nothing.
 
-### pic.v — the interrupt hub of the SoC (D19–D22)
-Not part of the CPU pipeline: this is the block the peripherals' interrupt
-lines plug into, and the counterpart of the CPU's `cpu_irq*` interface. The
-core of it is one line of combinational logic:
+Selects rd's value: ALU result, load data, PC+4 (JAL/JALR link) or CSR
+read value. The write enable is gated by the DX/WB valid bit.
 
-```
-pending = irq_src & enable & ~in_service
-```
+## 4. AXI4-Lite
 
-- `irq_src[7:0]` — level-sensitive request lines from the peripherals
-  (planned hookup: DMA channels 0..3, DP-SRAM on 4). A peripheral holds its
-  line high until software clears its own INT_STATUS register (D19).
-- `enable` — the PIC's software mask (its IRQ_ENABLE register), a second,
-  independent gate in front of the CPU's per-cause `mie` mask.
-- `in_service` — set from `cpu_irq_ack` when the CPU accepts a channel,
-  cleared when `cpu_in_trap` drops at MRET. This is what "suppress
-  re-assertion of the same interrupt" means in practice: the level line is
-  still high while its handler runs, and this mask keeps it from re-entering
-  a handler that re-enables interrupts (D21).
+Both master ports follow the same rules (REQ2, REQ12):
 
-`cpu_irq` and `cpu_irq_id` are both registered from the same `pending`
-vector, so the pair the CPU sees is always consistent; the id is simply the
-lowest-numbered pending channel — fixed priority, channel 0 highest (D20).
+- VALID never waits for READY; once VALID is high the payload holds until
+  the handshake.
+- At most one transaction in flight per port, never read+write at the
+  same time on `dbus`.
+- Read: AR handshake, then the R beat. Write: AW and W issued together,
+  each with its own READY, response on B.
 
-Software talks to it over an AXI4-Lite slave port (D22):
-
-| Offset | Register | Access | Meaning |
-|--------|----------|--------|---------|
-| 0x0 | IRQ_ENABLE | R/W | per-channel gate, bit i = channel i |
-| 0x4 | IRQ_PENDING | RO | what the CPU is being offered (= `cpu_irq`) |
-| 0x8 | IRQ_RAW | RO | the source lines, unmasked |
-| 0xC | IRQ_ACTIVE | RO | the in-service mask |
-
-Any other offset — and any write to a read-only register — answers SLVERR,
-which the CPU turns into a precise access fault.
-
----
-
-## 4. The AXI4-Lite buses
-
-Both ports follow the same rules (REQ2, REQ12); the CPU keeps at most one
-transaction in flight per port and never does read+write at once.
-
-Every channel uses the same handshake: the sender raises VALID with stable
-payload, the receiver raises READY, the transfer happens on the clock edge
-where both are high. VALID must never wait for READY, and once VALID is up
-the payload must not change — the fetch unit and LSU are built around
-exactly these two obligations.
-
-**Read (fetch or load):**
 ```
             cycle:   1     2     3
 ARVALID  ▔▔▔▔▔╲_____
-ARREADY  _____╱▔▔▔▔▔        (address accepted end of cycle 1)
+ARREADY  _____╱▔▔▔▔▔        address accepted end of cycle 1
 RVALID   ___________╱▔▔▔▔▔
-RREADY   ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  (data beat lands cycle 2..n, RRESP says OKAY/error)
+RREADY   ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  data beat in cycle 2..n, RRESP = OKAY/error
 ```
 
-**Write (store):** AW (address) and W (data+WSTRB) go out together, each
-with its own READY; when both have handshaked, the slave answers on B with
-the status. The LSU tracks the three channels independently, which is also
-what makes a future move to full AXI4 an extension instead of a rewrite.
+Error handling: OKAY is the normal case; SLVERR (from a real slave, e.g. a
+read-only PIC register) and DECERR (from the interconnect, unmapped
+address) both become precise traps — cause 1 on fetch, cause 5/7 on data
+(D8, D18).
 
-Error codes: `OKAY` is normal; `SLVERR`/`DECERR` turn into precise traps —
-instruction access fault for fetch, load/store access fault for data (D8,
-D18). `DECERR` is what the interconnect answers for an unmapped address.
-
----
-
-## 5. Stalls, bubbles, flushes — who moves when
-
-Three distinct mechanisms, often confused:
-
-- **Stall** — a stage holds its content. Only S2 stalls, and only while a
-  data transaction is in flight. S1 freezes with it (nowhere to deliver).
-- **Bubble** — a pipeline register loads "nothing" (valid=0). Happens when
-  fetch hasn't delivered yet, and behind every flush. A bubble flows
-  through S2/S3 doing nothing — every side effect is gated by valid (D1).
-- **Flush** — S2 decided the instruction(s) behind it are wrong-path:
-  mispredict, trap entry, MRET. Exactly one fetch is thrown away (the
-  pipeline is only 3 deep), and fetch restarts at the corrected address.
-
-Worked example — mispredicted branch:
-```
-cycle 1  S1 fetches B (predicted not-taken) ; next fetch = B+4 starts
-cycle 2  S2 resolves B: actually taken, target T → mispredict
-         hazard_unit: redirect=1 → fetch drops the B+4 word, IF/DX ← bubble
-cycle 3  S1 fetches T          ; S2 executes the bubble (does nothing)
-cycle 4  S2 executes T's instruction        → total cost: 1 cycle
-```
-
----
-
-## 6. Traps and interrupts, step by step
-
-**Synchronous exception** (say, a load from an unmapped address):
-```
-1. lsu issues the read; the interconnect answers DECERR
-2. exception_unit raises cause 5 in the response cycle
-3. same cycle: DX/WB gets valid=0 (the load never commits), IF/DX flushed
-4. csr_file commits atomically: mepc ← load's PC, mcause ← 5,
-   MPIE ← MIE, MIE ← 0
-5. fetch redirects to the handler (mtvec BASE, or BASE+4×cause if vectored
-   and it's an interrupt); cpu_in_trap goes high
-```
-
-**External interrupt** (REQ4, D2), end to end through the PIC:
-```
-1. a peripheral raises its level-sensitive line into pic.v and holds it
-2. the PIC gates it (IRQ_ENABLE, in-service mask), picks the lowest pending
-   channel, and presents cpu_irq / cpu_irq_id one cycle later
-3. the core takes it only when mstatus.MIE and that channel's mie bit are
-   set, and only at an instruction boundary — a pending interrupt during a
-   multi-cycle AXI stall politely waits for the stall to finish
-4. the victim instruction is squashed *before* doing anything (so it can
-   safely re-run), mepc points at it, cpu_irq_ack[id] pulses one cycle
-5. the PIC moves the channel into its in-service mask: even though the
-   peripheral's line is still high, it disappears from cpu_irq until MRET —
-   the handler cannot be re-entered by the interrupt it is serving
-6. the handler clears the peripheral's INT_STATUS (dropping the line) and
-   MRETs; cpu_in_trap falls, the PIC releases the in-service mask
-```
-Two masks stack up on purpose: the PIC's IRQ_ENABLE says "this source may
-reach the CPU at all", the CPU's `mie` says "the software running right now
-cares". A channel can be visible in `mip` yet never taken — that exact case
-(channel 5) runs in the testbench.
-
-**MRET**: `MIE ← MPIE`, jump to `mepc`, `cpu_in_trap` drops, and the
-preempted instruction executes as if nothing happened (D4).
-
-Nothing here consults the branch predictor — trap and MRET redirects are
-architectural, and the predictor neither learns from them nor steers them.
-
----
-
-## 7. Data flow, condensed
+## 5. Interrupts
 
 ```
-        ibus_axi.R ──► fetch_unit ──► IF/DX ──► decode ─┬─► regfile read
-                            ▲                           │       │
-   branch_predictor ────────┘ (next PC)                 │   forward from S3?
-                                                        ▼       ▼
-                                              control lines   operands
-                                                        │       │
-                              ┌─────────────────────────┼───────┤
-                              ▼                         ▼       ▼
-                         branch_unit                  ALU     csr_file
-                              │                         │       │
-                        taken/target             addr/result  rdata
-                              │                         │       │
-        mispredict/trap ◄─────┴──── exception_unit ◄────┤       │
-              │                                         ▼       │
-              ▼                                    lsu ◄─► dbus_axi
-        redirect to fetch                               │
-                                                   load data
-                                                        ▼
-                                    DX/WB ──► writeback_mux ──► regfile write
-                                                        │
-                                                        └──► forwarding to S2
+DMA ch0..3 ──┐
+DP-SRAM ─────┤ irq_src[7:0]   ┌──────────────── pic.v ───────────────┐
+mtimer ──────┘ (level) ──────►│ pending = src & enable & ~in_service │
+                              │ cpu_irq    <= pending                │
+   AXI4-Lite slave ──────────►│ cpu_irq_id <= lowest pending channel │
+   (IRQ_ENABLE etc.)          └──────────────────┬───────────────────┘
+                                                 ▼
+                                    cpu_irq / cpu_irq_id  ──►  CPU
+                                    cpu_irq_ack / cpu_in_trap ◄──
 ```
 
-Follow any instruction along this graph and you have its complete story:
-in through the R beat, out through the regfile write port (or, for stores,
-out through the W channel; for branches, back into the predictor).
+CPU side (REQ4): an interrupt is taken only under `mstatus.MIE`, only if
+the channel's `mie` bit is set, and only at an instruction boundary — a
+pending interrupt during a multi-cycle AXI stall waits for the response
+beat. The victim instruction is squashed before it does anything, so it
+can re-run after MRET. mepc holds the resume PC (D4); the one exception is
+a WFI wake, where mepc = wfi+4 per the privileged spec.
 
----
+PIC side (D19..D22):
+- Level-sensitive inputs, no latching (D19): a peripheral holds its line
+  until software clears its own status register. `cpu_irq` and
+  `cpu_irq_id` are registered from the same pending vector, so the pair
+  the CPU samples is always consistent.
+- Fixed priority, channel 0 highest (D20).
+- In-service suppression (D21): the acked channel is masked out of
+  `cpu_irq` until MRET, so a handler that re-enables MIE cannot be
+  re-entered by the interrupt it is serving.
+- Register map (D22), word registers from the base address:
 
-## 8. Running more than one core
+| Offset | Register | Access |
+|---|---|---|
+| 0x0 | IRQ_ENABLE | R/W |
+| 0x4 | IRQ_PENDING | RO (= cpu_irq) |
+| 0x8 | IRQ_RAW | RO (source lines) |
+| 0xC | IRQ_ACTIVE | RO (in-service mask) |
 
-The core carries no global state: memories are outside, identity comes from
-two parameters (`RESET_PC`, `HART_ID` → the read-only `mhartid` CSR, D5),
-and each instance is a well-behaved AXI master an interconnect can
-arbitrate. Software tells cores apart by reading `mhartid`. There is no
-LR/SC in RV32I, but every core here executes memory operations in order and
-one at a time — sequentially consistent — so plain flag handshakes through
-shared memory are sound. `debug/hdl/tb_dual_core.v` runs exactly that: two
-cores, one shared memory behind a 2:1 arbiter, a flag handshake, both
-results checked.
+Anything else, and any write to a read-only register, answers SLVERR.
 
----
+Two masks stack on purpose: PIC IRQ_ENABLE = "this source may reach the
+CPU", `mie` = "current software cares". A consequence of the fixed
+priority, found while testing: a source that is PIC-enabled but
+mie-masked keeps `cpu_irq_id` pointed at itself and starves all
+lower-priority channels. Integration rule: only route a source into the
+PIC if some handler will actually clear it.
 
-## 9. Where the testbench fits
+## 6. WFI + mtimer
 
-`debug/` mirrors this document in executable form: `tb_cpu_axi.v` builds a
-small SoC — CPU, imem, an address decoder that maps the PIC's registers at
-0x3000_0000 next to the dmem, and the real `pic.v` with the TB playing the
-peripherals on `irq_src` — and drives a real program
-(`debug/sim/program_axi.s`) through every path described above: every
-instruction group, every trap cause, PIC priority/suppression/masking, the
-predictor corner cases. Passive AXI monitors check the bus rules on every
-cycle on all three ports (ibus, dbus, PIC). `debug/VERIFICATION.md` maps
-each behavior to the exact check that proves it.
+WFI (D23) is decoded in `control` and implemented as a third stall source:
+S2 freezes on the WFI, S1 parks its fetch, and the instruction bus goes
+idle (measured: at most the one already-issued fetch completes per sleep).
+Wake condition is `|(cpu_irq & mie)` — `mstatus.MIE` is intentionally not
+part of it, per privileged spec 3.3.3:
+
+- MIE = 1: the wake becomes a normal interrupt, with mepc = wfi+4 so MRET
+  resumes after the WFI;
+- MIE = 0: the WFI completes as a NOP and execution falls through.
+
+mtimer (D26, D27) is the standard RISC-V machine timer as a memory-mapped
+peripheral: 64-bit free-running `mtime`, 64-bit `mtimecmp`, level
+interrupt `irq = (mtime >= mtimecmp)` wired to PIC channel 7 (lowest
+priority: a tick should not outrank DMA/DP-SRAM service).
+
+| Offset | Register | Access |
+|---|---|---|
+| 0x0 / 0x4 | MTIME_LO / HI | R/W |
+| 0x8 / 0xC | MTIMECMP_LO / HI | R/W |
+
+- Reset value of mtimecmp is all-ones, so the timer starts disarmed.
+- Arming order LO-then-HI cannot fire early (the compare cannot pass the
+  all-ones high half).
+- There is no separate status register: the compare is the status, and
+  the handler clears the line by moving mtimecmp — consistent with the
+  level-sensitive contract of the PIC (D19).
+
+Together they give the SoC an idle mode: program the DMA, arm the timer
+as a deadline, execute WFI. The CPU generates zero interconnect traffic
+while the DMA works, and either the completion interrupt or the timer
+wakes it; a timeout handler can abort a stuck channel over the DMA's
+CHx_CONTROL register.
+
+## 7. Multi-core
+
+The core keeps no global state: memories are external, identity comes
+from `RESET_PC`/`HART_ID`, and each instance is a normal AXI master an
+interconnect can arbitrate. RV32I has no LR/SC, but every memory op here
+is in-order and blocking (one outstanding, no store buffer), so each hart
+is sequentially consistent and flag handshakes through shared memory
+work. `debug/hdl/tb_dual_core.v` runs two cores against one shared memory
+behind a 2:1 arbiter and checks both results.
+
+## 8. Verification
+
+The testbench (`debug/hdl/tb_cpu_axi.v`) builds a small SoC around the
+CPU: instruction memory, two address decoders (PIC at 0x3000_0000, mtimer
+at 0x3001_0000, data memory as default), the real `pic.v` and `mtimer.v`,
+protocol monitors on all four AXI ports, and a directed self-checking
+program. A separate SVA + functional-coverage layer (`debug/sva/`) binds
+the same contracts as assertions and runs under Verilator. The test plan,
+the coverage results and the bugs found along the way are documented in
+`debug/VERIFICATION.md`.

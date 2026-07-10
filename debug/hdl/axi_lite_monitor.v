@@ -76,7 +76,10 @@ reg armed;   // skip the cycle right after reset (snapshots not valid yet)
 
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-        err_cnt <= 0; rd_cnt <= 0; wr_cnt <= 0;
+        // err_cnt is blocking everywhere (the err task increments it
+        // blocking); one style per signal keeps Verilator happy too
+        err_cnt = 0;
+        rd_cnt <= 0; wr_cnt <= 0;
         rd_out  <= 0; aw_pend <= 0; w_pend <= 0;
         armed   <= 0;
     end else begin

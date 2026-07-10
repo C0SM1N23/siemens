@@ -130,6 +130,8 @@ def encode(op, a, pc, syms):
         return 0x00100073
     if op == "mret":
         return 0x30200073
+    if op == "wfi":
+        return 0x10500073
     if op in R_OPS:
         f3, f7 = R_OPS[op]
         return enc_r(f3, f7, REGS[a[0]], REGS[a[1]], REGS[a[2]])

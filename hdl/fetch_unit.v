@@ -129,7 +129,9 @@ wire [31:0] issue_addr = redirect    ? redirect_pc :
                          instr_valid ? next_pc     :
                                        npc_q;       // post-reset / post-discard
 
-assign ibus_arvalid = ar_pending_q | issue_now;
+// gated by rst_n: AXI requires VALID low during reset (IHI0022E A3.1.2) —
+// issue_now is combinational and would otherwise request RESET_PC mid-reset
+assign ibus_arvalid = rst_n & (ar_pending_q | issue_now);
 assign ibus_araddr  = ar_pending_q ? issued_pc_q : issue_addr;
 
 wire ar_hs = ibus_arvalid && ibus_arready;

@@ -8,8 +8,13 @@
 //   - FENCE decodes as a NOP (single hart, in-order, no reordering store
 //     buffer — there is nothing to fence)
 //   - ECALL/EBREAK/CSR are trap- or CSR-handled downstream
-//   - SYSTEM is decoded strictly: ECALL / EBREAK / MRET plus CSR* incl. the
-//     immediate forms; any other SYSTEM encoding is illegal
+//   - SYSTEM is decoded strictly: ECALL / EBREAK / MRET / WFI plus CSR* incl.
+//     the immediate forms; any other SYSTEM encoding is illegal
+//
+// - D23
+//   WFI (Privileged ISA v20211203 ch. 3.3.3, the standard the brief cites).
+//   Decode only — the sleep/wake behavior lives in cpu_top/hazard_unit.
+//   Every other control line stays inactive, so a committed WFI is a NOP.
 //
 // Note: illegal detection feeds D3 (the supported trap causes). Unknown
 // opcodes or bad funct fields set illegal=1 and leave every other control
@@ -38,6 +43,7 @@ module control (
     output reg        mret,
     output reg        ecall,
     output reg        ebreak,
+    output reg        wfi,         // sleep until interrupt (D23)
     output reg        illegal
 );
 
@@ -47,7 +53,7 @@ always @(*) begin
     MemRead   = 0; MemWrite = 0; MemtoReg = 2'b00;
     Branch    = 0; Jump = 0;
     csr_instr = 0; csr_op = 2'b00; csr_imm = 0;
-    mret      = 0; ecall = 0; ebreak = 0; illegal = 0;
+    mret      = 0; ecall = 0; ebreak = 0; wfi = 0; illegal = 0;
 
     case (opcode)
         7'b0110011: begin // R-type
@@ -99,6 +105,7 @@ always @(*) begin
                 if      (imm12 == 12'h000 && rs1 == 5'b0 && rd == 5'b0) ecall  = 1;
                 else if (imm12 == 12'h001 && rs1 == 5'b0 && rd == 5'b0) ebreak = 1;
                 else if (imm12 == 12'h302 && rs1 == 5'b0 && rd == 5'b0) mret   = 1;
+                else if (imm12 == 12'h105 && rs1 == 5'b0 && rd == 5'b0) wfi    = 1;
                 else illegal = 1;
             end else if (funct3[1:0] != 2'b00) begin
                 // CSRRW/S/C (+I): rd gets the old CSR value

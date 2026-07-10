@@ -22,6 +22,16 @@
 //   Read-only mhartid (0xF14) from the HART_ID parameter (multi-core).
 //   Read-only mcycle/minstret counters kept as verification aids.
 //
+// - D25
+//   Read-only mhpmcounter3..7 at the standard addresses, hardwired to the
+//   events software actually needs to tune this SoC (the DP-SRAM exports
+//   BANDWIDTH_A/B and the DMA has per-channel throttling — these are the
+//   CPU-side numbers that close that loop):
+//     3: mispredict redirects        4: fetch-starved cycles (S2 empty)
+//     5: dbus stall cycles           6: traps taken (sync + irq)
+//     7: WFI sleep cycles
+//   mhpmcounter8..31 / mhpmevent* stay unimplemented -> illegal (D15).
+//
 // - D15
 //   Any access to an unimplemented CSR, or an effective write to a
 //   read-only one, raises illegal instruction in S2 (not a bus DECERR —
@@ -72,7 +82,11 @@ module csr_file #(
     output     [31:0] mepc_out,
 
     // counters
-    input             retire         // instruction committed in S3
+    input             retire,        // instruction committed in S3
+    input             ev_mispredict, // one pulse per mispredict redirect (D25)
+    input             ev_ibus_wait,  // level: S2 has no instruction
+    input             ev_dbus_stall, // level: data AXI op in flight
+    input             ev_wfi_sleep   // level: WFI sleeping (D23)
 );
 
 // CSR addresses (Privileged ISA v20211203)
@@ -85,11 +99,17 @@ localparam MCAUSE   = 12'h342;
 localparam MIP      = 12'h344;
 localparam MCYCLE   = 12'hB00;
 localparam MINSTRET = 12'hB02;
+localparam MHPMC3   = 12'hB03;   // mispredicts        (D25)
+localparam MHPMC4   = 12'hB04;   // fetch-starved cycles
+localparam MHPMC5   = 12'hB05;   // dbus stall cycles
+localparam MHPMC6   = 12'hB06;   // traps taken
+localparam MHPMC7   = 12'hB07;   // WFI sleep cycles
 localparam MHARTID  = 12'hF14;
 
 reg        mstatus_mie_q, mstatus_mpie_q;
 reg [7:0]  mie_q;
 reg [31:0] mtvec_q, mscratch_q, mepc_q, mcause_q, mcycle_q, minstret_q;
+reg [31:0] mhpm3_q, mhpm4_q, mhpm5_q, mhpm6_q, mhpm7_q;
 
 wire [31:0] mstatus_rd = {19'b0, 2'b11, 3'b0, mstatus_mpie_q, 3'b0, mstatus_mie_q, 3'b0};
 
@@ -108,6 +128,11 @@ always @(*) begin
         MIP:      begin csr_rdata = {8'b0, irq_lines, 16'b0}; addr_ro = 1; end
         MCYCLE:   begin csr_rdata = mcycle_q;   addr_ro = 1; end
         MINSTRET: begin csr_rdata = minstret_q; addr_ro = 1; end
+        MHPMC3:   begin csr_rdata = mhpm3_q;    addr_ro = 1; end
+        MHPMC4:   begin csr_rdata = mhpm4_q;    addr_ro = 1; end
+        MHPMC5:   begin csr_rdata = mhpm5_q;    addr_ro = 1; end
+        MHPMC6:   begin csr_rdata = mhpm6_q;    addr_ro = 1; end
+        MHPMC7:   begin csr_rdata = mhpm7_q;    addr_ro = 1; end
         MHARTID:  begin csr_rdata = HART_ID;    addr_ro = 1; end
         default:  begin csr_rdata = 32'b0; addr_ok = 0; end
     endcase
@@ -229,6 +254,43 @@ always @(posedge clk or negedge rst_n) begin
         minstret_q <= 32'b0;
     else if (retire)
         minstret_q <= minstret_q + 1;
+end
+
+// hardware performance counters (D25) — one per event, same shape as
+// mcycle/minstret: free-running, read-only, reset to 0
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mhpm3_q <= 32'b0;
+    else if (ev_mispredict)
+        mhpm3_q <= mhpm3_q + 1;
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mhpm4_q <= 32'b0;
+    else if (ev_ibus_wait)
+        mhpm4_q <= mhpm4_q + 1;
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mhpm5_q <= 32'b0;
+    else if (ev_dbus_stall)
+        mhpm5_q <= mhpm5_q + 1;
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mhpm6_q <= 32'b0;
+    else if (trap_set)
+        mhpm6_q <= mhpm6_q + 1;
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mhpm7_q <= 32'b0;
+    else if (ev_wfi_sleep)
+        mhpm7_q <= mhpm7_q + 1;
 end
 
 endmodule

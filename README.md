@@ -1,15 +1,16 @@
 # RISC-V RV32I CPU — 3-stage pipeline with AXI4-Lite
 
-The CPU block of the SoC project (CPU + DMA + DP-SRAM), in Verilog
-(IEEE 1364-2005). The original single-cycle core became a 3-stage pipeline with
-two AXI4-Lite master ports, a branch predictor, precise traps, an M-mode CSR
-file, and a PIC interrupt interface. The repo also ships the PIC itself
-([pic.v](hdl/pic.v)): the system interrupt controller every peripheral brief
-points at, which no block brief assigned to anyone.
+The CPU block of the SoC project (CPU + DMA + DP-SRAM), written in Verilog
+(IEEE 1364-2005). The core is a 3-stage RV32I pipeline with two AXI4-Lite
+master ports, a branch predictor with a return-address stack, precise traps,
+WFI, and an M-mode CSR file with performance counters. The repo also
+contains two blocks that no brief assigned but the system needs: the
+interrupt controller ([pic.v](hdl/pic.v)) that all peripheral irq lines
+point at, and the machine timer ([mtimer.v](hdl/mtimer.v)) used for
+scheduling and for timing out a hung DMA transfer.
 
-Want to *learn* the design? Start with [ARCHITECTURE.md](ARCHITECTURE.md) —
-module by module, how the system runs, and the full data flow. Recent code
-changes are documented in [CHANGELOG.md](CHANGELOG.md); verification lives in
+Block diagrams and per-module details are in
+[ARCHITECTURE.md](ARCHITECTURE.md); the test plan and results are in
 [debug/VERIFICATION.md](debug/VERIFICATION.md).
 
 ## Architecture
@@ -18,7 +19,8 @@ changes are documented in [CHANGELOG.md](CHANGELOG.md); verification lives in
 S1 FETCH ──────────── S2 DECODE + EXECUTE ─────────── S3 WRITEBACK
 ibus_axi (AR/R)       decode, regfile, ALU, branch,    rd write
 + branch predictor    CSR, load/store on dbus_axi      (S3->S2 forwarding)
-  (BTB/BHT, 128)      traps/interrupts resolve here
+  (BTB/BHT, 128,      traps/interrupts resolve here;
+   + 8-entry RAS)     WFI sleeps here (ibus goes idle)
 ```
 
 One clock, async active-low reset. The pipeline registers carry a `valid` bit,
@@ -81,6 +83,11 @@ each in full. These two tables are the index.
 | D20 | PIC priority fixed, channel 0 highest (id = lowest pending channel) | [pic.v](hdl/pic.v) |
 | D21 | In-service suppression: acked channel masked from ack until MRET (`cpu_in_trap` low); sized for non-nested handlers | [pic.v](hdl/pic.v) |
 | D22 | PIC register map (ENABLE / PENDING / RAW / ACTIVE); unmapped or read-only-write access answers SLVERR | [pic.v](hdl/pic.v) |
+| D23 | WFI (Priv. spec 3.3.3): S2 sleeps, S1 parks → zero ibus traffic; wake on any mie-enabled pending irq, `mstatus.MIE` decides trap-vs-fall-through; interrupt wake sets mepc = wfi+4 | [control.v](hdl/control.v), [cpu_top.v](hdl/cpu_top.v), [hazard_unit.v](hdl/hazard_unit.v) |
+| D24 | Return-address stack (8 entries, parameterized, 0 = off): calls/returns keyed on the ISA JALR hint regs (x1/x5); BTB entries tagged `is_ret` predict the RAS top; learned at commit like the BTB (never speculative) | [branch_predictor.v](hdl/branch_predictor.v) |
+| D25 | Read-only `mhpmcounter3..7`: mispredicts, fetch-starved cycles, dbus stall cycles, traps taken, WFI sleep cycles — the CPU-side numbers that pair with DP-SRAM BANDWIDTH_A/B and DMA throttling | [csr_file.v](hdl/csr_file.v) |
+| D26 | Machine timer (unassigned in the briefs, like the PIC): 64-bit mtime/mtimecmp, level irq = compare, born disarmed; handler clears by moving mtimecmp — feeds PIC channel 7 (lowest priority) | [mtimer.v](hdl/mtimer.v) |
+| D27 | mtimer AXI4-Lite slave port, same discipline as the PIC's (D22): 4 R/W word registers, SLVERR elsewhere, WSTRB honored per lane | [mtimer.v](hdl/mtimer.v) |
 
 ## AXI4-Lite interface (SoC integration)
 
@@ -105,14 +112,26 @@ boundary, only under `mstatus.MIE`, and is held through a multi-cycle AXI
 stall (REQ4; priority D2).
 
 The PIC side ([pic.v](hdl/pic.v), D19–D22): 8 level-sensitive source lines
-(planned: DMA ch0..3, DP-SRAM on 4), `pending = src & enable & ~in_service`,
-fixed priority with channel 0 highest. The acked channel is held out of
-`cpu_irq` until MRET — that is what the brief's "suppress re-assertion of the
-same interrupt" via `cpu_in_trap` means. Software programs it over an
-AXI4-Lite slave port: `0x0 IRQ_ENABLE` (R/W), `0x4 IRQ_PENDING`, `0x8
-IRQ_RAW`, `0xC IRQ_ACTIVE` (RO); anything else answers SLVERR. The PIC enable
-and the CPU's `mie` stack as two independent masks. Full walkthrough in
-[ARCHITECTURE.md](ARCHITECTURE.md).
+(DMA ch0..3, DP-SRAM on 4, mtimer on 7; 5–6 free),
+`pending = src & enable & ~in_service`, fixed priority with channel 0
+highest. The acked channel is held out of `cpu_irq` until MRET — this is
+what the brief's "suppress re-assertion of the same interrupt" via
+`cpu_in_trap` means in practice. Software programs it over an AXI4-Lite
+slave port: `0x0 IRQ_ENABLE` (R/W), `0x4 IRQ_PENDING`, `0x8 IRQ_RAW`,
+`0xC IRQ_ACTIVE` (RO); anything else answers SLVERR. The PIC enable and the
+CPU's `mie` are two independent masks. One consequence of the fixed
+priority, covered by a test: a source left PIC-enabled while its `mie` bit
+is off keeps `cpu_irq_id` pointed at itself and starves the lower-priority
+channels. A source should only be routed into the PIC if some handler will
+clear it.
+
+The timer ([mtimer.v](hdl/mtimer.v), D26/D27) sits on PIC channel 7:
+64-bit `mtime`/`mtimecmp` behind an AXI4-Lite slave port, level irq while
+`mtime >= mtimecmp`, disarmed at reset. Combined with WFI (D23) it gives
+the SoC an idle mode: program the DMA, arm the timer as a deadline, execute
+WFI. The CPU stops fetching while the DMA works, and either the completion
+interrupt or the timer wakes it. A timeout handler can abort a stuck DMA
+channel over `CHx_CONTROL`.
 
 ## Multi-core
 
@@ -137,11 +156,18 @@ hdl/
   csr_file.v           M-mode CSRs + trap/MRET sequencing       (REQ9; D3,D5,D15,D16)
   exception_unit.v     sync exception detect                    (D3,D17,D18)
   pic.v                system interrupt controller              (D19-D22)
+  mtimer.v             machine timer, AXI4-Lite + irq to PIC 7  (D26,D27)
   regfile.v            32x32 register file                      (REQ10)
   branch_unit.v        real branch/jump direction + target
   decode.v  imm_gen.v  alu.v  alu_top.v  writeback_mux.v   (reused, combinational)
 debug/
   VERIFICATION.md      test plan: what is checked, why, and known gaps
+debug/sva/
+  axi_lite_sva.sv      AXI4-Lite contract as SVA (per port: ibus/dbus/PIC)
+  cpu_core_sva.sv      pipeline invariants as SVA (REQ4,10,11; D2,D3,D12)
+  pic_sva.sv           PIC invariants as SVA (D19-D21)
+  cpu_func_cov.sv      functional coverage bins + end-of-run [FCOV] table
+  bind_sva.sv          attaches everything with bind - zero RTL edits
 debug/hdl/
   tb_cpu_axi.v         self-checking TB: CPU + real PIC @ 0x3000_0000 + AXI
                        memories + monitors; the TB plays the peripherals
@@ -158,6 +184,8 @@ debug/sim/
   program_dual.s       dual-core handshake (py asm.py program_dual.s program_dual.hex)
   asm.py               tiny RV32I assembler (range-checked imms, %hi/%lo, .org)
   sim.do               quick single run     regress.do  full 5-config regression
+  run_verilator.sh     SVA + functional coverage run (Verilator, free)
+  run_verilator.ps1    same, one command from Windows (via WSL)
 ```
 
 ## Simulation
@@ -166,25 +194,42 @@ debug/sim/
 cd debug/sim
 vsim -c -do "do regress.do; quit -f"      # full regression (5 configs)
 vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
+
+.\run_verilator.ps1                       # SVA + functional coverage —
+                                          # ModelSim ASE has neither, so the
+                                          # debug/sva layer runs on Verilator
 ```
 
-Coverage, per-case reasoning and the evidence trail are in
-[debug/VERIFICATION.md](debug/VERIFICATION.md): every mcause exercised with
-exact trap counting, CSR negative tests, PIC priority / in-service suppression /
-double masking / register access incl. SLVERR negatives, an interrupt held
-through an AXI stall, BTB aliasing, measured CPI = 1.00 on a latency-1 memory,
-AXI protocol monitors on every run (ibus, dbus, PIC port), seeded random
-backpressure, and the dual-core handshake.
+The SVA layer found a real bug on its first run: the fetch unit drove
+`ARVALID` during reset (the issue logic is combinational and requested
+`RESET_PC` while `rst_n` was still low), which the AXI spec forbids. The
+procedural monitor could not catch this because it only arms after reset.
+The fix is one line in [fetch_unit.v](hdl/fetch_unit.v); details in
+[debug/VERIFICATION.md](debug/VERIFICATION.md).
+
+The test plan and results are in
+[debug/VERIFICATION.md](debug/VERIFICATION.md). Short version: every mcause
+exercised with exact trap counting (including every PIC channel except the
+deliberately-masked one), CSR negative tests, PIC priority / in-service
+suppression / double masking / SLVERR negatives, an interrupt held through
+an AXI stall, BTB aliasing, RAS call/return nesting, WFI wake both ways
+with the instruction bus checked silent, the mtimer end to end, CPI = 1.00
+measured on a latency-1 memory, protocol monitors on all four AXI ports,
+seeded random backpressure, and the dual-core handshake. Functional
+coverage: 88/92 bins hit; the four misses are the two intentional ch5
+negatives and the two backpressure bins covered by the regression configs
+instead of the default run.
 
 ## Open points (system level)
 
 - Global memory map undecided — the reset vector is the `RESET_PC` parameter
-  (default 0x0), and the PIC's base address is a TB decoder parameter
-  (0x3000_0000 for now).
-- PIC has no spec of its own — the CPU-side interface is fixed by the CPU
-  brief and implemented; the internals (priority order, register map, D19–D22)
-  are our proposal to confirm with the team/mentor. The final source-to-channel
-  mapping (5 sources / 8 channels) is also open.
+  (default 0x0), and the PIC / mtimer base addresses are TB decoder parameters
+  (0x3000_0000 / 0x3001_0000 for now).
+- PIC and mtimer have no spec of their own — the CPU-side interface is fixed
+  by the CPU brief and implemented; the internals (priority order, register
+  maps, D19–D22, D26–D27) are our proposal to confirm with the team/mentor.
+  The source-to-channel mapping is DMA 0..3, DP-SRAM 4, mtimer 7; 5–6 free.
 - Reset type differs between blocks (CPU/DMA async, DP-SRAM sync).
 - With more than one core, "which PIC channel targets which core" is undefined
-  — the current PIC serves one CPU.
+  — the current PIC serves one CPU, and each core would want its own mtimer
+  compare.

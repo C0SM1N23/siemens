@@ -27,11 +27,18 @@
 //   - a multi-cycle S2 stall finishes before S2 emits a flush that depends
 //     on the op's result (e.g. an access fault only known once the AXI
 //     response lands)
+//
+// - D23
+//   WFI sleeps here as a third stall source: wfi_wait freezes S2 exactly
+//   like lsu_busy, and S1 with it (the parked fetch stops all ibus traffic).
+//   cpu_top drops wfi_wait on wake, so no extra rule is needed — an
+//   interrupt wake becomes a normal trap_take, a masked wake just commits.
 
 module hazard_unit (
     // pipeline state
     input        fetch_valid,   // S1 offers an instruction this cycle
     input        lsu_busy,      // data AXI op still in flight in S2
+    input        wfi_wait,      // WFI in S2, no wake condition yet (D23)
 
     // redirect requests resolved in S2
     input        trap_take,     // sync exception or accepted interrupt
@@ -55,7 +62,7 @@ module hazard_unit (
     output       fwd_rs2
 );
 
-assign s2_advance   = ~lsu_busy;
+assign s2_advance   = ~lsu_busy & ~wfi_wait;
 assign redirect     = (trap_take | mret_exec | mispredict) & s2_advance;
 assign if_dx_we     = s2_advance;
 assign if_dx_bubble = redirect | ~fetch_valid;

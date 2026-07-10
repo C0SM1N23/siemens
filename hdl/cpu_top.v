@@ -42,6 +42,11 @@
 //   RESET_PC and HART_ID parameters make the core instantiable N times —
 //   HART_ID feeds mhartid so software can tell instances apart (beyond
 //   spec). A single-core SoC leaves both at 0.
+//
+// - D23
+//   WFI wake logic lives here (the stall itself is hazard_unit's): wake on
+//   any mie-enabled pending interrupt regardless of mstatus.MIE, and an
+//   interrupt that ends a WFI records mepc = wfi+4 so MRET resumes past it.
 
 module cpu_top #(
     parameter RESET_PC = 32'h0000_0000,  // reset vector; pending the global memory map
@@ -98,7 +103,9 @@ reg [4:0]  dxwb_rd_q;
 reg [1:0]  dxwb_wbsel_q;
 reg [31:0] dxwb_result_q, dxwb_mem_q, dxwb_pc4_q;
 
-wire       ctl_taken_raw, mret_exec;
+wire        ctl_taken_raw, mret_exec, mispredict;
+wire        ras_push, ras_pop;      // RAS hints, resolved in S2 (D24)
+wire [31:0] s2_pc4;                 // the one shared S2 PC+4 adder
 
 // S1: fetch + predictor
 
@@ -149,7 +156,11 @@ branch_predictor branch_predictor_inst (
     .update_en     (bp_update_en),
     .update_pc     (ifdx_pc_q),
     .update_taken  (ctl_taken_raw),
-    .update_target (actual_target)
+    .update_target (actual_target),
+    .update_is_ret (ras_pop),
+    .update_call   (bp_update_en && ras_push),
+    .update_ret    (bp_update_en && ras_pop),
+    .update_link   (s2_pc4)
 );
 
 // IF/DX valid — the only bit that needs a reset; valid=0 makes whatever the
@@ -199,6 +210,7 @@ wire        RegWrite, ALUSrc, MemRead, MemWrite, Branch, Jump;
 wire [3:0]  ALUOp;
 wire [1:0]  MemtoReg;
 wire        csr_instr, csr_imm, ctrl_mret, ctrl_ecall, ctrl_ebreak, ctrl_illegal;
+wire        ctrl_wfi;
 wire [1:0]  csr_op;
 
 control control_inst (
@@ -222,6 +234,7 @@ control control_inst (
     .mret      (ctrl_mret),
     .ecall     (ctrl_ecall),
     .ebreak    (ctrl_ebreak),
+    .wfi       (ctrl_wfi),
     .illegal   (ctrl_illegal)
 );
 
@@ -256,6 +269,19 @@ wire irq_take = ifdx_valid_q && !lsu_active && mie_global &&
 
 // instruction actually executes: not preempted, and the fetch was clean
 wire dec_live = ifdx_valid_q && !irq_take && !ifdx_fault_q;
+
+// WFI (D23): sleep until a locally-enabled interrupt is pending — mie gates
+// the wake, mstatus.MIE deliberately does not (Priv. spec 3.3.3). While
+// asleep S2 is frozen and S1 parks its fetch, so the ibus goes silent. If
+// MIE is set the wake is a normal irq_take (dec_live drops, releasing the
+// stall in the same cycle); if masked, the WFI just commits as a NOP and
+// execution falls through.
+wire wfi_wake = |(cpu_irq & irq_enable);
+wire wfi_wait = dec_live && ctrl_wfi && !wfi_wake;
+
+// one shared PC+4 adder for S2: the mispredict fall-through, the JAL/JALR
+// link value and the WFI resume address are all the same number
+assign s2_pc4 = ifdx_pc_q + 32'd4;
 
 // ALU; AUIPC takes the PC as operand A
 wire [31:0] alu_result;
@@ -319,14 +345,21 @@ csr_file #(.HART_ID(HART_ID)) csr_file_inst (
     .trap_set    (trap_take & s2_advance),
     .trap_is_irq (irq_take),
     .trap_code   (trap_code),
-    .trap_pc     (ifdx_pc_q),
+    // an interrupt that wakes a WFI resumes *past* it: mepc = pc+4
+    // (Priv. spec 3.3.3); everything else records the instruction itself
+    .trap_pc     (irq_take && ctrl_wfi && !ifdx_fault_q ? s2_pc4 : ifdx_pc_q),
     .mret        (mret_exec),
     .irq_lines   (cpu_irq),
     .irq_enable  (irq_enable),
     .mie_global  (mie_global),
     .trap_vector (trap_vector),
     .mepc_out    (mepc_out),
-    .retire      (dxwb_valid_q)
+    .retire      (dxwb_valid_q),
+    // performance events (D25); trap count reuses trap_set inside
+    .ev_mispredict (mispredict && s2_advance),
+    .ev_ibus_wait  (~ifdx_valid_q),
+    .ev_dbus_stall (lsu_busy),
+    .ev_wfi_sleep  (wfi_wait)
 );
 
 // LSU: issue only for a live, legal, aligned op — an illegal or misaligned
@@ -393,16 +426,22 @@ exception_unit exception_unit_inst (
 // MRET and mispredict come after interrupt/exception in priority (D2)
 assign mret_exec = dec_live && ctrl_mret;
 wire ctl_taken  = ctl_taken_raw && !exception;
-wire mispredict = dec_live && !exception && !ctrl_mret &&
-                  ((ifdx_ptk_q != ctl_taken) ||
-                   (ctl_taken && (ifdx_ptg_q != actual_target)));
+assign mispredict = dec_live && !exception && !ctrl_mret &&
+                    ((ifdx_ptk_q != ctl_taken) ||
+                     (ctl_taken && (ifdx_ptg_q != actual_target)));
 
 // predictor learns every committed branch/jump at resolution (D11)
 assign bp_update_en = dec_live && (Branch | Jump) && !exception && s2_advance;
 
-// one shared PC+4 adder for S2: mispredict fall-through and the JAL/JALR
-// link value are the same number
-wire [31:0] s2_pc4 = ifdx_pc_q + 32'd4;
+// RAS hints (D24): rd/rs1 in {x1,x5} mark calls and returns, straight from
+// the ISA's JALR hint table. Both-link with rd==rs1 is push-only; both-link
+// with rd!=rs1 is pop-then-push (predictor treats push+pop as replace-top).
+// Learned at the same commit point as the BTB, so RAS state is never
+// speculative and survives traps like the rest of the predictor (D11).
+wire rd_link  = (rd  == 5'd1) || (rd  == 5'd5);
+wire rs1_link = (rs1 == 5'd1) || (rs1 == 5'd5);
+assign ras_push = Jump && rd_link;
+assign ras_pop  = (opcode == 7'b1100111) && rs1_link && !(rd_link && rd == rs1);
 
 // redirect target: trap > MRET > corrected path after a mispredict
 assign redirect_pc = trap_take ? trap_vector :
@@ -412,6 +451,7 @@ assign redirect_pc = trap_take ? trap_vector :
 hazard_unit hazard_unit_inst (
     .fetch_valid  (f_valid),
     .lsu_busy     (lsu_busy),
+    .wfi_wait     (wfi_wait),
     .trap_take    (trap_take),
     .mret_exec    (mret_exec),
     .mispredict   (mispredict),

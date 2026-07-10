@@ -1,7 +1,7 @@
 # Test program for the pipelined RV32I CPU (run by tb_cpu_axi).
 # TB map: imem @ 0x0000 (4KB), dmem @ 0x2000 (4KB), PIC registers @
-# 0x3000_0000; anything else on the dbus answers DECERR (unmapped).
-# TB preloads dmem[256] = 0xCAFE0001.
+# 0x3000_0000, mtimer @ 0x3001_0000; anything else on the dbus answers
+# DECERR (unmapped). TB preloads dmem[256] = 0xCAFE0001.
 #
 # Coverage on top of the basics (arith/forwarding, byte lanes, predictor
 # loop, JAL/JALR):
@@ -22,10 +22,20 @@
 #   - BTB aliasing: three branches sharing an index, different tags
 #   - CPI evidence: 32 dependent ALU ops in ~33 cycles (checked when imem
 #     has no added latency)
+#   - PIC channel sweep: ch0/1/4/6 raised by the TB on trigger stores, each
+#     taken exactly once (ch5 gets PIC-disabled first: a mie-masked pending
+#     channel would otherwise hold cpu_irq_id and starve the ones below it)
+#   - RAS: returns from alternating call sites + a nested call chain (D24)
+#   - WFI + mtimer (D23/D26): sleep until the timer irq (mepc must be
+#     wfi+4), then a second WFI with MIE=0 that must fall through untrapped;
+#     the handler disarms the timer by pushing mtimecmp, the RISC-V way
+#   - hpm counters (D25) read at the end: mispredicts/stalls/traps/wfi
+#   - coverage fills: AUIPC, BLT/BGE/BLTU/BGEU both ways, CSRRCI, add with
+#     both operands forwarded
 #
 # Reserved regs: x29 = sync trap bitmask, x31 = irq mcause,
 #                x28/x30 = scratch (main / handlers).
-# Scoreboard slots are dmem byte offsets 128..196 off x14 = 0x2000.
+# Scoreboard slots are dmem byte offsets 128..196 + 200..272 off x14 = 0x2000.
 
 _start:
     addi x1, x0, 10          # x1 = 10
@@ -236,13 +246,26 @@ vec_base:
     csrrw x0, mepc, x30
     mret
 
-# vectored slots for causes 18 and 19 (PIC ch2 @ BASE+0x48, ch3 @ BASE+0x4C)
-.org 0x348
-    jal  x0, irq_handler
-    jal  x0, irq_handler
+# vectored slots for all 8 PIC channels (causes 16..23 @ BASE+0x40..0x5C);
+# the cause-21 slot must never fire (ch5 stays mie-masked) — if it ever does,
+# the handler-entry count check catches it
+.org 0x340
+    jal  x0, irq_handler     # cause 16, ch0
+    jal  x0, irq_handler     # cause 17, ch1
+    jal  x0, irq_handler     # cause 18, ch2
+    jal  x0, irq_handler     # cause 19, ch3
+    jal  x0, irq_handler     # cause 20, ch4
+    jal  x0, irq_handler     # cause 21, ch5 (must stay unreached)
+    jal  x0, irq_handler     # cause 22, ch6
+    jal  x0, irq_handler     # cause 23, ch7 = mtimer
 
 # ---- irq handler: preserves x30 through mscratch, counts entries,
-# snapshots the PIC's in-service mask (proves the ack was registered) ------
+# snapshots the PIC's in-service mask (proves the ack was registered).
+# The timer (cause 23) is level-sensitive off its own compare, so the
+# handler must clear the source before MRET: push mtimecmp_hi back to
+# all-ones (D26) — otherwise the line re-enters the moment MRET releases
+# the in-service mask. x28 is only trashed on the timer path, where main
+# reloads it right after the WFI anyway. -----------------------------------
 .org 0x380
 irq_handler:
     csrrw x30, mscratch, x30
@@ -253,6 +276,13 @@ irq_handler:
     lui  x30, 0x30000
     lw   x30, 12(x30)        # PIC IRQ_ACTIVE = 1 << current channel
     sw   x30, 164(x14)       # [164] = in-service mask of the last irq taken
+    lui  x30, 0x80000
+    addi x30, x30, 0x17      # 0x80000017 = interrupt, cause 23
+    bne  x31, x30, ih_ret
+    lui  x28, 0x30010        # mtimer base
+    addi x30, x0, -1
+    sw   x30, 12(x28)        # mtimecmp_hi = all-ones: line drops
+ih_ret:
     csrrw x30, mscratch, x30
     mret                     # rerun the preempted instruction
 
@@ -345,9 +375,169 @@ jl_tgt:
     csrrs x30, mcycle, x0
     sub  x30, x30, x28
     sw   x30, 140(x14)       # [140] = cycle delta
+    jal  x0, phase_h
+
+# ---- PIC channel sweep: every channel taken once (ch5 excepted) ----------
+# The TB raises src0/1/4/6 in order, one per trigger store to [248], and
+# drops each line on its ack. ch5 is PIC-disabled first: a pending channel
+# that is mie-masked would pin cpu_irq_id at 5 and starve channels 6..7
+# (fixed priority, D20) — the same reason the real SoC must not leave a
+# routed-but-unhandled source enabled.
+.org 0xA00
+phase_h:
+    sw   x31, 200(x14)       # [200] = irq #3 mcause, before the sweep moves x31
+    lui  x28, 0x30000
+    addi x30, x0, 0xDF
+    sw   x30, 0(x28)         # IRQ_ENABLE = 0xDF (all but ch5)
+    lui  x28, 0xDF0
+    csrrs x0, mie, x28       # mie |= ch0,1,4,6,7 (ch5 stays masked forever)
+    addi x28, x0, 8
+    csrrs x0, mstatus, x28   # mstatus.MIE = 1
+    addi x31, x0, 0
+    sw   x30, 248(x14)       # trigger 1 -> TB raises src0
+sw_c0:
+    beq  x31, x0, sw_c0      # handler writes x31 = mcause
+    addi x31, x0, 0
+    sw   x30, 248(x14)       # trigger 2 -> src1
+sw_c1:
+    beq  x31, x0, sw_c1
+    addi x31, x0, 0
+    sw   x30, 248(x14)       # trigger 3 -> src4
+sw_c4:
+    beq  x31, x0, sw_c4
+    addi x31, x0, 0
+    sw   x30, 248(x14)       # trigger 4 -> src6
+sw_c6:
+    beq  x31, x0, sw_c6
+
+# ---- RAS (D24): returns from three different call sites, then a nested
+# chain (h -> g twice). Correct results regardless of prediction; the RAS
+# turns the return-target mispredicts into hits. x1/x5 are the ABI links
+# the hint table keys on, so save/restore them around the test.
+phase_ras:
+    add  x16, x0, x1
+    add  x18, x0, x5
+    addi x30, x0, 0
+    jal  x1, ras_f           # site 1
+    jal  x1, ras_f           # site 2 — return target changed
+    jal  x1, ras_f           # site 3
+    jal  x1, ras_h           # nested: h pushes x1, calls g via x5 twice
+    jal  x1, ras_h
+    sw   x30, 212(x14)       # [212] = 3*1 + 2*(256+2*16) = 0x243
+    add  x1, x0, x16
+    add  x5, x0, x18
+
+# ---- coverage fills: AUIPC, the four missing branches both ways,
+# CSRRCI, and an add with both operands forwarded from S3
+phase_cov:
+auipc_spot:
+    auipc x28, 0
+    sw   x28, 216(x14)       # [216] = &auipc_spot
+    addi x28, x0, -5
+    addi x30, x0, 3
+    addi x16, x0, 0
+    blt  x28, x30, cv1       # taken: -5 < 3 signed
+    addi x16, x16, 512
+cv1:
+    blt  x30, x28, cv_bad    # not taken
+    addi x16, x16, 1
+    bge  x30, x28, cv2       # taken
+    addi x16, x16, 512
+cv2:
+    bge  x28, x30, cv_bad    # not taken
+    addi x16, x16, 2
+    bltu x30, x28, cv3       # taken: 3 < 0xFFFFFFFB unsigned
+    addi x16, x16, 512
+cv3:
+    bltu x28, x30, cv_bad    # not taken
+    addi x16, x16, 4
+    bgeu x28, x30, cv4       # taken
+    addi x16, x16, 512
+cv4:
+    bgeu x30, x28, cv_bad    # not taken
+    addi x16, x16, 8
+    jal  x0, cv_done
+cv_bad:
+    addi x16, x16, 1024      # a branch went the wrong way
+cv_done:
+    sw   x16, 220(x14)       # [220] = 15
+
+    csrrwi x0, mscratch, 31
+    csrrci x30, mscratch, 5  # x30 = 31 (old), mscratch = 26
+    csrrs x28, mscratch, x0
+    sw   x28, 224(x14)       # [224] = 26
+    addi x28, x0, 21
+    add  x30, x28, x28       # rs1 and rs2 both forwarded from S3
+    sw   x30, 228(x14)       # [228] = 42
+
+# ---- WFI + mtimer (D23/D26): arm the timer ~250 cycles out, sleep, and
+# let the irq wake us. CMP_LO is written while CMP_HI still holds all-ones
+# so the compare can't fire between the two halves. mepc must be wfi+4
+# (Priv. 3.3.3) — MRET lands *after* the WFI, not on it.
+phase_wfi:
+    lui  x28, 0x30010        # mtimer base
+    lw   x30, 0(x28)         # MTIME_LO
+    addi x30, x30, 250
+    sw   x30, 8(x28)         # MTIMECMP_LO (still disarmed via HI)
+    sw   x0, 12(x28)         # MTIMECMP_HI = 0: armed
+wfi_spot:
+    wfi                      # ibus goes silent here (TB measures)
+after_wfi:
+    csrrs x30, mepc, x0
+    sw   x30, 204(x14)       # [204] = &after_wfi = wfi_spot + 4
+
+    # second WFI with MIE=0: the pending-but-masked wake must fall through
+    # to the next instruction without any handler entry
+    addi x28, x0, 8
+    csrrc x0, mstatus, x28   # mstatus.MIE = 0
+    lui  x28, 0x30010
+    lw   x30, 0(x28)
+    addi x30, x30, 120
+    sw   x30, 8(x28)         # rearm (HI is all-ones again after the handler)
+    sw   x0, 12(x28)
+wfi2_spot:
+    wfi                      # sleeps, then falls through untrapped
+    addi x30, x0, 0x77
+    sw   x30, 208(x14)       # [208] = 0x77 only if execution fell through
+    lui  x28, 0x30010
+    addi x30, x0, -1
+    sw   x30, 12(x28)        # disarm by hand this time
+
+    # mtime increments between two reads
+    lui  x28, 0x30010
+    lw   x16, 0(x28)
+    lw   x30, 0(x28)
+    sub  x30, x30, x16
+    sw   x30, 232(x14)       # [232] = delta > 0
+
+    # hpm counters (D25): read at the very end, when the totals are settled
+    csrrs x30, 0xB03, x0     # mhpmcounter3: mispredict redirects
+    sw   x30, 236(x14)       # [236] > 0
+    csrrs x30, 0xB04, x0     # mhpmcounter4: fetch-starved cycles
+    sw   x30, 272(x14)       # [272] > 0
+    csrrs x30, 0xB05, x0     # mhpmcounter5: dbus stall cycles
+    sw   x30, 260(x14)       # [260] > 0
+    csrrs x30, 0xB06, x0     # mhpmcounter6: every trap entry, incl. the
+                             # vectored ecall = 15 + 1 + 8 irq
+    sw   x30, 264(x14)       # [264] = 24
+    csrrs x30, 0xB07, x0     # mhpmcounter7: WFI sleep cycles
+    sw   x30, 268(x14)       # [268] > 0
 
     addi x23, x0, 0x123      # end marker for the TB
 end:
     jal  x0, end
 hang:
     jal  x0, hang            # a skipped-instruction test failed -> timeout
+
+# ---- RAS test subroutines ------------------------------------------------
+ras_f:
+    addi x30, x30, 1
+    jalr x0, x1, 0           # plain return (pop)
+ras_g:
+    addi x30, x30, 16
+    jalr x0, x5, 0           # return via the x5 link (pop)
+ras_h:
+    addi x30, x30, 256
+    jal  x5, ras_g           # nested call, pushes on top of h's own link
+    jal  x5, ras_g
+    jalr x0, x1, 0

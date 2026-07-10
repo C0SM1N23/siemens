@@ -1,13 +1,16 @@
-// Main testbench — the whole CPU + PIC system under one self-checking run.
+// Main testbench — the whole CPU + PIC + mtimer system under one
+// self-checking run.
 //
 // Setup (a small SoC):
 // - cpu_top, imem model @ 0x0000 on the ibus
-// - dbus goes through an address decoder:
-//   - 0x3000_0000 window -> the real pic module
+// - dbus goes through two address decoders:
+//   - 0x3000_0000 window -> the peripherals, split again into
+//     0x3000_0000 = the real pic, 0x3001_0000 = the real mtimer
 //   - everything else    -> dmem model @ 0x2000 (DECERR out of its range)
-// - passive AXI protocol monitors on ibus, dbus and the PIC slave port
-// - the TB plays the peripherals: it drives the PIC's irq_src lines the
-//   way the DMA / DP-SRAM would (raise on event, hold until "cleared")
+// - passive AXI protocol monitors on ibus, dbus, the PIC and mtimer ports
+// - the TB plays the peripherals on irq_src[6:0] the way the DMA / DP-SRAM
+//   would (raise on event, hold until "cleared"); channel 7 is the real
+//   mtimer interrupt, wired like the SoC would wire it
 //
 // What is tested and how the results come back:
 // - the program (program_axi.s) exercises every ISA group, every sync trap
@@ -70,6 +73,23 @@ wire [3:0]  p_wstrb;
 wire        p_awvalid, p_awready, p_wvalid, p_wready, p_bvalid, p_bready;
 wire        p_arvalid, p_arready, p_rvalid, p_rready;
 wire [1:0]  p_bresp, p_rresp;
+
+// peripheral legs after the second decoder: pp_* to the PIC, t_* to mtimer
+wire [31:0] pp_awaddr, pp_wdata, pp_araddr, pp_rdata;
+wire [2:0]  pp_awprot, pp_arprot;
+wire [3:0]  pp_wstrb;
+wire        pp_awvalid, pp_awready, pp_wvalid, pp_wready, pp_bvalid, pp_bready;
+wire        pp_arvalid, pp_arready, pp_rvalid, pp_rready;
+wire [1:0]  pp_bresp, pp_rresp;
+
+wire [31:0] t_awaddr, t_wdata, t_araddr, t_rdata;
+wire [2:0]  t_awprot, t_arprot;
+wire [3:0]  t_wstrb;
+wire        t_awvalid, t_awready, t_wvalid, t_wready, t_bvalid, t_bready;
+wire        t_arvalid, t_arready, t_rvalid, t_rready;
+wire [1:0]  t_bresp, t_rresp;
+
+wire        tmr_irq;
 
 cpu_top uut (
     .clk              (clk),
@@ -155,27 +175,66 @@ axi_lite_mem_model #(
     .rdata(d0_rdata), .rresp(d0_rresp), .rvalid(d0_rvalid), .rready(d0_rready)
 );
 
-// the device under second test: the real PIC on the decoded window
-pic pic_inst (
+// peripheral window split: mtimer at 0x3001_0000, the PIC is the default
+axi_lite_dec2 #(
+    .S1_BASE(32'h3001_0000), .S1_MASK(32'hFFFF_0000)
+) perip_dec_inst (
     .clk(clk), .rst_n(rst_n),
-    .irq_src(irq_src),
-    .cpu_irq(cpu_irq), .cpu_irq_id(cpu_irq_id),
-    .cpu_irq_ack(cpu_irq_ack), .cpu_in_trap(cpu_in_trap),
-    .s_axi_awaddr(p_awaddr), .s_axi_awprot(p_awprot),
-    .s_axi_awvalid(p_awvalid), .s_axi_awready(p_awready),
-    .s_axi_wdata(p_wdata), .s_axi_wstrb(p_wstrb),
-    .s_axi_wvalid(p_wvalid), .s_axi_wready(p_wready),
-    .s_axi_bresp(p_bresp), .s_axi_bvalid(p_bvalid), .s_axi_bready(p_bready),
-    .s_axi_araddr(p_araddr), .s_axi_arprot(p_arprot),
-    .s_axi_arvalid(p_arvalid), .s_axi_arready(p_arready),
-    .s_axi_rdata(p_rdata), .s_axi_rresp(p_rresp),
-    .s_axi_rvalid(p_rvalid), .s_axi_rready(p_rready)
+    .m_awaddr(p_awaddr), .m_awprot(p_awprot), .m_awvalid(p_awvalid), .m_awready(p_awready),
+    .m_wdata(p_wdata), .m_wstrb(p_wstrb), .m_wvalid(p_wvalid), .m_wready(p_wready),
+    .m_bresp(p_bresp), .m_bvalid(p_bvalid), .m_bready(p_bready),
+    .m_araddr(p_araddr), .m_arprot(p_arprot), .m_arvalid(p_arvalid), .m_arready(p_arready),
+    .m_rdata(p_rdata), .m_rresp(p_rresp), .m_rvalid(p_rvalid), .m_rready(p_rready),
+    .s0_awaddr(pp_awaddr), .s0_awprot(pp_awprot), .s0_awvalid(pp_awvalid), .s0_awready(pp_awready),
+    .s0_wdata(pp_wdata), .s0_wstrb(pp_wstrb), .s0_wvalid(pp_wvalid), .s0_wready(pp_wready),
+    .s0_bresp(pp_bresp), .s0_bvalid(pp_bvalid), .s0_bready(pp_bready),
+    .s0_araddr(pp_araddr), .s0_arprot(pp_arprot), .s0_arvalid(pp_arvalid), .s0_arready(pp_arready),
+    .s0_rdata(pp_rdata), .s0_rresp(pp_rresp), .s0_rvalid(pp_rvalid), .s0_rready(pp_rready),
+    .s1_awaddr(t_awaddr), .s1_awprot(t_awprot), .s1_awvalid(t_awvalid), .s1_awready(t_awready),
+    .s1_wdata(t_wdata), .s1_wstrb(t_wstrb), .s1_wvalid(t_wvalid), .s1_wready(t_wready),
+    .s1_bresp(t_bresp), .s1_bvalid(t_bvalid), .s1_bready(t_bready),
+    .s1_araddr(t_araddr), .s1_arprot(t_arprot), .s1_arvalid(t_arvalid), .s1_arready(t_arready),
+    .s1_rdata(t_rdata), .s1_rresp(t_rresp), .s1_rvalid(t_rvalid), .s1_rready(t_rready)
 );
 
-// protocol monitors on both CPU buses and on the PIC slave port
+// the device under second test: the real PIC on the decoded window.
+// Channel 7 is the real mtimer interrupt; the TB plays channels 0..6.
+pic pic_inst (
+    .clk(clk), .rst_n(rst_n),
+    .irq_src({tmr_irq, irq_src[6:0]}),
+    .cpu_irq(cpu_irq), .cpu_irq_id(cpu_irq_id),
+    .cpu_irq_ack(cpu_irq_ack), .cpu_in_trap(cpu_in_trap),
+    .s_axi_awaddr(pp_awaddr), .s_axi_awprot(pp_awprot),
+    .s_axi_awvalid(pp_awvalid), .s_axi_awready(pp_awready),
+    .s_axi_wdata(pp_wdata), .s_axi_wstrb(pp_wstrb),
+    .s_axi_wvalid(pp_wvalid), .s_axi_wready(pp_wready),
+    .s_axi_bresp(pp_bresp), .s_axi_bvalid(pp_bvalid), .s_axi_bready(pp_bready),
+    .s_axi_araddr(pp_araddr), .s_axi_arprot(pp_arprot),
+    .s_axi_arvalid(pp_arvalid), .s_axi_arready(pp_arready),
+    .s_axi_rdata(pp_rdata), .s_axi_rresp(pp_rresp),
+    .s_axi_rvalid(pp_rvalid), .s_axi_rready(pp_rready)
+);
+
+// the device under third test: the real mtimer (D26/D27)
+mtimer mtimer_inst (
+    .clk(clk), .rst_n(rst_n),
+    .irq(tmr_irq),
+    .s_axi_awaddr(t_awaddr), .s_axi_awprot(t_awprot),
+    .s_axi_awvalid(t_awvalid), .s_axi_awready(t_awready),
+    .s_axi_wdata(t_wdata), .s_axi_wstrb(t_wstrb),
+    .s_axi_wvalid(t_wvalid), .s_axi_wready(t_wready),
+    .s_axi_bresp(t_bresp), .s_axi_bvalid(t_bvalid), .s_axi_bready(t_bready),
+    .s_axi_araddr(t_araddr), .s_axi_arprot(t_arprot),
+    .s_axi_arvalid(t_arvalid), .s_axi_arready(t_arready),
+    .s_axi_rdata(t_rdata), .s_axi_rresp(t_rresp),
+    .s_axi_rvalid(t_rvalid), .s_axi_rready(t_rready)
+);
+
+// protocol monitors on both CPU buses and on the PIC / mtimer slave ports
 // (err counts must end at 0)
-wire [15:0] ib_mon_err, db_mon_err, p_mon_err;
+wire [15:0] ib_mon_err, db_mon_err, p_mon_err, t_mon_err;
 wire [31:0] ib_mon_rd, db_mon_rd, db_mon_wr, p_mon_rd, p_mon_wr;
+wire [31:0] t_mon_rd, t_mon_wr;
 
 axi_lite_monitor #(.NAME("ibus"), .HAS_WRITE(0)) ibus_mon (
     .clk(clk), .rst_n(rst_n),
@@ -199,12 +258,22 @@ axi_lite_monitor #(.NAME("dbus"), .HAS_WRITE(1)) dbus_mon (
 
 axi_lite_monitor #(.NAME("pic"), .HAS_WRITE(1)) pic_mon (
     .clk(clk), .rst_n(rst_n),
-    .awaddr(p_awaddr), .awvalid(p_awvalid), .awready(p_awready),
-    .wdata(p_wdata), .wstrb(p_wstrb), .wvalid(p_wvalid), .wready(p_wready),
-    .bresp(p_bresp), .bvalid(p_bvalid), .bready(p_bready),
-    .araddr(p_araddr), .arvalid(p_arvalid), .arready(p_arready),
-    .rdata(p_rdata), .rresp(p_rresp), .rvalid(p_rvalid), .rready(p_rready),
+    .awaddr(pp_awaddr), .awvalid(pp_awvalid), .awready(pp_awready),
+    .wdata(pp_wdata), .wstrb(pp_wstrb), .wvalid(pp_wvalid), .wready(pp_wready),
+    .bresp(pp_bresp), .bvalid(pp_bvalid), .bready(pp_bready),
+    .araddr(pp_araddr), .arvalid(pp_arvalid), .arready(pp_arready),
+    .rdata(pp_rdata), .rresp(pp_rresp), .rvalid(pp_rvalid), .rready(pp_rready),
     .err_cnt(p_mon_err), .rd_cnt(p_mon_rd), .wr_cnt(p_mon_wr)
+);
+
+axi_lite_monitor #(.NAME("tmr"), .HAS_WRITE(1)) tmr_mon (
+    .clk(clk), .rst_n(rst_n),
+    .awaddr(t_awaddr), .awvalid(t_awvalid), .awready(t_awready),
+    .wdata(t_wdata), .wstrb(t_wstrb), .wvalid(t_wvalid), .wready(t_wready),
+    .bresp(t_bresp), .bvalid(t_bvalid), .bready(t_bready),
+    .araddr(t_araddr), .arvalid(t_arvalid), .arready(t_arready),
+    .rdata(t_rdata), .rresp(t_rresp), .rvalid(t_rvalid), .rready(t_rready),
+    .err_cnt(t_mon_err), .rd_cnt(t_mon_rd), .wr_cnt(t_mon_wr)
 );
 
 integer errors;
@@ -230,6 +299,7 @@ reg        ack_double;     // ack is a 1-cycle pulse
 reg        ack_in_stall;   // never accept an irq mid data transaction
 reg [7:0]  ack_prev;
 integer    ack2_count, ack3_count;
+integer    ack0_count, ack1_count, ack4_count, ack6_count, ack7_count;
 reg        id_bad;         // cpu_irq_id must be the lowest pending channel
 reg        suppress_fail;  // an in-service channel must stay out of cpu_irq
 reg [3:0]  ack3_age;       // cycles since ack[3], to skip the update pipeline
@@ -242,6 +312,11 @@ always @(posedge clk or negedge rst_n) begin
         ack_prev   <= 8'b0;
         ack2_count <= 0;
         ack3_count <= 0;
+        ack0_count <= 0;
+        ack1_count <= 0;
+        ack4_count <= 0;
+        ack6_count <= 0;
+        ack7_count <= 0;
         id_bad     <= 0;
         suppress_fail <= 0;
         ack3_age   <= 4'd0;
@@ -249,8 +324,13 @@ always @(posedge clk or negedge rst_n) begin
         if (cpu_irq_ack[5])            ack5_seen  <= 1;
         if (|(cpu_irq_ack & ack_prev)) ack_double <= 1;
         if (|cpu_irq_ack && uut.lsu_inst.active) ack_in_stall <= 1;
+        if (cpu_irq_ack[0])            ack0_count <= ack0_count + 1;
+        if (cpu_irq_ack[1])            ack1_count <= ack1_count + 1;
         if (cpu_irq_ack[2])            ack2_count <= ack2_count + 1;
         if (cpu_irq_ack[3])            ack3_count <= ack3_count + 1;
+        if (cpu_irq_ack[4])            ack4_count <= ack4_count + 1;
+        if (cpu_irq_ack[6])            ack6_count <= ack6_count + 1;
+        if (cpu_irq_ack[7])            ack7_count <= ack7_count + 1;
         ack_prev <= cpu_irq_ack;
 
         // the id must point at a set cpu_irq bit with nothing below it
@@ -268,6 +348,34 @@ always @(posedge clk or negedge rst_n) begin
             ack3_age <= ack3_age + 4'd1;
         if (ack3_age >= 4'd3 && cpu_in_trap && irq_src[3] && cpu_irq[3])
             suppress_fail <= 1;
+    end
+end
+
+// WFI quietness (D23): while the core sleeps, the ibus read counter must
+// freeze — at most the one fetch already in flight when sleep began may
+// complete. Entry snapshot is retaken on every sleep, so both WFIs are
+// measured independently; wfi_noisy latches any extra read.
+reg        wfi_prev, wfi_seen, wfi_noisy;
+integer    wfi_cycles;
+reg [31:0] wfi_rd_entry;
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n) begin
+        wfi_prev  <= 0;
+        wfi_seen  <= 0;
+        wfi_noisy <= 0;
+        wfi_cycles <= 0;
+        wfi_rd_entry <= 32'b0;
+    end else begin
+        wfi_prev <= uut.wfi_wait;
+        if (uut.wfi_wait) begin
+            wfi_seen   <= 1;
+            wfi_cycles <= wfi_cycles + 1;
+            if (!wfi_prev)
+                wfi_rd_entry <= ib_mon_rd;
+            else if (ib_mon_rd - wfi_rd_entry > 32'd1)
+                wfi_noisy <= 1;
+        end
     end
 end
 
@@ -318,6 +426,33 @@ initial begin
     while (cpu_irq_ack[2] !== 1'b1) @(posedge clk);
     t_ack2 = $time;
     irq_src[2] = 1'b0;
+
+    // channel sweep: the program writes [248] once per channel; each write
+    // raises the next source, held (level) until its ack — same handshake
+    // a DMA channel / the DP-SRAM would do
+    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
+             db_awaddr === 32'h0000_20F8)) @(posedge clk);
+    irq_src[0] = 1'b1;
+    while (cpu_irq_ack[0] !== 1'b1) @(posedge clk);
+    irq_src[0] = 1'b0;
+
+    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
+             db_awaddr === 32'h0000_20F8)) @(posedge clk);
+    irq_src[1] = 1'b1;
+    while (cpu_irq_ack[1] !== 1'b1) @(posedge clk);
+    irq_src[1] = 1'b0;
+
+    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
+             db_awaddr === 32'h0000_20F8)) @(posedge clk);
+    irq_src[4] = 1'b1;
+    while (cpu_irq_ack[4] !== 1'b1) @(posedge clk);
+    irq_src[4] = 1'b0;
+
+    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
+             db_awaddr === 32'h0000_20F8)) @(posedge clk);
+    irq_src[6] = 1'b1;
+    while (cpu_irq_ack[6] !== 1'b1) @(posedge clk);
+    irq_src[6] = 1'b0;
 end
 
 // main sequence
@@ -395,11 +530,17 @@ initial begin
 
     // interrupts through the real PIC — priority, suppression, masking and
     // the stall case, all observed at the CPU boundary (ack/mepc/mcause)
-    check(32'h80000012,  uut.regfile_inst.regs[31], "x31 irq mcause");
+    check(32'h80000012,  dmem_inst.mem[50],         "irq #3 mcause snapshot");
+    check(32'h80000017,  uut.regfile_inst.regs[31], "x31 last irq mcause (timer)");
     check(32'h00200000,  dmem_inst.mem[34],         "mip shows masked ch5 only");
-    check(32'd3,         dmem_inst.mem[49],         "irq handler entered 3x");
+    check(32'd8,         dmem_inst.mem[49],         "irq handler entered 8x");
     check(32'd2,         ack2_count,                "exactly two ack[2] pulses");
     check(32'd1,         ack3_count,                "exactly one ack[3] pulse");
+    check(32'd1,         ack0_count,                "sweep: one ack[0]");
+    check(32'd1,         ack1_count,                "sweep: one ack[1]");
+    check(32'd1,         ack4_count,                "sweep: one ack[4]");
+    check(32'd1,         ack6_count,                "sweep: one ack[6]");
+    check(32'd1,         ack7_count,                "timer: one ack[7]");
     check(32'd0,         {31'b0, ack5_seen},        "masked ch5 never acked");
     check(32'd0,         {31'b0, ack_double},       "ack is a 1-cycle pulse");
     check(32'd0,         {31'b0, ack_in_stall},     "no ack during a data stall");
@@ -415,6 +556,42 @@ initial begin
     end
     check(32'hCAFE0001,  dmem_inst.mem[40],         "load retired before irq #3");
     check(32'h00000168,  dmem_inst.mem[42],         "irq #3 mepc = boundary instr");
+
+    // WFI + mtimer (D23/D26): the timer wakes the sleep through the PIC,
+    // mepc lands past the WFI, and a mie-enabled but MIE=0 wake falls
+    // through with no handler entry (the entry count above stays exact)
+    check(32'h00000B10,  dmem_inst.mem[51],         "WFI preempted: mepc = wfi+4");
+    check(32'h00000077,  dmem_inst.mem[52],         "WFI falls through when MIE=0");
+    if (wfi_seen && wfi_cycles >= 20 && !wfi_noisy)
+        $display("PASS: WFI slept %0d cycles, <=1 ibus read per sleep", wfi_cycles);
+    else begin
+        $display("FAIL: WFI quietness (seen %0d, cycles %0d, noisy %0d)",
+                 wfi_seen, wfi_cycles, wfi_noisy);
+        errors = errors + 1;
+    end
+
+    // RAS (D24) + coverage fills — results are prediction-independent
+    check(32'h00000243,  dmem_inst.mem[53],         "RAS calls/returns correct");
+    check(32'h00000A7C,  dmem_inst.mem[54],         "AUIPC");
+    check(32'd15,        dmem_inst.mem[55],         "BLT/BGE/BLTU/BGEU both ways");
+    check(32'd26,        dmem_inst.mem[56],         "CSRRCI");
+    check(32'd42,        dmem_inst.mem[57],         "add, both operands forwarded");
+
+    // hpm counters (D25) + mtime: exact where architectural, nonzero where
+    // the value is latency-dependent
+    // 15 direct-mode sync + 1 vectored ecall + 8 irq entries
+    check(32'd24,        dmem_inst.mem[66],         "mhpm6 counts every trap entry");
+    if (dmem_inst.mem[58] > 0 && dmem_inst.mem[59] > 0 && dmem_inst.mem[65] > 0 &&
+        dmem_inst.mem[67] > 0 && dmem_inst.mem[68] > 0)
+        $display("PASS: perf counters alive (mtimeD %0d, mispred %0d, dstall %0d, wfi %0d, fwait %0d)",
+                 dmem_inst.mem[58], dmem_inst.mem[59], dmem_inst.mem[65],
+                 dmem_inst.mem[67], dmem_inst.mem[68]);
+    else begin
+        $display("FAIL: a perf counter stayed 0 (mtimeD %0d, mispred %0d, dstall %0d, wfi %0d, fwait %0d)",
+                 dmem_inst.mem[58], dmem_inst.mem[59], dmem_inst.mem[65],
+                 dmem_inst.mem[67], dmem_inst.mem[68]);
+        errors = errors + 1;
+    end
     if (t_rbeat2 != 0 && t_ack2 > t_rbeat2)
         $display("PASS: irq #3 held through the AXI stall (R @%0t, ack @%0t)",
                  t_rbeat2, t_ack2);
@@ -428,13 +605,13 @@ initial begin
     check(32'h0000002C,  dmem_inst.mem[45],         "PIC IRQ_ENABLE readback");
     check(32'h00000020,  dmem_inst.mem[46],         "PIC IRQ_RAW: src5 high");
     check(32'h00000020,  dmem_inst.mem[47],         "PIC IRQ_PENDING: ch5 only");
-    check(32'h00000004,  dmem_inst.mem[41],         "PIC IRQ_ACTIVE in handler");
+    check(32'h00000080,  dmem_inst.mem[41],         "IRQ_ACTIVE in handler (timer)");
 
     // vectored mtvec
     check(32'h00000301,  uut.csr_file_inst.mtvec_q, "mtvec vectored");
     check(32'd11,        dmem_inst.mem[39],         "vectored exception -> BASE");
-    check(32'h00000178,  uut.csr_file_inst.mepc_q,  "final mepc = vec_ecall+4");
-    check(32'd11,        uut.csr_file_inst.mcause_q,"final mcause");
+    check(32'h00000B10,  uut.csr_file_inst.mepc_q,  "final mepc = wfi+4 (timer irq)");
+    check(32'h80000017,  uut.csr_file_inst.mcause_q,"final mcause = timer irq");
     check(32'd0,         {31'b0, uut.csr_file_inst.mstatus_mie_q}, "mstatus.MIE after CSRRC");
     check(32'd0,         {31'b0, cpu_in_trap},      "cpu_in_trap after MRET");
 
@@ -453,10 +630,12 @@ initial begin
     check(32'd0,         {16'b0, ib_mon_err},       "ibus protocol clean");
     check(32'd0,         {16'b0, db_mon_err},       "dbus protocol clean");
     check(32'd0,         {16'b0, p_mon_err},        "PIC port protocol clean");
+    check(32'd0,         {16'b0, t_mon_err},        "mtimer port protocol clean");
     if (ib_mon_rd > 0 && db_mon_rd > 0 && db_mon_wr > 0 &&
-        p_mon_rd > 0 && p_mon_wr > 0)
-        $display("PASS: traffic seen (ibus rd %0d, dbus rd %0d wr %0d, pic rd %0d wr %0d)",
-                 ib_mon_rd, db_mon_rd, db_mon_wr, p_mon_rd, p_mon_wr);
+        p_mon_rd > 0 && p_mon_wr > 0 && t_mon_rd > 0 && t_mon_wr > 0)
+        $display("PASS: traffic seen (ibus rd %0d, dbus rd %0d wr %0d, pic rd %0d wr %0d, tmr rd %0d wr %0d)",
+                 ib_mon_rd, db_mon_rd, db_mon_wr, p_mon_rd, p_mon_wr,
+                 t_mon_rd, t_mon_wr);
     else begin
         $display("FAIL: a bus saw no traffic");
         errors = errors + 1;

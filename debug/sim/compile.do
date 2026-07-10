@@ -22,6 +22,7 @@ vlog ../../hdl/lsu.v
 vlog ../../hdl/hazard_unit.v
 vlog ../../hdl/cpu_top.v
 vlog ../../hdl/pic.v
+vlog ../../hdl/mtimer.v
 
 # testbench collateral
 vlog ../hdl/ck_rst_tb.v
