@@ -9,10 +9,12 @@ in the free edition), so the methodology leans on five pillars:
    sequences; results land in registers and a dmem scoreboard checked by the
    TB. Trap handling is verified by *using* it (handlers dispatch on mcause,
    fix mepc, return), not by poking signals.
-2. **Exact-count properties**: the sync-trap handler counts every entry
-   (must be exactly 15) and x29 accumulates one bit per cause (must be
-   exactly 0x1FF). A missing trap, a double trap, or a spurious one cannot
-   cancel out — order-independent and airtight against "it passed by luck".
+2. **Exact-count properties**: the direct-mode sync-trap handler counts
+   every entry (must be exactly 17) and x29 accumulates one bit per cause
+   (must be exactly 0x1FF); the hardware `mhpmcounter6` independently counts
+   every trap entry of any kind (must be exactly 26 = 17 direct + 1 vectored
+   + 8 irq). A missing trap, a double trap, or a spurious one cannot cancel
+   out — order-independent and airtight against "it passed by luck".
 3. **Passive protocol monitors** (`hdl/axi_lite_monitor.v`) on both AXI
    master buses and on the PIC's slave port, every run: VALID/payload
    stability under stalled READY, response ordering, the CPU's 1-outstanding
@@ -59,7 +61,7 @@ code.
 | REQ11 | WSTRB lanes + load extract for SB/SH/SW/LB(U)/LH(U) | DP-SRAM compatibility contract | dmem word checks + sign/zero-extend reg checks |
 | REQ8,D9-D11 | Predictor learns taken loops; not-taken default; alias eviction stays correct | predictor may only affect *time*, never results | BNE loop sum; 3 branches sharing index 0x12 with different tags (0x448/0x648/0x848), sum = 18 |
 | D7 | Mispredict recovery incl. JALR, rd==rs1 | link write must use pre-jump value, 1-cycle flush path | JAL/JALR round-trip; `jalr x30,x30` link check; skipped-word poison jumps to a hang loop |
-| D3 | Every sync cause: 0,1,2,3,4,5,6,7,11 | trap table complete, mepc per cause | x29 = 0x1FF, trap count = 15, handler returns resume execution |
+| D3 | Every sync cause: 0,1,2,3,4,5,6,7,11 | trap table complete, mepc per cause | x29 = 0x1FF, direct-mode trap count = 17, handler returns resume execution |
 | REQ7,D3 | Illegal instruction has **no side effects** | an illegal store must not reach the bus | `.word 0x04D73023` targets dmem[64]; word must stay 0 (this check caught a real RTL bug) |
 | D17 | Misaligned access issues **no** AXI transaction | must trap before issuing any transaction | LH/SH @odd trap cause 4/6; dmem[0] untouched; monitors see no extra transaction |
 | D8,D18 | SLVERR/DECERR on fetch/load/store -> mcause 1/5/7 | bus errors must be precise traps | jumps/accesses into unmapped space; cause-1 handler resumes via mscratch (its intended purpose) |
@@ -74,8 +76,8 @@ code.
 | REQ10 | x0 hardwired, regfile reset | | `addi x0,x0,5` then read; regs[0] === 0 |
 | D23 | WFI: sleep until wake, ibus silent, mepc = wfi+4 on an interrupt wake, fall-through (no trap) when MIE=0 | the CPU must idle without burning interconnect bandwidth the DMA needs | timer irq wakes the first WFI (mepc readback = wfi+4); second WFI with MIE=0 falls through to a marker store with the handler-entry count unchanged; TB measures ≤1 ibus read per sleep window + SVA `wfi_ibus_quiet` |
 | D24 | RAS: returns from 3 different call sites + a nested call chain (h→g→g) predict correctly and stay correct | the BTB's last-target scheme is systematically wrong for returns; the RAS may only change *time*, never results | accumulated signature 0x243 checked; FCOV separates returns predicted correctly vs mispredicted (first encounters only) |
-| D25 | mhpmcounter3..7 count mispredicts / fetch-starved / dbus-stall / traps / WFI cycles; writes to them trap | the CPU-side observability numbers for tuning DMA throttling | end-of-run readbacks: traps exactly 24 (15 direct + 1 vectored + 8 irq), the latency-dependent ones nonzero; RO-write trap covered by the existing mcycle negative |
-| D26,D27 | mtimer end to end: disarmed at reset, armed CMP_LO-then-CMP_HI without false fires, level irq through PIC ch7, handler clears by moving mtimecmp, unmapped offset SLVERR | the timer is a real peripheral on a real bus — and the WFI wake source | timer irq taken exactly once (ack7 = 1, cause 23 vectored slot), mtime monotonic readback, mtimer port protocol monitor + SVA clean |
+| D25 | mhpmcounter3..7 count mispredicts / fetch-starved / dbus-stall / traps / WFI cycles; writes to them trap | the CPU-side observability numbers for tuning DMA throttling | end-of-run readbacks: traps exactly 26 (17 direct + 1 vectored + 8 irq), the latency-dependent ones nonzero; RO-write trap covered by the existing mcycle negative |
+| D26,D27 | mtimer end to end: disarmed at reset, armed CMP_LO-then-CMP_HI without false fires, level irq through PIC ch7, handler clears by moving mtimecmp, software register write, unmapped offset SLVERR | the timer is a real peripheral on a real bus — and the WFI wake source | timer irq taken exactly once (ack7 = 1, cause 23 vectored slot), mtime monotonic readback, MTIME_HI write/read-back = 0x2AB, bad-offset read+write both trap (cause 5/7, counted in the 17), mtimer port protocol monitor + SVA clean |
 | D20 | Channel sweep: ch0/1/4/6 each raised once and served; ch5 PIC-disabled first because a mie-masked pending source pins `cpu_irq_id` and starves lower-priority channels | the starvation discipline every peripheral hookup must respect | one ack per swept channel, handler-entry count exactly 8, ack5 still never seen |
 | D6 | Back-to-back fetch: 1 instr/cycle on a latency-1 memory | the throughput claim, measured not asserted | mcycle delta across 33 straight-line instrs = 33 (gated to the latency-1 config) |
 | REQ2,REQ12 | AXI4-Lite legality on both master ports | interoperability with DMA/DP-SRAM | protocol monitors, all runs, all configs |
@@ -112,7 +114,7 @@ into `cpu_top` and `pic`, so every instance (dual-core included) gets them:
   acks, bus response/backpressure bins. Prints the `[FCOV]` table with a
   hit/MISS verdict per bin and a summary percentage at end of run.
 
-Current evidence: **all 86 TB checks pass under Verilator, zero assertion
+Current evidence: **all 87 TB checks pass under Verilator, zero assertion
 violations, 88/92 functional bins hit (95%)**. The first measurement of this
 table (59/85) exposed real test-plan holes — AUIPC never committed,
 BLT/BGE/BLTU/BGEU and CSRRCI never executed, both-operand forwarding never

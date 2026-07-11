@@ -521,7 +521,7 @@ initial begin
     // per cause in x29, so a missing/double/spurious trap cannot cancel out
     check(32'h00000200,  uut.regfile_inst.regs[27], "x27 mtvec readback");
     check(32'd511,       uut.regfile_inst.regs[29], "x29 all 9 sync causes seen");
-    check(32'd15,        dmem_inst.mem[48],         "sync trap count exact");
+    check(32'd17,        dmem_inst.mem[48],         "sync trap count exact");
     check(32'd0,         dmem_inst.mem[16],         "illegal store: no mem write");
     check(32'd21,        dmem_inst.mem[32],         "CSRRWI/CSRRSI old value");
     check(32'd31,        dmem_inst.mem[33],         "mscratch round-trip");
@@ -555,7 +555,7 @@ initial begin
         errors = errors + 1;
     end
     check(32'hCAFE0001,  dmem_inst.mem[40],         "load retired before irq #3");
-    check(32'h00000168,  dmem_inst.mem[42],         "irq #3 mepc = boundary instr");
+    check(32'h00000178,  dmem_inst.mem[42],         "irq #3 mepc = boundary instr");
 
     // WFI + mtimer (D23/D26): the timer wakes the sleep through the PIC,
     // mepc lands past the WFI, and a mie-enabled but MIE=0 wake falls
@@ -577,10 +577,13 @@ initial begin
     check(32'd26,        dmem_inst.mem[56],         "CSRRCI");
     check(32'd42,        dmem_inst.mem[57],         "add, both operands forwarded");
 
+    // mtimer software write path (D26): MTIME_HI reads back what was written
+    check(32'h000002AB,  dmem_inst.mem[69],         "mtimer MTIME_HI write/read");
+
     // hpm counters (D25) + mtime: exact where architectural, nonzero where
     // the value is latency-dependent
-    // 15 direct-mode sync + 1 vectored ecall + 8 irq entries
-    check(32'd24,        dmem_inst.mem[66],         "mhpm6 counts every trap entry");
+    // 17 direct-mode sync + 1 vectored ecall + 8 irq entries
+    check(32'd26,        dmem_inst.mem[66],         "mhpm6 counts every trap entry");
     if (dmem_inst.mem[58] > 0 && dmem_inst.mem[59] > 0 && dmem_inst.mem[65] > 0 &&
         dmem_inst.mem[67] > 0 && dmem_inst.mem[68] > 0)
         $display("PASS: perf counters alive (mtimeD %0d, mispred %0d, dstall %0d, wfi %0d, fwait %0d)",

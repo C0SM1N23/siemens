@@ -6,7 +6,7 @@
 # Coverage on top of the basics (arith/forwarding, byte lanes, predictor
 # loop, JAL/JALR):
 #   - every sync trap cause: 0,1,2,3,4,5,6,7,11 (bitmask in x29, exact trap
-#     count in dmem[192] — 15 entries: 13 CPU-side + 2 PIC SLVERR accesses)
+#     count in dmem[192] — 17 entries: 13 CPU-side + 2 PIC + 2 mtimer SLVERR)
 #   - illegal ops must have no side effects (illegal store leaves mem alone)
 #   - CSR negatives: unimplemented address, writes to RO mip/mhartid
 #   - CSR immediate forms + mscratch round-trip + mhartid read
@@ -104,6 +104,13 @@ back:
     lw   x30, 16(x28)        # unmapped PIC register -> SLVERR -> cause 5
     lui  x28, 0x30000        # reload: the handler trashes x28
     sw   x0, 4(x28)          # IRQ_PENDING is read-only -> SLVERR -> cause 7
+
+    # and again from the mtimer: an offset past MTIMECMP_HI (0xC) is unmapped
+    # inside the peripheral -> SLVERR -> access fault (D27)
+    lui  x28, 0x30010        # mtimer window
+    lw   x30, 16(x28)        # offset 0x10 unmapped -> SLVERR -> cause 5
+    lui  x28, 0x30010        # reload: the handler trashes x28
+    sw   x0, 16(x28)         # offset 0x10 unmapped write -> SLVERR -> cause 7
 
     csrrs x30, 0x7C0, x0     # unimplemented CSR, even a read -> cause 2
     csrrw x0, mip, x28       # write to RO mip -> cause 2
@@ -509,6 +516,15 @@ wfi2_spot:
     lw   x30, 0(x28)
     sub  x30, x30, x16
     sw   x30, 232(x14)       # [232] = delta > 0
+
+    # software write to a timer register (MTIME_HI only carries on a LO
+    # rollover, so it reads back stable): exercises the write + WSTRB
+    # lane-merge path (D26). Timer stays disarmed (mtimecmp all-ones) so the
+    # huge mtime raises no irq.
+    addi x30, x0, 0x2AB
+    sw   x30, 4(x28)         # MTIME_HI = 0x2AB
+    lw   x30, 4(x28)
+    sw   x30, 276(x14)       # [276] = 0x2AB readback
 
     # hpm counters (D25): read at the very end, when the totals are settled
     csrrs x30, 0xB03, x0     # mhpmcounter3: mispredict redirects
