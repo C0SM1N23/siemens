@@ -1,50 +1,30 @@
-// S1 fetch — PC + AXI4-Lite read master on ibus (AR/R channels only).
-// REQ# = spec requirement, D# = design choice; both are tracked in the README.
+// S1 fetch — PC + AXI4-Lite read master on ibus (AR/R only).
+// REQ# = spec requirement, D# = design choice; both tracked in the README.
 //
-// What this block is responsible for:
-// - Owns the PC and issues one instruction read at a time on ibus.
-// - Asks the predictor where to fetch next.
-// - Parks a finished fetch when S2 stalls, drops it on a redirect.
-// - Passes fetch bus errors downstream instead of trapping here.
+// Owns the PC and issues one instruction read at a time, asks the predictor
+// where to fetch next, parks a finished fetch when S2 stalls (drops it on a
+// redirect), and passes fetch bus errors downstream instead of trapping here.
 //
-// Spec coverage:
+// REQ5:  S1 stalls while the AXI read response isn't valid yet.
+// REQ12: all response codes handled — OKAY, and SLVERR/DECERR (see D8).
 //
-// - REQ5
-//   S1 stalls while the AXI read response isn't valid yet.
+// D6: ibus master fully independent of dbus, one outstanding, issued
+//     back-to-back — the next ARVALID rises in the same cycle the current R
+//     beat is accepted, so a latency-1 memory sustains 1 instr/cycle. The next
+//     address comes from the predictor (BTB hit & taken -> target, else PC+4),
+//     and the prediction rides into IF/DX for S2 to check.
+// D7: if S2 stalls, a finished fetch parks in a holding register and no new
+//     fetch issues until it drains — S1 never runs ahead. On a redirect an
+//     in-flight read can't be cancelled, so it is marked "discard", its beat
+//     is accepted and thrown away, then fetch restarts at redirect_pc. This is
+//     where "flush beats stall" happens.
+// D8: a fetch bus error (RRESP = SLVERR/DECERR) doesn't stop S1 — the word is
+//     delivered with fetch_fault set and traps as instruction access fault in
+//     S2, so a wrong-path fetch error gets flushed before it can trap.
 //
-// - REQ12
-//   All response codes handled: OKAY, and SLVERR/DECERR (see D8).
-//
-// Design choices:
-//
-// - D6
-//   The ibus master is fully independent of the dbus, one outstanding
-//   transaction, issued back-to-back: the next ARVALID goes up in the same
-//   cycle the current R beat is accepted. On a latency-1 memory that
-//   sustains 1 instruction/cycle.
-//   The next address comes from the predictor (BTB hit & taken -> target,
-//   else PC+4), and the prediction rides into IF/DX so S2 can check it.
-//
-// - D7
-//   If S2 stalls, a finished fetch parks in a holding register and no new
-//   fetch is issued until it drains — S1 never runs ahead.
-//   On a redirect (mispredict/trap/MRET):
-//   - an in-flight read can't be cancelled, so it is marked "discard"
-//   - its beat is accepted and thrown away
-//   - fetch restarts at redirect_pc
-//   This is where "flush beats stall" actually happens.
-//
-// - D8
-//   A fetch bus error (RRESP = SLVERR/DECERR) doesn't stop S1. The word is
-//   delivered with fetch_fault set and traps as instruction-access-fault in
-//   S2 — so a wrong-path fetch error gets flushed before it can trap.
-//
-// Notes:
-//
-// - State lives in small per-purpose always blocks.
-// - Only control bits and architectural addresses get a reset; the holding
-//   payload doesn't need one (never believed unless hold_valid_q is set,
-//   and that is only set in the same cycle the payload is written).
+// Only control bits and architectural addresses get a reset; the holding
+// payload doesn't (never believed unless hold_valid_q is set, which happens in
+// the same cycle the payload is written).
 
 module fetch_unit #(
     parameter RESET_PC = 32'h0000_0000  // reset vector (pending the global memory map)
@@ -111,7 +91,7 @@ assign instr       = hold_valid_q ? hold_instr_q : ibus_rdata;
 assign instr_pc    = hold_valid_q ? hold_pc_q    : issued_pc_q;
 assign fetch_fault = hold_valid_q ? hold_fault_q : ibus_rresp[1];
 
-// same lookup decides the next PC and the prediction we propagate, so the two
+// one lookup drives both the next PC and the propagated prediction, so they
 // can never disagree
 assign bp_lookup_pc = instr_pc;
 assign pred_taken   = bp_pred_taken;
@@ -129,8 +109,8 @@ wire [31:0] issue_addr = redirect    ? redirect_pc :
                          instr_valid ? next_pc     :
                                        npc_q;       // post-reset / post-discard
 
-// gated by rst_n: AXI requires VALID low during reset (IHI0022E A3.1.2) —
-// issue_now is combinational and would otherwise request RESET_PC mid-reset
+// gated by rst_n: AXI wants VALID low in reset (IHI0022E A3.1.2), and issue_now
+// is combinational so it would otherwise request RESET_PC mid-reset
 assign ibus_arvalid = rst_n & (ar_pending_q | issue_now);
 assign ibus_araddr  = ar_pending_q ? issued_pc_q : issue_addr;
 
@@ -152,8 +132,7 @@ always @(posedge clk or negedge rst_n) begin
         inflight_q <= ar_hs ? 1'b1 : (inflight_q && !beat);
 end
 
-// address of the outstanding fetch — once VALID is up this must hold stable
-// on ARADDR until ARREADY
+// address of the outstanding fetch — held stable on ARADDR until ARREADY
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         issued_pc_q <= RESET_PC;
@@ -161,7 +140,7 @@ always @(posedge clk or negedge rst_n) begin
         issued_pc_q <= issue_addr;
 end
 
-// discard: a redirect with a transaction still out means its future beat is
+// discard: a redirect with a transaction still out means its beat is
 // wrong-path and must be swallowed
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)

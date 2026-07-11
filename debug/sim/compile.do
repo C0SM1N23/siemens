@@ -30,5 +30,6 @@ vlog ../hdl/axi_lite_mem_model.v
 vlog ../hdl/axi_lite_monitor.v
 vlog ../hdl/axi_lite_arb2.v
 vlog ../hdl/axi_lite_dec2.v
-vlog ../hdl/tb_cpu_axi.v
+# +incdir+. so tb_cpu_axi finds program_axi_sym.vh (label addresses from asm.py)
+vlog +incdir+. ../hdl/tb_cpu_axi.v
 vlog ../hdl/tb_dual_core.v

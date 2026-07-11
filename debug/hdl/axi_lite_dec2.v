@@ -1,26 +1,20 @@
 // 1-master / 2-slave AXI4-Lite address decoder — TB stand-in for the SoC
 // interconnect (like axi_lite_arb2, but for the slave side).
 //
-// Address map:
-// - slave 1 owns the window (addr & S1_MASK) == S1_BASE
-// - everything else goes to slave 0 (the default slave, which itself
-//   answers DECERR out of its own range)
-// - read and write paths are routed independently, as AXI keeps them
+// Slave 1 owns the window (addr & S1_MASK) == S1_BASE; everything else goes to
+// slave 0 (the default, which answers DECERR out of its own range). Read and
+// write paths route independently, as AXI keeps them.
 //
-// Routing rule per path:
-// - while the address is on the wire (xVALID high), the select comes
-//   straight from the address
-// - after the address handshake, the select is held in a register until
-//   the response completes
-// That covers both orders the CPU can produce: W finishing before AW
-// (route W by the live AW address) and the response arriving after the
-// address dropped (route by the latched select). Sound for ≤1 outstanding
-// per direction, which is what the CPU guarantees.
+// Routing per path: while the address is on the wire (xVALID high) the select
+// comes from the address; after the handshake it is held in a register until
+// the response completes. That covers both orders the CPU can produce — W
+// before AW (route W by the live AW address), and a response after the address
+// dropped (route by the latched select). Sound for ≤1 outstanding per direction.
 //
-// Note: the address compares are qualified with VALID because the master's
-// address is undefined between transactions (payload registers carry no
-// reset) — an unqualified compare would leak X into the READY muxes.
-// (Found by the random-backpressure regression runs.)
+// The address compares are qualified with VALID: the master's address is
+// undefined between transactions (payload registers carry no reset), so an
+// unqualified compare would leak X into the READY muxes (found by the
+// random-backpressure runs).
 
 module axi_lite_dec2 #(
     parameter S1_BASE = 32'h3000_0000,

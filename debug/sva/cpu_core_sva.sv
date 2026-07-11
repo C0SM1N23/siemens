@@ -1,18 +1,13 @@
 // CPU pipeline invariants (SVA) — bound into cpu_top, verification only.
 //
-// Each assertion states one architectural promise the design makes in the
-// README/ARCHITECTURE.md, so a regression that passes proves the promise,
-// not just the test program:
-//
-// - REQ4: cpu_irq_ack is a one-cycle, one-hot pulse; cpu_in_trap rises with
-//   the ack and holds until MRET
-// - D2:   an interrupt is only accepted at an instruction boundary — never
-//   while a data transaction is in flight
-// - D3:   a trapping instruction never commits (precise traps)
-// - REQ10: x0 reads as zero on both register file ports
-// - REQ11: WSTRB is one of the shapes SB/SH/SW can produce — the exact
-//   contract the DP-SRAM byte lanes rely on
-// - D12:  the dbus never carries a read and a write at the same time
+// Each assertion states one architectural promise from the README/ARCHITECTURE,
+// so a passing regression proves the promise, not just the test program:
+// - REQ4:  cpu_irq_ack is a one-cycle one-hot pulse; cpu_in_trap rises with it, holds to MRET
+// - D2:    an interrupt is accepted only at an instruction boundary, never mid data transaction
+// - D3:    a trapping instruction never commits (precise traps)
+// - REQ10: x0 reads zero on both register-file ports
+// - REQ11: WSTRB is one of the SB/SH/SW shapes — the DP-SRAM byte-lane contract
+// - D12:   the dbus never carries a read and a write at once
 //
 // Bound from bind_sva.sv — no RTL is touched.
 

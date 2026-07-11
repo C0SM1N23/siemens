@@ -1,14 +1,12 @@
 // PIC invariants (SVA) — bound into pic, verification only.
 //
-// The PIC's whole contract is one line of combinational logic plus two
-// registers (D19-D21); these properties pin each piece down:
-//
-// - D19: cpu_irq / cpu_irq_id are registered from the same pending vector —
-//   checked as the exact register transfer, so any inconsistency between
-//   the pair the CPU sees is caught the cycle it happens
+// The PIC's contract is one line of combinational logic plus two registers
+// (D19-D21); these properties pin each piece down:
+// - D19: cpu_irq / cpu_irq_id registered from the same pending vector, checked
+//   as the exact register transfer so any inconsistency is caught the cycle it happens
 // - D20: the id is the lowest-numbered pending channel (fixed priority)
-// - D21: an in-service channel stays out of cpu_irq until MRET releases it,
-//   and MRET releases the whole in-service mask
+// - D21: an in-service channel stays out of cpu_irq until MRET, which releases
+//   the whole in-service mask
 //
 // Bound from bind_sva.sv — no RTL is touched.
 

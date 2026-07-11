@@ -1,25 +1,17 @@
 // RV32I control decoder.
-// REQ# = spec requirement, D# = design choice; both are tracked in the README.
+// REQ# = spec requirement, D# = design choice; both tracked in the README.
 //
-// Spec coverage:
+// REQ7: control signals for every RV32I group.
+//   - FENCE = NOP (single hart, in-order, nothing to fence)
+//   - ECALL/EBREAK/CSR handled downstream (trap or CSR)
+//   - SYSTEM decoded strictly: ECALL/EBREAK/MRET/WFI + CSR* (incl. immediate
+//     forms); anything else is illegal
+// D23: WFI decode only (Priv. spec 3.3.3); sleep/wake lives in cpu_top +
+//   hazard_unit, so a committed WFI leaves every line inactive (a NOP).
 //
-// - REQ7
-//   Control signals for every RV32I instruction group.
-//   - FENCE decodes as a NOP (single hart, in-order, no reordering store
-//     buffer — there is nothing to fence)
-//   - ECALL/EBREAK/CSR are trap- or CSR-handled downstream
-//   - SYSTEM is decoded strictly: ECALL / EBREAK / MRET / WFI plus CSR* incl.
-//     the immediate forms; any other SYSTEM encoding is illegal
-//
-// - D23
-//   WFI (Privileged ISA v20211203 ch. 3.3.3, the standard the brief cites).
-//   Decode only — the sleep/wake behavior lives in cpu_top/hazard_unit.
-//   Every other control line stays inactive, so a committed WFI is a NOP.
-//
-// Note: illegal detection feeds D3 (the supported trap causes). Unknown
-// opcodes or bad funct fields set illegal=1 and leave every other control
-// signal inactive — an illegal op has no side effects, it just becomes an
-// illegal-instruction trap in S2.
+// Illegal detection feeds D3: an unknown opcode or bad funct field sets
+// illegal=1 and clears every other line, so an illegal op has no side effects
+// and just traps in S2.
 
 module control (
     input      [6:0]  opcode,
@@ -27,7 +19,7 @@ module control (
     input      [6:0]  funct7,
     input      [4:0]  rs1,         // rs1/uimm field, checked in SYSTEM encodings
     input      [4:0]  rd,
-    input      [11:0] imm12,       // instr[31:20], selects ECALL/EBREAK/MRET
+    input      [11:0] imm12,       // instr[31:20], selects ECALL/EBREAK/MRET/WFI
 
     output reg        RegWrite,    // writes rd
     output reg        ALUSrc,      // 0=rs2, 1=imm

@@ -1,31 +1,24 @@
 // Sync exception detect in S2 — precise traps.
 // D# = design choice; tracked in the README.
 //
-// Design choices:
+// D3: the supported mcause set, resolved at the end of S2 so the offending
+//     instruction never reaches writeback. A priority chain picks one cause
+//     (they're mutually exclusive over an instruction's life anyway):
+//       0    instr addr misaligned (taken branch/jump, target[1]=1)
+//       1    instr access fault (ibus SLVERR/DECERR, carried via IF/DX)
+//       2    illegal instruction
+//       3    breakpoint
+//      11    env call (M-mode)
+//       4/6  load/store addr misaligned
+//       5/7  load/store access fault
+//     (external-interrupt causes 16..23 live in csr_file, also D3.)
+// D17: load/store misalignment is checked before the access, so a misaligned op
+//      (cause 4/6) never issues an AXI transaction.
+// D18: a bus error becomes an access fault, not "illegal" — fetch to cause 1,
+//      load to 5, store to 7.
 //
-// - D3
-//   The supported mcause set, resolved at the end of S2 so the offending
-//   instruction never reaches writeback. A priority chain picks one cause
-//   (they are mutually exclusive over an instruction's life anyway):
-//   -  0    instr addr misaligned (taken branch/jump with target[1]=1)
-//   -  1    instr access fault (ibus SLVERR/DECERR, carried via IF/DX)
-//   -  2    illegal instruction
-//   -  3    breakpoint
-//   - 11    env call (M-mode)
-//   -  4/6  load/store addr misaligned
-//   -  5/7  load/store access fault
-//   (The 8 external-interrupt causes 16..23 live in csr_file, also D3.)
-//
-// - D17
-//   Load/store misalignment is checked BEFORE the access — a misaligned op
-//   (cause 4/6) never issues an AXI transaction.
-//
-// - D18
-//   A bus error becomes an access fault, not "illegal instruction":
-//   fetch SLVERR/DECERR -> cause 1, load -> 5, store -> 7.
-//
-// Note: interrupts don't come through here — cpu_top evaluates them before
-// execution and delivers valid=0 for a preempted instruction.
+// Interrupts don't come through here: cpu_top evaluates them before execution
+// and delivers valid=0 for a preempted instruction.
 
 module exception_unit (
     input             valid,          // real, non-preempted instruction in S2

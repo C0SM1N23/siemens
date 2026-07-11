@@ -1,48 +1,30 @@
-// Branch predictor — combined BHT + BTB.
-// REQ# = spec requirement, D# = design choice; both are tracked in the README.
+// Branch predictor — combined BHT + BTB + RAS.
+// REQ# = spec requirement, D# = design choice; both tracked in the README.
 //
-// Spec coverage:
+// REQ8: 1-bit saturating predictor — each branch records its last outcome,
+//       which predicts the next encounter.
+// D9:  direct-mapped, 128 entries, index PC[8:2], tag PC[31:9], plus a stored
+//      32-bit target next to the 1-bit state. The target is the point of the
+//      BTB: at fetch the immediate isn't decoded yet, so a direction bit alone
+//      couldn't say where to go.
+// D10: a miss predicts not-taken (no target, so fetch PC+4).
+// D11: entries are learned at S2 resolution, committed instructions only, so
+//      state is never speculative. Entries survive traps/MRET — those redirects
+//      (mtvec/mepc) are architectural and bypass the predictor.
+// D24: return-address stack (RAS_DEPTH entries, 0 disables). The BTB's stored
+//      target is the last target, wrong for a return reached from several call
+//      sites. Calls (rd = x1/x5, the ISA JALR hint table) push pc+4 at commit,
+//      returns pop, and a BTB entry learned from a return is tagged is_ret and
+//      predicts the RAS top instead. Push+pop together (both-link JALR,
+//      rd != rs1) replaces the top. Updates happen at the BTB's commit point,
+//      so RAS state is never speculative — wrong-path fetches only peek.
+//      Overflow wraps, underflow falls back to the BTB target; either way only
+//      accuracy is at stake, never correctness.
 //
-// - REQ8
-//   1-bit saturating predictor: each branch records its last outcome and
-//   that predicts the next encounter.
-//
-// Design choices (the structure the spec left to the intern):
-//
-// - D9
-//   Direct-mapped, 128 entries, index = PC[8:2], tag = PC[31:9], plus a
-//   stored 32-bit target next to the 1-bit state.
-//   The target is the whole point of the BTB: it lets S1 redirect on a
-//   taken prediction — in fetch the immediate isn't decoded yet, so a bare
-//   direction bit couldn't say where to go.
-//
-// - D10
-//   A miss predicts not-taken (no target known, so just fetch PC+4).
-//
-// - D11
-//   Entries are learned at S2 resolution, committed instructions only, so
-//   the state is never speculative. Entries survive traps/MRET — those
-//   redirects (mtvec/mepc) are architectural and bypass the predictor.
-//
-// - D24
-//   Return address stack (RAS_DEPTH entries, 0 disables). The BTB's stored
-//   target is the *last* target, which is systematically wrong for a return
-//   reached from more than one call site. Calls (rd = x1/x5, per the ISA
-//   JALR hint table) push pc+4 at commit; returns pop; a BTB entry learned
-//   from a return is tagged is_ret and predicts the RAS top instead of the
-//   stored target. Push+pop together (both-link JALR, rd != rs1) replaces
-//   the top. All updates happen at the same commit point as the BTB (D11),
-//   so RAS state is never speculative either — wrong-path fetches only
-//   *peek*. Overflow wraps (oldest lost), underflow falls back to the BTB
-//   target: in both cases only prediction accuracy is at stake, never
-//   correctness.
-//
-// Notes:
-//
-// - Only the valid bits get a reset. The tag/state/target arrays (~7k bits)
-//   don't need one: an entry is never believed until its valid bit is set,
-//   and valid is only set together with a full payload write. Keeping reset
-//   off the big arrays keeps the reset tree small.
+// Only the valid bits get a reset. The tag/state/target arrays (~7k bits)
+// don't: an entry is never believed until its valid bit is set, and valid is
+// set together with a full payload write, so keeping reset off the big arrays
+// keeps the reset tree small.
 
 module branch_predictor #(
     parameter RAS_DEPTH = 8     // return-address stack entries; 0 disables (D24)

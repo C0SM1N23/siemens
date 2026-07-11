@@ -1,58 +1,28 @@
 // Load/store unit — drives AXI4-Lite transactions on dbus.
-// REQ# = spec requirement, D# = design choice; both are tracked in the README.
+// REQ# = spec requirement, D# = design choice; both tracked in the README.
 //
-// What this block is responsible for:
-// - Keeps S2 stalled for the whole load/store round-trip.
-// - Builds the right WSTRB pattern for SB/SH/SW.
-// - Picks the correct byte/half on loads and applies sign/zero extension.
-// - Turns AXI SLVERR/DECERR responses into access faults.
+// Keeps S2 stalled for the whole round-trip, builds the WSTRB pattern for
+// SB/SH/SW, extracts the byte/half on loads with sign/zero extension, and turns
+// AXI SLVERR/DECERR into access faults.
 //
-// Spec coverage:
+// REQ5:  S2 stays stalled for the whole data transaction; `busy` drops only
+//        once the response handshake is done.
+// REQ11: store byte enables match the DP-SRAM slave directly (no adapter).
+//        WSTRB: SB = 0001<<addr[1:0] (byte replicated across lanes, WSTRB picks
+//        the active one); SH = 0011<<addr[1:0] (addr[0]=0 for aligned halfwords,
+//        halfword replicated); SW = 1111. Loads use addr[1:0] to pick the byte/
+//        half, then sign/zero-extend by funct3.
+// REQ12: SLVERR/DECERR raise an access fault in S2 — load -> cause 5, store -> 7.
+// D12:   one outstanding transaction; address and write data are latched at
+//        request start, because forwarded operands are only valid in the first
+//        cycle (S3 bubbles while S2 stalls) and AXI wants a stable payload.
+//        Handshake tracking is per AXI channel, so a later move to AXI4-Full is
+//        an extension, not a rewrite.
 //
-// - REQ5
-//   S2 stays stalled for the entire data transaction.
-//   `busy` only drops once the read/write response handshake is actually done.
-//
-// - REQ11
-//   Store byte enables are generated to match the DP-SRAM slave directly,
-//   so loads/stores work without needing any extra adapter layer.
-//
-//   WSTRB layout:
-//   - SB: `0001 << addr[1:0]`
-//     The byte is replicated across all lanes, WSTRB picks the active one.
-//   - SH: `0011 << addr[1:0]`
-//     `addr[0]` is guaranteed 0 for aligned halfword stores.
-//     The halfword is replicated so the selected 2-byte lane gets the data.
-//   - SW: `1111`
-//
-//   Loads use `addr[1:0]` to select the requested byte / halfword and then
-//   sign-extend or zero-extend based on `funct3`.
-//
-// - REQ12
-//   If AXI returns `SLVERR` or `DECERR`, an access fault is raised in S2:
-//   - load fault  -> cause 5
-//   - store fault -> cause 7
-//
-// Design choice:
-//
-// - D12
-//   Only one outstanding transaction at a time.
-//   Address and write data are latched when the request starts.
-//
-//   Why this is done:
-//   - forwarded operands are only guaranteed valid in the first cycle
-//     (S3 bubbles while S2 stalls)
-//   - AXI expects address/write data to stay stable until the handshake
-//
-//   Handshake tracking is kept per AXI channel, so moving later to AXI4-Full
-//   is an extension, not a rewrite.
-//
-// Notes:
-//
-// - `req` is only raised for a legal, aligned, non-squashed memory op.
-// - Misaligned accesses trap earlier, so no AXI transaction is issued here.
-// - The command latch has no reset on purpose: it is only read while a
-//   transaction is active, and every new transaction overwrites it first.
+// `req` is raised only for a legal, aligned, non-squashed op (misaligned traps
+// earlier, so no transaction is issued here). The command latch has no reset:
+// it is read only while a transaction is active, and every new one overwrites
+// it first.
 
 module lsu (
     input             clk,
@@ -141,9 +111,8 @@ assign err    = rd_done ? dbus_rresp[1] : dbus_bresp[1];
 assign active = (state_q != S_IDLE);
 assign busy   = (start || active) && !done;
 
-// load extract: one shifter serves both widths. Halves are always 16-bit
-// aligned (a misaligned LH/LHU traps before the bus), so shifting by the
-// byte offset leaves the wanted half in [15:0] too.
+// load extract: one shifter serves both widths. A misaligned LH/LHU traps
+// before the bus, so shifting by the byte offset leaves the half in [15:0].
 wire [31:0] ld_shift = dbus_rdata >> {addr_q[1:0], 3'b000};
 wire [7:0]  lbyte    = ld_shift[7:0];
 wire [15:0] lhalf    = ld_shift[15:0];
@@ -170,9 +139,8 @@ always @(posedge clk or negedge rst_n) begin
         state_q <= S_IDLE;
 end
 
-// per-channel handshake progress, one tracker per channel. A handshake can
-// already land in the start cycle, so start captures it instead of clearing
-// blindly; done rearms the tracker for the next transaction.
+// one handshake tracker per channel. A handshake can land in the start cycle,
+// so start captures it instead of clearing blindly; done rearms it.
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         ar_sent_q <= 1'b0;

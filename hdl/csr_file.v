@@ -1,54 +1,30 @@
 // M-mode CSR file.
-// REQ# = spec requirement, D# = design choice; both are tracked in the README.
+// REQ# = spec requirement, D# = design choice; both tracked in the README.
 //
-// Spec coverage:
+// REQ9: the 7 required CSRs at their addresses — mstatus 0x300, mie 0x304,
+//       mtvec 0x305, mscratch 0x340, mepc 0x341, mcause 0x342, mip 0x344 (mip
+//       read-only, driven by the PIC). Live fields only, the rest read 0/WPRI:
+//       mstatus MIE(3)/MPIE(7), MPP(12:11) hardwired 2'b11; mtvec BASE[31:2] +
+//       MODE[1:0]; mepc [1:0] forced to 0.
+// D3:  the 8 PIC channels map to mie/mip bits 16..23 (external-interrupt causes
+//      16..23) — the interrupt half of the supported-cause set.
+// D5:  read-only mhartid (0xF14) from HART_ID; read-only mcycle/minstret as
+//      verification aids.
+// D25: read-only mhpmcounter3..7 at the standard addresses, wired to the events
+//      software needs to tune the SoC (pairs with the DP-SRAM BANDWIDTH_A/B and
+//      DMA throttling): 3 mispredicts, 4 fetch-starved cycles, 5 dbus stall
+//      cycles, 6 traps taken, 7 WFI sleep cycles. Higher hpm addresses stay
+//      unimplemented -> illegal (D15).
+// D15: access to an unimplemented CSR, or an effective write to a read-only one,
+//      raises illegal in S2 (not DECERR — CSRs are internal). csr_wen already
+//      drops the "CSRRS/C with x0/uimm=0 = pure read" case, so those don't trap.
+// D16: vectored mtvec — interrupts to BASE+4*cause, exceptions to BASE; direct
+//      mode sends everything to BASE.
 //
-// - REQ9
-//   The 7 required CSRs at their addresses: mstatus 0x300, mie 0x304,
-//   mtvec 0x305, mscratch 0x340, mepc 0x341, mcause 0x342, mip 0x344 —
-//   with mip read-only, driven by the PIC lines.
-//   Live fields only, the rest read 0/WPRI:
-//   - mstatus: MIE(3), MPIE(7); MPP(12:11) hardwired 2'b11 (M-mode)
-//   - mtvec:   BASE[31:2] + MODE[1:0]
-//   - mepc:    bits [1:0] forced to 0
-//
-// Design choices:
-//
-// - D3
-//   The 8 PIC channels map to mie/mip bits 16..23 (external-interrupt
-//   causes 16..23) — the interrupt half of the supported-cause set.
-//
-// - D5
-//   Read-only mhartid (0xF14) from the HART_ID parameter (multi-core).
-//   Read-only mcycle/minstret counters kept as verification aids.
-//
-// - D25
-//   Read-only mhpmcounter3..7 at the standard addresses, hardwired to the
-//   events software actually needs to tune this SoC (the DP-SRAM exports
-//   BANDWIDTH_A/B and the DMA has per-channel throttling — these are the
-//   CPU-side numbers that close that loop):
-//     3: mispredict redirects        4: fetch-starved cycles (S2 empty)
-//     5: dbus stall cycles           6: traps taken (sync + irq)
-//     7: WFI sleep cycles
-//   mhpmcounter8..31 / mhpmevent* stay unimplemented -> illegal (D15).
-//
-// - D15
-//   Any access to an unimplemented CSR, or an effective write to a
-//   read-only one, raises illegal instruction in S2 (not a bus DECERR —
-//   CSRs are internal). csr_wen already drops the "CSRRS/C with x0/uimm=0
-//   = pure read" case, so those don't trap.
-//
-// - D16
-//   Vectored mtvec: interrupts -> BASE + 4*cause, exceptions -> BASE.
-//   Direct mode sends everything to BASE.
-//
-// Notes:
-//
-// - Trap entry / MRET are sequenced by cpu_top:
-//   - trap_set commits mepc / mcause / MPIE<-MIE / MIE<-0 atomically
-//   - mret does MIE<-MPIE, MPIE<-1
-// - trap_set wins over a same-cycle software write — the trapping
-//   instruction never commits its own write.
+// Trap entry / MRET are sequenced by cpu_top: trap_set commits mepc / mcause /
+// MPIE<-MIE / MIE<-0 atomically, mret does MIE<-MPIE, MPIE<-1. trap_set wins
+// over a same-cycle software write, so the trapping instruction never commits
+// its own write.
 
 module csr_file #(
     parameter HART_ID = 32'd0
@@ -167,11 +143,10 @@ wire [31:0] mstatus_nv = csr_new_val(mstatus_rd, csr_wdata, csr_op);
 wire [31:0] mie_nv     = csr_new_val({8'b0, mie_q, 16'b0}, csr_wdata, csr_op);
 wire [31:0] mepc_nv    = csr_new_val(mepc_q, csr_wdata, csr_op);
 
-// committed software write. Note it can never coincide with trap_set or mret:
-// an interrupt kills csr_wen (dec_live drops), the only exception a CSR op can
-// raise is its own illegal access (blocked right here), and MRET is a
-// different instruction entirely. The trap arms below still come first so
-// each register reads as "hardware beats software".
+// committed software write. It never coincides with trap_set or mret: an
+// interrupt kills csr_wen, a CSR op's only exception is its own illegal access
+// (blocked here), and MRET is a different instruction. The trap arms below
+// still come first, so each register reads as "hardware beats software".
 wire csr_wr = csr_wen && !csr_illegal;
 
 wire wr_mstatus  = csr_wr && (csr_addr == MSTATUS);

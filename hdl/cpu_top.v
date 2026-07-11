@@ -1,52 +1,34 @@
 // RV32I CPU — 3-stage pipeline, top level.
-// REQ# = spec requirement (implemented to spec), D# = intern design choice.
-// Both families are indexed in the README; grep REQ or D<n> to navigate.
+// REQ# = spec requirement, D# = intern design choice; both indexed in the
+// README (grep REQ or D<n> to navigate).
 //
 // The three stages:
-// - S1 fetch      AXI4-Lite master on ibus (AR/R) + BTB/BHT branch predictor
-// - S2 dec+exec   decode, regfile, ALU, branch, CSR; load/store on dbus with
-//                 the pipeline stalled for the whole AXI round-trip; traps,
-//                 interrupts and mispredicts all resolve here (precise traps)
-// - S3 writeback  rd write into the regfile, no-op for everything else
+// - S1 fetch      AXI4-Lite master on ibus (AR/R) + BTB/BHT predictor
+// - S2 dec+exec   decode, regfile, ALU, branch, CSR, load/store on dbus (S2
+//                 stalls the whole AXI round-trip); traps, interrupts and
+//                 mispredicts all resolve here — precise traps
+// - S3 writeback  rd write into the regfile, no-op otherwise
 //
-// Spec coverage:
+// REQ1: the 3-stage pipeline above.
+// REQ2: two AXI4-Lite master ports — ibus (read only), dbus (read+write).
+// REQ3: one sync clock, async active-low reset, PIC lines cpu_irq / cpu_irq_id
+//       / cpu_irq_ack / cpu_in_trap.
+// REQ4: interrupts sampled only under mstatus.MIE, at instruction boundaries;
+//       cpu_irq_ack pulses one cycle; cpu_in_trap held from trap entry to MRET.
 //
-// - REQ1  the 3-stage pipeline above (Fetch / Decode+Execute / Writeback)
-// - REQ2  two AXI4-Lite master ports — ibus (read only), dbus (read + write)
-// - REQ3  top interface: one sync clock, async active-low reset, and the PIC
-//         lines cpu_irq / cpu_irq_id / cpu_irq_ack / cpu_in_trap
-// - REQ4  interrupts sampled only under mstatus.MIE, at instruction
-//         boundaries; cpu_irq_ack pulses one cycle; cpu_in_trap held from
-//         trap entry until MRET
-//
-// Design choices:
-//
-// - D1
-//   Pipeline registers carry a valid bit — valid=0 is a guaranteed safe
-//   bubble, independent of the NOP encoding.
-//   (S3->S2 forwarding removes the load-use stall; the two ports are
-//   independent, 1 outstanding each, so a fetch and a load/store can be
-//   in flight at once.)
-//
-// - D2
-//   S2 priority: interrupt > sync exception > mispredict, as a sequential
-//   check. The interrupt is tested before the instruction issues any data
-//   transaction, so a preempted instruction can safely rerun after MRET.
-//   Trap/MRET redirects (mtvec/mepc) bypass the predictor.
-//
-// - D4
-//   Trap return address: exceptions -> the offending instruction,
-//   interrupts -> the instruction to resume at.
-//
-// - D5
-//   RESET_PC and HART_ID parameters make the core instantiable N times —
-//   HART_ID feeds mhartid so software can tell instances apart (beyond
-//   spec). A single-core SoC leaves both at 0.
-//
-// - D23
-//   WFI wake logic lives here (the stall itself is hazard_unit's): wake on
-//   any mie-enabled pending interrupt regardless of mstatus.MIE, and an
-//   interrupt that ends a WFI records mepc = wfi+4 so MRET resumes past it.
+// D1: pipeline registers carry a valid bit — valid=0 is a safe bubble (not the
+//     NOP encoding). S3->S2 forwarding removes the load-use stall; the two
+//     ports are independent, 1 outstanding each, so fetch and load/store overlap.
+// D2: S2 priority interrupt > sync exception > mispredict, a sequential check.
+//     The interrupt is tested before any data transaction, so a preempted
+//     instruction reruns safely after MRET. Trap/MRET redirects bypass the predictor.
+// D4: trap return address — exceptions to the offending instruction, interrupts
+//     to the instruction to resume at.
+// D5: RESET_PC and HART_ID make the core instantiable N times; HART_ID feeds
+//     mhartid so software tells instances apart (beyond spec). Single-core = both 0.
+// D23: WFI wake logic lives here (the stall is hazard_unit's): wake on any
+//     mie-enabled pending interrupt regardless of mstatus.MIE, and a WFI-ending
+//     interrupt records mepc = wfi+4 so MRET resumes past it.
 
 module cpu_top #(
     parameter RESET_PC = 32'h0000_0000,  // reset vector; pending the global memory map
@@ -270,17 +252,16 @@ wire irq_take = ifdx_valid_q && !lsu_active && mie_global &&
 // instruction actually executes: not preempted, and the fetch was clean
 wire dec_live = ifdx_valid_q && !irq_take && !ifdx_fault_q;
 
-// WFI (D23): sleep until a locally-enabled interrupt is pending — mie gates
-// the wake, mstatus.MIE deliberately does not (Priv. spec 3.3.3). While
-// asleep S2 is frozen and S1 parks its fetch, so the ibus goes silent. If
-// MIE is set the wake is a normal irq_take (dec_live drops, releasing the
-// stall in the same cycle); if masked, the WFI just commits as a NOP and
-// execution falls through.
+// WFI (D23): sleep until a locally-enabled interrupt is pending. mie gates the
+// wake, mstatus.MIE deliberately does not (Priv. spec 3.3.3). Asleep, S2 is
+// frozen and S1 parks its fetch, so the ibus goes silent. MIE set -> a normal
+// irq_take (dec_live drops, releasing the stall); masked -> the WFI commits as
+// a NOP and falls through.
 wire wfi_wake = |(cpu_irq & irq_enable);
 wire wfi_wait = dec_live && ctrl_wfi && !wfi_wake;
 
-// one shared PC+4 adder for S2: the mispredict fall-through, the JAL/JALR
-// link value and the WFI resume address are all the same number
+// one shared PC+4 adder for S2: mispredict fall-through, JAL/JALR link and the
+// WFI resume address are all the same number
 assign s2_pc4 = ifdx_pc_q + 32'd4;
 
 // ALU; AUIPC takes the PC as operand A
@@ -345,8 +326,8 @@ csr_file #(.HART_ID(HART_ID)) csr_file_inst (
     .trap_set    (trap_take & s2_advance),
     .trap_is_irq (irq_take),
     .trap_code   (trap_code),
-    // an interrupt that wakes a WFI resumes *past* it: mepc = pc+4
-    // (Priv. spec 3.3.3); everything else records the instruction itself
+    // an interrupt that wakes a WFI resumes past it (mepc = pc+4, Priv. 3.3.3);
+    // everything else records the instruction itself
     .trap_pc     (irq_take && ctrl_wfi && !ifdx_fault_q ? s2_pc4 : ifdx_pc_q),
     .mret        (mret_exec),
     .irq_lines   (cpu_irq),
@@ -433,11 +414,10 @@ assign mispredict = dec_live && !exception && !ctrl_mret &&
 // predictor learns every committed branch/jump at resolution (D11)
 assign bp_update_en = dec_live && (Branch | Jump) && !exception && s2_advance;
 
-// RAS hints (D24): rd/rs1 in {x1,x5} mark calls and returns, straight from
-// the ISA's JALR hint table. Both-link with rd==rs1 is push-only; both-link
-// with rd!=rs1 is pop-then-push (predictor treats push+pop as replace-top).
-// Learned at the same commit point as the BTB, so RAS state is never
-// speculative and survives traps like the rest of the predictor (D11).
+// RAS hints (D24): rd/rs1 in {x1,x5} mark calls/returns, from the ISA's JALR
+// hint table. Both-link rd==rs1 is push-only; both-link rd!=rs1 is pop-then-push
+// (the predictor treats push+pop as replace-top). Learned at the BTB's commit
+// point, so RAS state is never speculative and survives traps (D11).
 wire rd_link  = (rd  == 5'd1) || (rd  == 5'd5);
 wire rs1_link = (rs1 == 5'd1) || (rs1 == 5'd5);
 assign ras_push = Jump && rd_link;
@@ -477,8 +457,7 @@ always @(posedge clk or negedge rst_n) begin
         cpu_irq_ack <= (irq_take && s2_advance) ? (8'h01 << cpu_irq_id) : 8'b0;
 end
 
-// cpu_in_trap holds until MRET; a nested sync trap inside the handler keeps
-// it asserted (REQ4)
+// cpu_in_trap holds until MRET; a nested sync trap in the handler keeps it up (REQ4)
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         cpu_in_trap <= 1'b0;
@@ -500,8 +479,8 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // DX/WB payload — captured only when a real instruction leaves S2. Bubbles
-// don't touch these ~130 flops (everything downstream is gated by valid),
-// which also means no reset is needed here.
+// leave these ~130 flops alone (everything downstream is gated by valid), so
+// no reset is needed here.
 always @(posedge clk) begin
     if (s2_advance && ifdx_valid_q) begin
         dxwb_rd_q       <= rd;

@@ -1,26 +1,21 @@
 // AXI4-Lite protocol assertions (SVA) — bindable, verification only.
 //
-// One instance watches one AXI4-Lite port and checks the protocol rules the
-// design is built around (ARCHITECTURE.md section 4), as formal properties
-// instead of procedural checks:
+// One instance watches one AXI4-Lite port and checks the rules the design is
+// built around (ARCHITECTURE.md section 4) as formal properties:
+// - VALID never waits for READY, and once VALID is up the payload holds until
+//   the handshake (the two obligations fetch_unit and lsu rely on)
+// - a response only ever answers an outstanding request (R after AR, B after
+//   AW+W), at most one in flight per direction — the ≤1-outstanding claim (D6, D12)
+// - response codes are legal AXI4-Lite (EXOKAY never appears)
+// - all VALIDs are low in reset
 //
-// - VALID never waits for READY, and once VALID is up the payload holds
-//   until the handshake (the two obligations fetch_unit and lsu are built on)
-// - a response only ever answers an outstanding request (R after AR,
-//   B after AW+W), and at most one transaction is in flight per direction —
-//   the <=1-outstanding claim (D6, D12) as a checked property
-// - response codes are legal for AXI4-Lite (EXOKAY never appears)
-// - all VALIDs are low while in reset
+// axi_lite_monitor.v stays the ModelSim-compatible checker; this is the same
+// contract in SVA for tools that support it (Verilator --assert, Questa). Bound
+// from bind_sva.sv — no RTL is touched.
 //
-// The existing axi_lite_monitor.v stays the ModelSim-compatible checker;
-// this file is the same contract written in SVA for tools that support it
-// (Verilator --assert, Questa). Bound from bind_sva.sv — no RTL is touched.
-//
-// Parameters:
-// - NAME        tag used in assertion messages
-// - HAS_WRITE   0 = read-only port (ibus): write checks are not generated
-// - CHECK_ALIGN 1 = ARADDR must be word-aligned (true for instruction fetch;
-//                   not for dbus, where LB/LBU legally carry a byte address)
+// Parameters: NAME tags the messages; HAS_WRITE 0 = read-only port (no write
+// checks); CHECK_ALIGN 1 = ARADDR must be word-aligned (instruction fetch, not
+// dbus where LB/LBU legally carry a byte address).
 
 module axi_lite_sva #(
     parameter NAME        = "axi",

@@ -1,22 +1,19 @@
 // Functional coverage — bound into cpu_top, verification only.
 //
 // Turns the manual coverage argument in VERIFICATION.md into measured bins:
-// every scenario the test plan claims to exercise gets a counter, sampled on
-// the cycle the scenario actually happens at the S2 boundary (commit, trap
-// entry, branch resolution) or on the bus handshake. At the end of the run a
-// [FCOV] table prints every bin with its count and a hit/MISS verdict plus a
-// summary percentage — a MISS line is a test-plan hole, not a failure.
+// every scenario the test plan claims gets a counter, sampled the cycle it
+// happens (at the S2 boundary or on a bus handshake). At end of run a [FCOV]
+// table prints each bin's count + hit/MISS verdict and a summary percentage —
+// a MISS is a test-plan hole, not a failure.
 //
 // Sampling points:
-// - commit      = a real instruction leaves S2 for writeback
-//                 (s2_advance && ifdx_valid && !trap_take)
-// - trap entry  = trap_take && s2_advance, binned by mcause code
-// - resolution  = predictor outcome at a committed branch/jump
-// - bus beats   = response handshakes on ibus/dbus, binned by RRESP/BRESP
+// - commit     = a real instruction leaves S2 (s2_advance && ifdx_valid && !trap_take)
+// - trap entry = trap_take && s2_advance, binned by mcause
+// - resolution = predictor outcome at a committed branch/jump
+// - bus beats  = response handshakes on ibus/dbus, binned by RRESP/BRESP
 //
-// Implemented with plain counters (portable: Verilator, Questa, and — minus
-// the SVA files — even ModelSim ASE could host this one). Bound from
-// bind_sva.sv — no RTL is touched.
+// Plain counters (portable to Verilator, Questa, even ModelSim ASE minus the
+// SVA files). Bound from bind_sva.sv — no RTL is touched.
 
 module cpu_func_cov (
     input        clk,
@@ -228,114 +225,133 @@ always @(posedge clk) begin
     end
 end
 
-// --- report ---
+// --- report + coverage gate ---
+//
+// Each bin is tagged required (REQ) or optional (OPT). A required bin that
+// stays 0 fails the gate — that is a coverage regression, checked as hard as a
+// scoreboard miss. The optional bins are the ones the default run legitimately
+// leaves untouched: the masked ch5 negatives (must never fire), the two AR
+// backpressure bins (only the regress random-READY configs hit them), and the
+// right-direction-wrong-target mispredict (the RAS covers those targets).
 
-integer hit_n, tot_n;
+localparam bit REQ = 1'b1, OPT = 1'b0;
 
-function void rep(input string name, input integer cnt);
+integer hit_n, tot_n, gate_fail;
+
+function void rep(input string name, input integer cnt, input bit req);
     begin
         tot_n = tot_n + 1;
-        if (cnt > 0) hit_n = hit_n + 1;
-        $display("[FCOV] %0s : %0d %0s", name, cnt, cnt > 0 ? "hit" : "MISS");
+        if (cnt > 0)
+            hit_n = hit_n + 1;
+        else if (req)
+            gate_fail = gate_fail + 1;
+        $display("[FCOV] %0s : %0d %0s", name, cnt,
+                 cnt > 0 ? "hit" : (req ? "MISS (required)" : "MISS (optional)"));
     end
 endfunction
 
 final begin
-    hit_n = 0; tot_n = 0;
+    hit_n = 0; tot_n = 0; gate_fail = 0;
     $display("[FCOV] ---- functional coverage report ----");
 
-    rep("class LUI",     cls_cnt[C_LUI]);
-    rep("class AUIPC",   cls_cnt[C_AUIPC]);
-    rep("class JAL",     cls_cnt[C_JAL]);
-    rep("class JALR",    cls_cnt[C_JALR]);
-    rep("class BRANCH",  cls_cnt[C_BR]);
-    rep("class LOAD",    cls_cnt[C_LD]);
-    rep("class STORE",   cls_cnt[C_ST]);
-    rep("class OP-IMM",  cls_cnt[C_OPI]);
-    rep("class OP",      cls_cnt[C_OP]);
-    rep("class FENCE",   cls_cnt[C_FEN]);
-    rep("class SYSTEM",  cls_cnt[C_SYS]);
+    rep("class LUI",     cls_cnt[C_LUI],   REQ);
+    rep("class AUIPC",   cls_cnt[C_AUIPC], REQ);
+    rep("class JAL",     cls_cnt[C_JAL],   REQ);
+    rep("class JALR",    cls_cnt[C_JALR],  REQ);
+    rep("class BRANCH",  cls_cnt[C_BR],    REQ);
+    rep("class LOAD",    cls_cnt[C_LD],    REQ);
+    rep("class STORE",   cls_cnt[C_ST],    REQ);
+    rep("class OP-IMM",  cls_cnt[C_OPI],   REQ);
+    rep("class OP",      cls_cnt[C_OP],    REQ);
+    rep("class FENCE",   cls_cnt[C_FEN],   REQ);
+    rep("class SYSTEM",  cls_cnt[C_SYS],   REQ);
 
-    rep("load LB",  ld_cnt[3'b000]);
-    rep("load LH",  ld_cnt[3'b001]);
-    rep("load LW",  ld_cnt[3'b010]);
-    rep("load LBU", ld_cnt[3'b100]);
-    rep("load LHU", ld_cnt[3'b101]);
-    rep("store SB", st_cnt[3'b000]);
-    rep("store SH", st_cnt[3'b001]);
-    rep("store SW", st_cnt[3'b010]);
+    rep("load LB",  ld_cnt[3'b000], REQ);
+    rep("load LH",  ld_cnt[3'b001], REQ);
+    rep("load LW",  ld_cnt[3'b010], REQ);
+    rep("load LBU", ld_cnt[3'b100], REQ);
+    rep("load LHU", ld_cnt[3'b101], REQ);
+    rep("store SB", st_cnt[3'b000], REQ);
+    rep("store SH", st_cnt[3'b001], REQ);
+    rep("store SW", st_cnt[3'b010], REQ);
 
-    rep("branch BEQ  not-taken", br_cnt[3'b000][0]);
-    rep("branch BEQ  taken",     br_cnt[3'b000][1]);
-    rep("branch BNE  not-taken", br_cnt[3'b001][0]);
-    rep("branch BNE  taken",     br_cnt[3'b001][1]);
-    rep("branch BLT  not-taken", br_cnt[3'b100][0]);
-    rep("branch BLT  taken",     br_cnt[3'b100][1]);
-    rep("branch BGE  not-taken", br_cnt[3'b101][0]);
-    rep("branch BGE  taken",     br_cnt[3'b101][1]);
-    rep("branch BLTU not-taken", br_cnt[3'b110][0]);
-    rep("branch BLTU taken",     br_cnt[3'b110][1]);
-    rep("branch BGEU not-taken", br_cnt[3'b111][0]);
-    rep("branch BGEU taken",     br_cnt[3'b111][1]);
+    rep("branch BEQ  not-taken", br_cnt[3'b000][0], REQ);
+    rep("branch BEQ  taken",     br_cnt[3'b000][1], REQ);
+    rep("branch BNE  not-taken", br_cnt[3'b001][0], REQ);
+    rep("branch BNE  taken",     br_cnt[3'b001][1], REQ);
+    rep("branch BLT  not-taken", br_cnt[3'b100][0], REQ);
+    rep("branch BLT  taken",     br_cnt[3'b100][1], REQ);
+    rep("branch BGE  not-taken", br_cnt[3'b101][0], REQ);
+    rep("branch BGE  taken",     br_cnt[3'b101][1], REQ);
+    rep("branch BLTU not-taken", br_cnt[3'b110][0], REQ);
+    rep("branch BLTU taken",     br_cnt[3'b110][1], REQ);
+    rep("branch BGEU not-taken", br_cnt[3'b111][0], REQ);
+    rep("branch BGEU taken",     br_cnt[3'b111][1], REQ);
 
-    rep("predict NT actual NT (correct)",    bp_cnt[2'b00]);
-    rep("predict NT actual T  (mispredict)", bp_cnt[2'b01]);
-    rep("predict T  actual NT (mispredict)", bp_cnt[2'b10]);
-    rep("predict T  actual T",               bp_cnt[2'b11]);
-    rep("predict T, right dir, wrong target", bp_tgt_wrong);
+    rep("predict NT actual NT (correct)",    bp_cnt[2'b00], REQ);
+    rep("predict NT actual T  (mispredict)", bp_cnt[2'b01], REQ);
+    rep("predict T  actual NT (mispredict)", bp_cnt[2'b10], REQ);
+    rep("predict T  actual T",               bp_cnt[2'b11], REQ);
+    rep("predict T, right dir, wrong target", bp_tgt_wrong, OPT);
 
-    rep("trap instr misaligned (0)",  trap_cnt[0]);
-    rep("trap instr fault (1)",       trap_cnt[1]);
-    rep("trap illegal (2)",           trap_cnt[2]);
-    rep("trap EBREAK (3)",            trap_cnt[3]);
-    rep("trap load misaligned (4)",   trap_cnt[4]);
-    rep("trap load fault (5)",        trap_cnt[5]);
-    rep("trap store misaligned (6)",  trap_cnt[6]);
-    rep("trap store fault (7)",       trap_cnt[7]);
-    rep("trap ECALL (11)",            trap_cnt[11]);
-    for (j = 0; j < 8; j = j + 1)
-        rep($sformatf("trap irq channel %0d (%0d)", j, 16 + j), trap_cnt[16 + j]);
+    rep("trap instr misaligned (0)",  trap_cnt[0],  REQ);
+    rep("trap instr fault (1)",       trap_cnt[1],  REQ);
+    rep("trap illegal (2)",           trap_cnt[2],  REQ);
+    rep("trap EBREAK (3)",            trap_cnt[3],  REQ);
+    rep("trap load misaligned (4)",   trap_cnt[4],  REQ);
+    rep("trap load fault (5)",        trap_cnt[5],  REQ);
+    rep("trap store misaligned (6)",  trap_cnt[6],  REQ);
+    rep("trap store fault (7)",       trap_cnt[7],  REQ);
+    rep("trap ECALL (11)",            trap_cnt[11], REQ);
+    for (j = 0; j < 8; j = j + 1)   // ch5 is deliberately masked, so optional
+        rep($sformatf("trap irq channel %0d (%0d)", j, 16 + j),
+            trap_cnt[16 + j], (j == 5) ? OPT : REQ);
 
-    rep("CSRRW",       csr_cnt[3'b001]);
-    rep("CSRRS",       csr_cnt[3'b010]);
-    rep("CSRRC",       csr_cnt[3'b011]);
-    rep("CSRRWI",      csr_cnt[3'b101]);
-    rep("CSRRSI",      csr_cnt[3'b110]);
-    rep("CSRRCI",      csr_cnt[3'b111]);
-    rep("CSR pure read (rs1=x0)", csr_ro);
+    rep("CSRRW",       csr_cnt[3'b001], REQ);
+    rep("CSRRS",       csr_cnt[3'b010], REQ);
+    rep("CSRRC",       csr_cnt[3'b011], REQ);
+    rep("CSRRWI",      csr_cnt[3'b101], REQ);
+    rep("CSRRSI",      csr_cnt[3'b110], REQ);
+    rep("CSRRCI",      csr_cnt[3'b111], REQ);
+    rep("CSR pure read (rs1=x0)", csr_ro, REQ);
 
-    rep("forward S3->S2 rs1 only", fwd_cnt[0]);
-    rep("forward S3->S2 rs2 only", fwd_cnt[1]);
-    rep("forward S3->S2 both",     fwd_cnt[2]);
+    rep("forward S3->S2 rs1 only", fwd_cnt[0], REQ);
+    rep("forward S3->S2 rs2 only", fwd_cnt[1], REQ);
+    rep("forward S3->S2 both",     fwd_cnt[2], REQ);
 
-    rep("MRET executed",              ev_mret);
-    rep("mispredict redirects",       ev_mispredict);
-    rep("irq pending during a stall", ev_irq_in_stall);
-    rep("multiple irqs pending",      ev_multi_pending);
+    rep("MRET executed",              ev_mret,          REQ);
+    rep("mispredict redirects",       ev_mispredict,    REQ);
+    rep("irq pending during a stall", ev_irq_in_stall,  REQ);
+    rep("multiple irqs pending",      ev_multi_pending, REQ);
 
-    rep("WFI committed (masked wake)", wfi_commit);
-    rep("WFI sleep cycles",            wfi_sleep);
-    rep("WFI preempted by irq",        wfi_preempt);
-    rep("RAS push (committed call)",   ras_pushes);
-    rep("RAS pop (committed return)",  ras_pops);
-    rep("return predicted correctly",  ret_pred_ok);
-    rep("return mispredicted",         ret_pred_bad);
-    for (j = 0; j < 8; j = j + 1)
-        rep($sformatf("PIC ack channel %0d", j), ack_cnt[j]);
+    rep("WFI committed (masked wake)", wfi_commit,   REQ);
+    rep("WFI sleep cycles",            wfi_sleep,    REQ);
+    rep("WFI preempted by irq",        wfi_preempt,  REQ);
+    rep("RAS push (committed call)",   ras_pushes,   REQ);
+    rep("RAS pop (committed return)",  ras_pops,     REQ);
+    rep("return predicted correctly",  ret_pred_ok,  REQ);
+    rep("return mispredicted",         ret_pred_bad, REQ);
+    for (j = 0; j < 8; j = j + 1)   // ch5 masked -> never acked, so optional
+        rep($sformatf("PIC ack channel %0d", j), ack_cnt[j], (j == 5) ? OPT : REQ);
 
-    rep("ibus fetch OKAY",         ib_ok);
-    rep("ibus fetch error resp",   ib_err);
-    rep("ibus AR backpressure",    ib_bp);
-    rep("dbus read OKAY",          db_rd_ok);
-    rep("dbus read SLVERR",        db_rd_slverr);
-    rep("dbus read DECERR",        db_rd_decerr);
-    rep("dbus AR backpressure",    db_rd_bp);
-    rep("dbus write OKAY",         db_wr_ok);
-    rep("dbus write SLVERR",       db_wr_slverr);
-    rep("dbus write DECERR",       db_wr_decerr);
+    rep("ibus fetch OKAY",         ib_ok,        REQ);
+    rep("ibus fetch error resp",   ib_err,       REQ);
+    rep("ibus AR backpressure",    ib_bp,        OPT);
+    rep("dbus read OKAY",          db_rd_ok,     REQ);
+    rep("dbus read SLVERR",        db_rd_slverr, REQ);
+    rep("dbus read DECERR",        db_rd_decerr, REQ);
+    rep("dbus AR backpressure",    db_rd_bp,     OPT);
+    rep("dbus write OKAY",         db_wr_ok,     REQ);
+    rep("dbus write SLVERR",       db_wr_slverr, REQ);
+    rep("dbus write DECERR",       db_wr_decerr, REQ);
 
     $display("[FCOV] ---- %0d/%0d bins hit (%0d%%) ----",
              hit_n, tot_n, (hit_n * 100) / tot_n);
+    if (gate_fail == 0)
+        $display("[FCOV] == COVERAGE GATE PASSED ==");
+    else
+        $display("[FCOV] == COVERAGE GATE FAILED: %0d required bin(s) missed ==",
+                 gate_fail);
 end
 
 endmodule

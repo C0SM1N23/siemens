@@ -1,47 +1,31 @@
 // Programmable interrupt controller (PIC).
-// REQ# = spec requirement, D# = design choice; both are tracked in the README.
+// REQ# = spec requirement, D# = design choice; both tracked in the README.
 //
-// Why this module exists:
-// - every peripheral brief routes its interrupt line "to the system
-//   interrupt controller" (DMA irq[3:0], DP-SRAM irq)
-// - the CPU brief fixes a complete interface *to* that controller
-// - but no brief specifies the PIC itself or assigns building it
-// This module fills that gap. The CPU-side handshake is fixed by the CPU
-// brief (REQ4); everything internal is a design choice:
+// Every peripheral brief routes its irq line "to the system interrupt
+// controller" (DMA irq[3:0], DP-SRAM irq) and the CPU brief fixes a complete
+// interface to it, but no brief specifies the PIC or assigns building it. This
+// module fills that gap: the CPU-side handshake is fixed by REQ4, everything
+// internal is a design choice.
 //
-// - D19
-//   Level-sensitive aggregator, no latching. A source raises its line and
-//   holds it until its own INT_STATUS is cleared (that is how the DMA and
-//   DP-SRAM interrupt outputs behave), so the PIC just combines the lines:
-//
-//     pending = source & enable & ~in_service
-//
-//   cpu_irq / cpu_irq_id are registered from the same pending vector —
-//   keeps the pair consistent at the CPU and off the peripherals' timing
-//   paths, at the cost of one cycle of interrupt latency.
-//
-// - D20
-//   Fixed priority, channel 0 highest. cpu_irq_id = lowest-index pending
-//   channel; the DMA channels (0..3) outrank the DP-SRAM (4).
-//
-// - D21
-//   In-service suppression. The acked channel is masked from cpu_irq_ack
-//   until cpu_in_trap deasserts (MRET). A handler that re-enables
-//   mstatus.MIE cannot be re-entered by the interrupt it is serving — the
-//   level line is still high until the handler clears the peripheral.
-//   Sized for non-nested handlers (the CPU enters a trap with MIE=0 and
-//   cpu_in_trap is a single bit).
-//
-// - D22
-//   AXI4-Lite slave for software control, word registers at BASE+:
-//   - 0x0 IRQ_ENABLE   R/W  [7:0]
-//   - 0x4 IRQ_PENDING  RO   (= cpu_irq)
-//   - 0x8 IRQ_RAW      RO   (source lines)
-//   - 0xC IRQ_ACTIVE   RO   (in-service mask)
-//   Anything else — and any write to a read-only register — answers
-//   SLVERR, which the CPU turns into a precise access fault.
-//   One transaction at a time per direction; the ≤1-outstanding CPU never
-//   exceeds that.
+// D19: level-sensitive aggregator, no latching. A source holds its line until
+//      its own INT_STATUS is cleared (how the DMA/DP-SRAM outputs behave), so
+//      the PIC just combines the lines: pending = source & enable & ~in_service.
+//      cpu_irq / cpu_irq_id are registered from the same pending vector, which
+//      keeps the pair consistent and off the peripherals' timing paths, at one
+//      cycle of interrupt latency.
+// D20: fixed priority, channel 0 highest. cpu_irq_id = lowest-index pending
+//      channel, so DMA (0..3) outranks DP-SRAM (4).
+// D21: in-service suppression. The acked channel is masked from cpu_irq_ack
+//      until cpu_in_trap drops (MRET), so a handler that re-enables mstatus.MIE
+//      cannot be re-entered by the interrupt it serves (its level line is still
+//      high). Sized for non-nested handlers (trap entry has MIE=0, cpu_in_trap
+//      is one bit).
+// D22: AXI4-Lite slave for software control, word registers at BASE+:
+//        0x0 IRQ_ENABLE  R/W [7:0]      0x4 IRQ_PENDING RO (= cpu_irq)
+//        0x8 IRQ_RAW     RO (sources)   0xC IRQ_ACTIVE  RO (in-service mask)
+//      Anything else, and any write to a read-only register, answers SLVERR ->
+//      precise access fault. One transaction per direction; the ≤1-outstanding
+//      CPU never exceeds that.
 //
 // Expected SoC hookup: irq_src = {3'b0, sram_irq, dma_irq[3:0]}.
 

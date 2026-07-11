@@ -22,7 +22,7 @@ TBH="../hdl"
 SVA="../sva"
 
 verilator --cc --exe --build --timing --assert --coverage -Wno-fatal \
-  --top-module tb_cpu_axi -o Vtb_cpu_axi \
+  --top-module tb_cpu_axi -o Vtb_cpu_axi +incdir+. \
   sim_main.cpp \
   "$RTL"/alu.v "$RTL"/alu_top.v "$RTL"/branch_predictor.v "$RTL"/branch_unit.v \
   "$RTL"/control.v "$RTL"/cpu_top.v "$RTL"/csr_file.v "$RTL"/decode.v \
@@ -34,7 +34,16 @@ verilator --cc --exe --build --timing --assert --coverage -Wno-fatal \
   "$SVA"/axi_lite_sva.sv "$SVA"/cpu_core_sva.sv "$SVA"/pic_sva.sv \
   "$SVA"/cpu_func_cov.sv "$SVA"/bind_sva.sv
 
-./obj_dir/Vtb_cpu_axi
+./obj_dir/Vtb_cpu_axi | tee sim_run.log
 
 verilator_coverage --annotate cov_annotated coverage.dat > /dev/null
 echo "cover-property annotation written to debug/sim/cov_annotated/"
+
+# pass criteria: the TB self-check passed, no assertion fired, and every
+# required functional-coverage bin was hit
+status=0
+grep -q "== ALL TESTS PASSED ==" sim_run.log || { echo "FAIL: TB checks";       status=1; }
+grep -q "COVERAGE GATE PASSED"   sim_run.log || { echo "FAIL: coverage gate";    status=1; }
+grep -q "GATE FAILED"            sim_run.log && { echo "FAIL: coverage gate";     status=1; }
+[ $status -eq 0 ] && echo "== run_verilator: PASS ==" || echo "== run_verilator: FAIL =="
+exit $status
