@@ -1,190 +1,64 @@
-# RISC-V RV32I CPU — 3-stage pipeline with AXI4-Lite
+# SoC project — CPU + DMA + Dual-Port SRAM
 
-The CPU block of the SoC project (CPU + DMA + DP-SRAM), in Verilog
-(IEEE 1364-2005). The original single-cycle core became a 3-stage pipeline with
-two AXI4-Lite master ports, a branch predictor, precise traps, an M-mode CSR
-file, and a PIC interrupt interface. The repo also ships the PIC itself
-([pic.v](hdl/pic.v)): the system interrupt controller every peripheral brief
-points at, which no block brief assigned to anyone.
+Siemens summer internship, "Digital IC Design & Advanced Verification".
+A small System-on-Chip built from three blocks, each developed and verified
+on its own branch. This is the project landing page; the actual RTL lives on
+the block branches (see below).
 
-Want to *learn* the design? Start with [ARCHITECTURE.md](ARCHITECTURE.md) —
-module by module, how the system runs, and the full data flow. Recent code
-changes are documented in [CHANGELOG.md](CHANGELOG.md); verification lives in
-[debug/VERIFICATION.md](debug/VERIFICATION.md).
+## The blocks
 
-## Architecture
+A CPU runs the software and sets things up, a DMA moves data in the
+background without the CPU, and a shared dual-port SRAM is the buffer they
+exchange data through. Everything talks over AMBA AXI.
 
-```
-S1 FETCH ──────────── S2 DECODE + EXECUTE ─────────── S3 WRITEBACK
-ibus_axi (AR/R)       decode, regfile, ALU, branch,    rd write
-+ branch predictor    CSR, load/store on dbus_axi      (S3->S2 forwarding)
-  (BTB/BHT, 128)      traps/interrupts resolve here
-```
+**CPU — RV32I, 3-stage pipeline** (`RISCV` branch)
+General-purpose core, RISC-V RV32I. Fetch / decode-execute / writeback,
+two AXI4-Lite master ports (one for instructions, one for load/store),
+a branch predictor, precise traps and M-mode CSRs. The branch also carries
+two system blocks no brief assigned but the SoC needs: the interrupt
+controller (PIC) and the machine timer.
 
-One clock, async active-low reset. The pipeline registers carry a `valid` bit,
-so a flushed or reset stage is a guaranteed no-op. Load-use hazards are covered
-by S3→S2 forwarding (no stall), and the two AXI ports are independent with one
-outstanding transaction each, so a fetch and a load/store overlap.
+**DMA — multi-channel, AXI4 master** (`DMA` branch)
+Moves data on its own once configured. AXI4-Lite slave for the CPU to
+program it, AXI4 full master for the transfers, 4 channels, scatter-gather
+via descriptors, bandwidth throttling, per-channel completion/error
+interrupts.
 
-## Spec requirements vs. design decisions
+**DP-SRAM — dual-port, AXI4-Lite** (`SDRAM` branch)
+1 KB shared memory with two independent AXI4-Lite slave ports (one for the
+CPU, one for the DMA), byte-lane writes via WSTRB, collision handling and an
+interrupt. Used as a ping-pong buffer between CPU and DMA.
 
-The project brief separates two kinds of item, and so does this repo:
-
-- **Spec requirements** (`REQ#`) — behavior the brief fixed. These are
-  implemented *to spec*; there was no choice to make, only to match it.
-- **Design decisions** (`D#`) — the points the brief explicitly left "for the
-  intern to define." Each is a deliberate choice with a rationale.
-
-Both are tagged in the code (grep `REQ` or `D<n>`) and the file header explains
-each in full. These two tables are the index.
-
-### Spec requirements (implemented to spec)
-
-| Tag | Requirement | File(s) |
-|-----|-------------|---------|
-| REQ1  | 3-stage pipeline: Fetch / Decode+Execute / Writeback | [cpu_top.v](hdl/cpu_top.v) |
-| REQ2  | Two AXI4-Lite master ports: ibus (read-only), dbus (read+write) | [cpu_top.v](hdl/cpu_top.v) |
-| REQ3  | Top interface: 1 sync clock, async active-low reset, PIC lines | [cpu_top.v](hdl/cpu_top.v) |
-| REQ4  | Interrupts sampled under `mstatus.MIE` at instruction boundaries; ack 1-cycle pulse; `cpu_in_trap` entry→MRET | [cpu_top.v](hdl/cpu_top.v) |
-| REQ5  | Pipeline stalls until AXI response valid; data op stalls the whole round-trip | [fetch_unit.v](hdl/fetch_unit.v), [lsu.v](hdl/lsu.v) |
-| REQ6  | Dedicated centralized hazard/stall/flush unit | [hazard_unit.v](hdl/hazard_unit.v) |
-| REQ7  | RV32I instruction set; FENCE = NOP; ECALL/EBREAK trap-handled | [control.v](hdl/control.v) (+ reused alu/decode/imm_gen) |
-| REQ8  | 1-bit saturating branch predictor | [branch_predictor.v](hdl/branch_predictor.v) |
-| REQ9  | The 7 required M-mode CSRs at their addresses; `mip` read-only, PIC-driven | [csr_file.v](hdl/csr_file.v) |
-| REQ10 | Register file: 32×32, x0=0, 1 write / 2 combinational reads, reset 0 | [regfile.v](hdl/regfile.v) |
-| REQ11 | WSTRB byte-lane writes (SB/SH/SW) as AXI / DP-SRAM require | [lsu.v](hdl/lsu.v) |
-| REQ12 | Handle all AXI response codes (OKAY/SLVERR/DECERR) on both ports | [fetch_unit.v](hdl/fetch_unit.v), [lsu.v](hdl/lsu.v) |
-
-### Design decisions (intern-defined)
-
-| Tag | Decision | File(s) |
-|-----|----------|---------|
-| D1  | `valid`-bit pipeline registers → guaranteed safe bubble (not the NOP encoding) | [cpu_top.v](hdl/cpu_top.v) |
-| D2  | S2 priority: interrupt > sync exception > mispredict, as a sequential check | [cpu_top.v](hdl/cpu_top.v) |
-| D3  | Supported mcause set 0,1,2,3,4,5,6,7,11 + external interrupts on 8 PIC channels (causes 16..23) | [exception_unit.v](hdl/exception_unit.v), [csr_file.v](hdl/csr_file.v) |
-| D4  | Trap return: exceptions → offending PC, interrupts → resume PC | [cpu_top.v](hdl/cpu_top.v) |
-| D5  | `RESET_PC` + `HART_ID` params → `mhartid` (multi-core; beyond spec) | [cpu_top.v](hdl/cpu_top.v), [csr_file.v](hdl/csr_file.v) |
-| D6  | ibus master fully independent, ≤1 outstanding, back-to-back fetch (1 instr/cycle) | [fetch_unit.v](hdl/fetch_unit.v) |
-| D7  | Holding register keeps PC correct in a stall; in-flight fetch discarded on redirect | [fetch_unit.v](hdl/fetch_unit.v) |
-| D8  | Fetch bus error → instruction access fault (mcause 1), not "illegal" | [fetch_unit.v](hdl/fetch_unit.v) |
-| D9  | Predictor structure: BHT+BTB, direct-mapped, 128 entries, index PC[8:2], tag + stored target | [branch_predictor.v](hdl/branch_predictor.v) |
-| D10 | Miss predicts not-taken | [branch_predictor.v](hdl/branch_predictor.v) |
-| D11 | Learned at S2 resolution (non-speculative); entries kept across traps | [branch_predictor.v](hdl/branch_predictor.v) |
-| D12 | ≤1 outstanding transaction; address/data latched at start | [lsu.v](hdl/lsu.v) |
-| D13 | Load-use solved by S3→S2 forwarding, zero stall cycles | [hazard_unit.v](hdl/hazard_unit.v) |
-| D14 | Flush beats stall; both priority rules gated by `s2_advance` | [hazard_unit.v](hdl/hazard_unit.v) |
-| D15 | Unimplemented / read-only CSR access → illegal instruction (not DECERR) | [csr_file.v](hdl/csr_file.v) |
-| D16 | Vectored mtvec: interrupts → BASE+4·cause, exceptions → BASE | [csr_file.v](hdl/csr_file.v) |
-| D17 | Misalignment checked pre-access → no AXI transaction issued | [exception_unit.v](hdl/exception_unit.v) |
-| D18 | Bus error → access fault (load 5 / store 7) | [exception_unit.v](hdl/exception_unit.v) |
-| D19 | PIC built here (unassigned in the briefs): level-sensitive aggregator, no latching; `cpu_irq`/`cpu_irq_id` registered from one pending vector | [pic.v](hdl/pic.v) |
-| D20 | PIC priority fixed, channel 0 highest (id = lowest pending channel) | [pic.v](hdl/pic.v) |
-| D21 | In-service suppression: acked channel masked from ack until MRET (`cpu_in_trap` low); sized for non-nested handlers | [pic.v](hdl/pic.v) |
-| D22 | PIC register map (ENABLE / PENDING / RAW / ACTIVE); unmapped or read-only-write access answers SLVERR | [pic.v](hdl/pic.v) |
-
-## AXI4-Lite interface (SoC integration)
-
-Both ports are conformant AXI4-Lite masters — no proprietary extensions — so the
-DMA config port and DP-SRAM Port A see a standard master.
-
-- `ibus_axi` — read only (AR/R), instruction fetch.
-- `dbus_axi` — read + write (AW/W/B/AR/R), load/store, `WSTRB` per byte lane (REQ11).
-- One outstanding transaction per port; the FSMs are split per channel so a
-  later move to AXI4-Full (bursts, IDs) is additive rather than a rewrite (D6, D12).
-- All three response codes are handled (REQ12): OKAY, plus SLVERR/DECERR →
-  precise access-fault traps (D8, D18). DP-SRAM only emits OKAY/SLVERR; DECERR
-  comes from the interconnect on an unmapped address — the CPU covers both.
-
-## Interrupts (PIC)
-
-The CPU side: `cpu_irq[7:0]` in, `cpu_irq_id[2:0]` in (highest-priority
-pending channel), `cpu_irq_ack[7:0]` out (1-cycle pulse), `cpu_in_trap` out
-(held until MRET). Channels map to mcause 16..23; `mip[16+i]` mirrors
-`cpu_irq[i]`, `mie[16+i]` enables. An irq is taken only at an instruction
-boundary, only under `mstatus.MIE`, and is held through a multi-cycle AXI
-stall (REQ4; priority D2).
-
-The PIC side ([pic.v](hdl/pic.v), D19–D22): 8 level-sensitive source lines
-(planned: DMA ch0..3, DP-SRAM on 4), `pending = src & enable & ~in_service`,
-fixed priority with channel 0 highest. The acked channel is held out of
-`cpu_irq` until MRET — that is what the brief's "suppress re-assertion of the
-same interrupt" via `cpu_in_trap` means. Software programs it over an
-AXI4-Lite slave port: `0x0 IRQ_ENABLE` (R/W), `0x4 IRQ_PENDING`, `0x8
-IRQ_RAW`, `0xC IRQ_ACTIVE` (RO); anything else answers SLVERR. The PIC enable
-and the CPU's `mie` stack as two independent masks. Full walkthrough in
-[ARCHITECTURE.md](ARCHITECTURE.md).
-
-## Multi-core
-
-Nothing is shared between instances: no static state, memories are external,
-and identity comes only from the `HART_ID`/`RESET_PC` parameters (D5). Two or
-more cores work behind a standard AXI interconnect. RV32I has no LR/SC, but each
-core is in-order with blocking memory ops (sequentially consistent per hart), so
-flag-based sharing through memory is sound — the same property the SoC's
-ping-pong buffering relies on. `debug/hdl/tb_dual_core.v` demonstrates two cores
-sharing one memory through an arbiter.
-
-## Layout
+## How it fits together
 
 ```
-hdl/
-  cpu_top.v            top level: pipeline + AXI + PIC          (REQ1-4; D1,D2,D4,D5)
-  fetch_unit.v         S1: PC + ibus master + holding/redirect  (REQ5,12; D6-D8)
-  branch_predictor.v   BTB/BHT                                  (REQ8; D9-D11)
-  lsu.v                S2: dbus master, alignment + WSTRB       (REQ5,11,12; D12)
-  hazard_unit.v        centralized stall/flush/forwarding       (REQ6; D13,D14)
-  control.v            decoder (RV32I, FENCE=NOP, SYSTEM)       (REQ7)
-  csr_file.v           M-mode CSRs + trap/MRET sequencing       (REQ9; D3,D5,D15,D16)
-  exception_unit.v     sync exception detect                    (D3,D17,D18)
-  pic.v                system interrupt controller              (D19-D22)
-  regfile.v            32x32 register file                      (REQ10)
-  branch_unit.v        real branch/jump direction + target
-  decode.v  imm_gen.v  alu.v  alu_top.v  writeback_mux.v   (reused, combinational)
-debug/
-  VERIFICATION.md      test plan: what is checked, why, and known gaps
-debug/hdl/
-  tb_cpu_axi.v         self-checking TB: CPU + real PIC @ 0x3000_0000 + AXI
-                       memories + monitors; the TB plays the peripherals
-  tb_dual_core.v       2 CPUs + shared memory behind an arbiter (scalability proof)
-  axi_lite_monitor.v   passive AXI4-Lite protocol checker (ibus, dbus, PIC port)
-  axi_lite_mem_model.v behavioral AXI4-Lite slave (OKAY/DECERR, latency + seeded
-                       random READY backpressure)
-  axi_lite_arb2.v      2:1 AXI4-Lite arbiter (TB stand-in for the interconnect)
-  axi_lite_dec2.v      1-master/2-slave address decoder (TB interconnect for
-                       the PIC window)
-  ck_rst_tb.v          clock/reset generator
-debug/sim/
-  program_axi.s        main test program   (py asm.py program_axi.s program_axi.hex)
-  program_dual.s       dual-core handshake (py asm.py program_dual.s program_dual.hex)
-  asm.py               tiny RV32I assembler (range-checked imms, %hi/%lo, .org)
-  sim.do               quick single run     regress.do  full 5-config regression
+   CPU ──┬── instruction bus ── instruction memory
+         └── data bus ─────────┐
+                               │  AXI interconnect
+   DMA ── config (slave) ──────┤
+       └─ transfer (master) ───┤
+                               ├── DP-SRAM (port A = CPU, port B = DMA)
+   PIC ◄─ irq lines from DMA / DP-SRAM / timer ── CPU
 ```
 
-## Simulation
+Typical flow: the CPU programs the DMA over AXI4-Lite, the DMA moves data
+through the DP-SRAM, and it raises an interrupt when done so the CPU can
+pick up the result.
 
-```
-cd debug/sim
-vsim -c -do "do regress.do; quit -f"      # full regression (5 configs)
-vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
-```
+## Standards
 
-Coverage, per-case reasoning and the evidence trail are in
-[debug/VERIFICATION.md](debug/VERIFICATION.md): every mcause exercised with
-exact trap counting, CSR negative tests, PIC priority / in-service suppression /
-double masking / register access incl. SLVERR negatives, an interrupt held
-through an AXI stall, BTB aliasing, measured CPI = 1.00 on a latency-1 memory,
-AXI protocol monitors on every run (ibus, dbus, PIC port), seeded random
-backpressure, and the dual-core handshake.
+- RISC-V RV32I (unprivileged v20191213, M-mode privileged v20211203)
+- AMBA AXI4 / AXI4-Lite per ARM IHI0022E
+- Verilog IEEE 1364-2005, behavioural RTL simulation (no vendor IP)
 
-## Open points (system level)
+## Branches
 
-- Global memory map undecided — the reset vector is the `RESET_PC` parameter
-  (default 0x0), and the PIC's base address is a TB decoder parameter
-  (0x3000_0000 for now).
-- PIC has no spec of its own — the CPU-side interface is fixed by the CPU
-  brief and implemented; the internals (priority order, register map, D19–D22)
-  are our proposal to confirm with the team/mentor. The final source-to-channel
-  mapping (5 sources / 8 channels) is also open.
-- Reset type differs between blocks (CPU/DMA async, DP-SRAM sync).
-- With more than one core, "which PIC channel targets which core" is undefined
-  — the current PIC serves one CPU.
+| Branch | Block | Owner |
+|--------|-------|-------|
+| `master` | project overview (this page) | — |
+| `RISCV` | CPU + PIC + timer | Cosmin |
+| `DMA` | DMA engine | Andrei |
+| `SDRAM` | dual-port SRAM | Gabriel |
+
+Each block is developed on its own branch. `master` stays a clean overview;
+a block gets merged in once it is stable and reviewed.
