@@ -1,8 +1,8 @@
 # CPU verification plan & evidence
 
-Verification strategy for the RV32I 3-stage pipeline CPU. Target is behavioral
-RTL simulation in ModelSim, plain Verilog — no vendor IP, no UVM (not available
-in the free edition), so the methodology leans on five pillars:
+Verification strategy for the RV32I 3-stage pipeline CPU. Target: behavioral RTL
+simulation in ModelSim, plain Verilog — no vendor IP, no UVM (not in the free
+edition) — so the methodology leans on five pillars:
 
 1. **Self-checking directed program** (`sim/program_axi.s`): every
    architectural feature is driven end-to-end through real instruction
@@ -16,10 +16,10 @@ in the free edition), so the methodology leans on five pillars:
    + 8 irq). A missing trap, a double trap, or a spurious one cannot cancel
    out — order-independent and airtight against "it passed by luck".
 3. **Passive protocol monitors** (`hdl/axi_lite_monitor.v`) on both AXI
-   master buses and on the PIC's slave port, every run: VALID/payload
-   stability under stalled READY, response ordering, the CPU's 1-outstanding
-   contract, X hygiene, no EXOKAY. Protocol legality is a checked property,
-   not an assumption.
+   master buses and on the PIC and mtimer slave ports, every run:
+   VALID/payload stability under stalled READY, response ordering, the CPU's
+   1-outstanding contract, X hygiene, no EXOKAY. Protocol legality is a
+   checked property, not an assumption.
 4. **Configuration sweep** (`sim/regress.do`): the same suite runs under
    default latencies, high fixed latencies, and seeded random READY
    backpressure (reproducible by seed), plus the dual-core TB. Each run
@@ -50,9 +50,8 @@ PASSED`, zero `FAIL:` lines, monitor error counters zero.
 
 ## Test plan
 
-The "Area" column links each test to the spec requirement (`REQ#`) or design
-decision (`D#`) it exercises — the same tags used in the README index and the
-code.
+The "Area" column links each test to the `REQ#` / `D#` it exercises — the same
+tags as the README index and the code.
 
 | Area | Behavior under test | Why it matters | Checked by |
 |------|--------------------|----------------|------------|
@@ -68,11 +67,11 @@ code.
 | REQ9,D15 | CSRRW/S/C + immediate forms; read-only CSR write and unimplemented CSR -> illegal; CSRRS x0 = pure read | CSR access rules, incl. negatives | mscratch round-trip 21/31; csrrs 0x7C0, csrrw mip/mhartid all trap; csrrs mip with x0 does *not* trap |
 | D16 | Vectored mtvec: irq -> BASE+4*cause, exception -> BASE | the two vectored paths differ | irq lands at 0x348 slot (cause 18); ecall in vectored mode records at BASE |
 | REQ4 | irq sampled only under MIE, only enabled channels, held through AXI stalls, taken at instruction boundaries | the CPU side of the PIC contract | src5 pending whole run, never acked; ch2 raised mid-load: ack timestamp > R-beat timestamp, mepc = boundary instruction, load value intact |
-| REQ4 | ack = 1-cycle pulse on the right bit; cpu_in_trap spans entry..MRET | PIC handshake shape | pulse-width invariant, ack counts (ch2=2, ch3=1) = handler entry count (3), in_trap sampled in handler and after |
+| REQ4 | ack = 1-cycle pulse on the right bit; cpu_in_trap spans entry..MRET | PIC handshake shape | pulse-width invariant, ack counts ch2=2 / ch3=1, in_trap sampled in handler and after |
 | D20 | PIC priority: two channels pending together are served lowest-first | "highest-priority pending" must be deterministic | src2+src3 raised in the same cycle: ack2 timestamp < ack3 timestamp; per-cycle invariant `cpu_irq_id` = lowest set `cpu_irq` bit |
 | D21 | In-service suppression: an acked channel with its line still high disappears from `cpu_irq` until MRET | a handler that re-enables MIE must not be re-entered by its own interrupt | src3 held high through its whole handler; invariant checks `cpu_irq[3]`=0 in that window; ack3 count stays 1 |
 | D19,D22 | PIC software interface: ENABLE write+readback, RAW/PENDING/ACTIVE reads; PIC enable and `mie` are independent masks | the programmable half of the PIC, over real AXI | scoreboard: ENABLE=0x2C, RAW=PENDING=0x20 (src5), ACTIVE=0x04 read *inside* the handler; ch5 visible in mip yet never taken |
-| D22 | Unmapped PIC register read and read-only register write answer SLVERR -> precise access faults | error responses from a real peripheral, not just the TB model | both accesses trap (causes 5 and 7, counted in the exact 15); PIC-port monitor stays clean |
+| D22 | Unmapped PIC register read and read-only register write answer SLVERR -> precise access faults | error responses from a real peripheral, not just the TB model | both accesses trap (causes 5 and 7, counted in the exact 17); PIC-port monitor stays clean |
 | REQ10 | x0 hardwired, regfile reset | | `addi x0,x0,5` then read; regs[0] === 0 |
 | D23 | WFI: sleep until wake, ibus silent, mepc = wfi+4 on an interrupt wake, fall-through (no trap) when MIE=0 | the CPU must idle without burning interconnect bandwidth the DMA needs | timer irq wakes the first WFI (mepc readback = wfi+4); second WFI with MIE=0 falls through to a marker store with the handler-entry count unchanged; TB measures ≤1 ibus read per sleep window + SVA `wfi_ibus_quiet` |
 | D24 | RAS: returns from 3 different call sites + a nested call chain (h→g→g) predict correctly and stay correct | the BTB's last-target scheme is systematically wrong for returns; the RAS may only change *time*, never results | accumulated signature 0x243 checked; FCOV separates returns predicted correctly vs mispredicted (first encounters only) |
@@ -89,10 +88,11 @@ ModelSim ASE has no SVA and no coverage, so this layer lives in `debug/sva/`
 and runs the same `tb_cpu_axi` through Verilator
 (`--timing --assert --coverage`, plus `sim_main.cpp` to dump the coverage
 database). Nothing is edited to attach it — `bind_sva.sv` binds the checkers
-into `cpu_top` and `pic`, so every instance (dual-core included) gets them:
+into `cpu_top`, `pic` and `mtimer`, so every instance (dual-core included) gets
+them:
 
 - `axi_lite_sva.sv` — the AXI4-Lite contract as concurrent properties, one
-  instance per port (ibus, dbus, PIC slave): VALID/payload stability under a
+  instance per port (ibus, dbus, PIC, mtimer): VALID/payload stability under a
   stalled READY, R-only-after-AR / B-only-after-AW+W ordering, the
   ≤1-outstanding claim (D6, D12), legal response codes (no EXOKAY), VALID
   low during reset, word-aligned fetch addresses. Cover properties record
@@ -127,22 +127,21 @@ the default run.
 ## Performance evidence
 
 CPI = 1.00 measured (33 cycles / 33 straight-line instructions) with a
-latency-1 instruction memory. The only remaining stalls are the unavoidable
-ones: blocking load/store round-trips and the 1-cycle mispredict bubble. The
-1-bit predictor and ≤1 outstanding transaction per port are fixed design
-choices (REQ8, D12), so this is the performance ceiling of this design.
+latency-1 instruction memory. The only remaining stalls are unavoidable:
+blocking load/store round-trips and the 1-cycle mispredict bubble. The 1-bit
+predictor and ≤1 outstanding transaction per port are fixed design choices
+(REQ8, D12), so this is the design's ceiling.
 
 ## Multi-core reasoning
 
-Nothing in the core is shared between instances (no static state, memories
-private to each instance, all identity via the `HART_ID`/`RESET_PC`
-parameters), both bus ports are standard AXI4-Lite masters an interconnect
-can arbitrate, and `mhartid` gives software its identity. RV32I has no
-LR/SC, but each core executes memory ops in order and blocking (one
-outstanding, no store buffer) — i.e. sequentially consistent — so flag/
-Peterson-style protocols through shared memory are sound. That is the same
-property the SoC's ping-pong buffering relies on. `tb_dual_core`
-demonstrates it end to end.
+Nothing in the core shared between instances (no static state, memories private
+to each instance, all identity via the `HART_ID`/`RESET_PC` parameters); both
+bus ports are standard AXI4-Lite masters an interconnect can arbitrate; `mhartid`
+gives software its identity. RV32I has no LR/SC, but each core executes memory
+ops in order and blocking (one outstanding, no store buffer) — sequentially
+consistent — so flag / Peterson-style protocols through shared memory are sound,
+the same property the SoC's ping-pong buffering relies on. `tb_dual_core` shows
+it end to end.
 
 ## Bugs this flow has caught (why the method earns its keep)
 

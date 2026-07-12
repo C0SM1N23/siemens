@@ -1,17 +1,15 @@
 # RISC-V RV32I CPU — 3-stage pipeline with AXI4-Lite
 
-The CPU block of the SoC project (CPU + DMA + DP-SRAM), written in Verilog
-(IEEE 1364-2005). The core is a 3-stage RV32I pipeline with two AXI4-Lite
-master ports, a branch predictor with a return-address stack, precise traps,
-WFI, and an M-mode CSR file with performance counters. The repo also
-contains two blocks that no brief assigned but the system needs: the
-interrupt controller ([pic.v](hdl/pic.v)) that all peripheral irq lines
-point at, and the machine timer ([mtimer.v](hdl/mtimer.v)) used for
-scheduling and for timing out a hung DMA transfer.
+The CPU block of the SoC (CPU + DMA + DP-SRAM), in Verilog. A 3-stage RV32I
+pipeline with two AXI4-Lite master ports, a branch predictor with a
+return-address stack, precise traps, WFI, and an M-mode CSR file with
+performance counters. The repo also carries two blocks no brief assigned but
+the system needs: the interrupt controller ([pic.v](hdl/pic.v)) every
+peripheral irq line points at, and the machine timer ([mtimer.v](hdl/mtimer.v))
+for scheduling and timing out a hung DMA transfer.
 
-Block diagrams and per-module details are in
-[ARCHITECTURE.md](ARCHITECTURE.md); the test plan and results are in
-[debug/VERIFICATION.md](debug/VERIFICATION.md).
+Block diagrams and per-module detail: [ARCHITECTURE.md](ARCHITECTURE.md). Test
+plan and results: [debug/VERIFICATION.md](debug/VERIFICATION.md).
 
 ## Architecture
 
@@ -23,22 +21,22 @@ ibus_axi (AR/R)       decode, regfile, ALU, branch,    rd write
    + 8-entry RAS)     WFI sleeps here (ibus goes idle)
 ```
 
-One clock, async active-low reset. The pipeline registers carry a `valid` bit,
-so a flushed or reset stage is a guaranteed no-op. Load-use hazards are covered
-by S3→S2 forwarding (no stall), and the two AXI ports are independent with one
-outstanding transaction each, so a fetch and a load/store overlap.
+One clock, async active-low reset. Pipeline registers carry a `valid` bit, so a
+flushed or reset stage is a guaranteed no-op. Load-use hazards go through S3→S2
+forwarding (no stall); the two AXI ports are independent, one outstanding
+transaction each, so a fetch and a load/store overlap.
 
 ## Spec requirements vs. design decisions
 
-The project brief separates two kinds of item, and so does this repo:
+The brief separates two kinds of item, so does this repo:
 
-- **Spec requirements** (`REQ#`) — behavior the brief fixed. These are
-  implemented *to spec*; there was no choice to make, only to match it.
-- **Design decisions** (`D#`) — the points the brief explicitly left "for the
-  intern to define." Each is a deliberate choice with a rationale.
+- **Spec requirements** (`REQ#`) — behavior the brief fixed. Implemented to
+  spec; no choice to make, only to match.
+- **Design decisions** (`D#`) — points the brief left "for the intern to
+  define". Each a deliberate choice with a rationale.
 
-Both are tagged in the code (grep `REQ` or `D<n>`) and the file header explains
-each in full. These two tables are the index.
+Both tagged in the code (grep `REQ` or `D<n>`); each file header explains its
+own in full. These tables are the index.
 
 ### Spec requirements (implemented to spec)
 
@@ -96,11 +94,11 @@ DMA config port and DP-SRAM Port A see a standard master.
 
 - `ibus_axi` — read only (AR/R), instruction fetch.
 - `dbus_axi` — read + write (AW/W/B/AR/R), load/store, `WSTRB` per byte lane (REQ11).
-- One outstanding transaction per port; the FSMs are split per channel so a
-  later move to AXI4-Full (bursts, IDs) is additive rather than a rewrite (D6, D12).
-- All three response codes are handled (REQ12): OKAY, plus SLVERR/DECERR →
-  precise access-fault traps (D8, D18). DP-SRAM only emits OKAY/SLVERR; DECERR
-  comes from the interconnect on an unmapped address — the CPU covers both.
+- One outstanding transaction per port; the FSMs split per channel, so a later
+  move to AXI4-Full (bursts, IDs) stays additive, not a rewrite (D6, D12).
+- All three response codes handled (REQ12): OKAY, plus SLVERR/DECERR → precise
+  access-fault traps (D8, D18). DP-SRAM only emits OKAY/SLVERR; DECERR comes
+  from the interconnect on an unmapped address — the CPU covers both.
 
 ## Interrupts (PIC)
 
@@ -108,39 +106,38 @@ The CPU side: `cpu_irq[7:0]` in, `cpu_irq_id[2:0]` in (highest-priority
 pending channel), `cpu_irq_ack[7:0]` out (1-cycle pulse), `cpu_in_trap` out
 (held until MRET). Channels map to mcause 16..23; `mip[16+i]` mirrors
 `cpu_irq[i]`, `mie[16+i]` enables. An irq is taken only at an instruction
-boundary, only under `mstatus.MIE`, and is held through a multi-cycle AXI
-stall (REQ4; priority D2).
+boundary, only under `mstatus.MIE`, held through a multi-cycle AXI stall
+(REQ4; priority D2).
 
 The PIC side ([pic.v](hdl/pic.v), D19–D22): 8 level-sensitive source lines
 (DMA ch0..3, DP-SRAM on 4, mtimer on 7; 5–6 free),
 `pending = src & enable & ~in_service`, fixed priority with channel 0
-highest. The acked channel is held out of `cpu_irq` until MRET — this is
-what the brief's "suppress re-assertion of the same interrupt" via
-`cpu_in_trap` means in practice. Software programs it over an AXI4-Lite
-slave port: `0x0 IRQ_ENABLE` (R/W), `0x4 IRQ_PENDING`, `0x8 IRQ_RAW`,
-`0xC IRQ_ACTIVE` (RO); anything else answers SLVERR. The PIC enable and the
-CPU's `mie` are two independent masks. One consequence of the fixed
-priority, covered by a test: a source left PIC-enabled while its `mie` bit
-is off keeps `cpu_irq_id` pointed at itself and starves the lower-priority
-channels. A source should only be routed into the PIC if some handler will
-clear it.
+highest. The acked channel stays out of `cpu_irq` until MRET — the brief's
+"suppress re-assertion of the same interrupt" via `cpu_in_trap`, in practice.
+Software programs it over an AXI4-Lite slave port: `0x0 IRQ_ENABLE` (R/W),
+`0x4 IRQ_PENDING`, `0x8 IRQ_RAW`, `0xC IRQ_ACTIVE` (RO); anything else answers
+SLVERR. The PIC enable and the CPU's `mie` are two independent masks. One
+consequence of the fixed priority, covered by a test: a source left
+PIC-enabled while its `mie` bit is off pins `cpu_irq_id` on itself and starves
+the lower-priority channels. Route a source into the PIC only if some handler
+will clear it.
 
 The timer ([mtimer.v](hdl/mtimer.v), D26/D27) sits on PIC channel 7:
 64-bit `mtime`/`mtimecmp` behind an AXI4-Lite slave port, level irq while
-`mtime >= mtimecmp`, disarmed at reset. Combined with WFI (D23) it gives
-the SoC an idle mode: program the DMA, arm the timer as a deadline, execute
-WFI. The CPU stops fetching while the DMA works, and either the completion
-interrupt or the timer wakes it. A timeout handler can abort a stuck DMA
-channel over `CHx_CONTROL`.
+`mtime >= mtimecmp`, disarmed at reset. With WFI (D23) it gives the SoC an
+idle mode: program the DMA, arm the timer as a deadline, execute WFI. The CPU
+stops fetching while the DMA works; either the completion interrupt or the
+timer wakes it. A timeout handler can abort a stuck DMA channel over
+`CHx_CONTROL`.
 
 ## Multi-core
 
-Nothing is shared between instances: no static state, memories are external,
-and identity comes only from the `HART_ID`/`RESET_PC` parameters (D5). Two or
-more cores work behind a standard AXI interconnect. RV32I has no LR/SC, but each
-core is in-order with blocking memory ops (sequentially consistent per hart), so
+Nothing shared between instances: no static state, memories external, identity
+only from the `HART_ID`/`RESET_PC` parameters (D5). Two or more cores work
+behind a standard AXI interconnect. RV32I has no LR/SC, but each core is
+in-order with blocking memory ops (sequentially consistent per hart), so
 flag-based sharing through memory is sound — the same property the SoC's
-ping-pong buffering relies on. `debug/hdl/tb_dual_core.v` demonstrates two cores
+ping-pong buffering relies on. `debug/hdl/tb_dual_core.v` shows two cores
 sharing one memory through an arbiter.
 
 ## Layout
@@ -157,6 +154,7 @@ hdl/
   exception_unit.v     sync exception detect                    (D3,D17,D18)
   pic.v                system interrupt controller              (D19-D22)
   mtimer.v             machine timer, AXI4-Lite + irq to PIC 7  (D26,D27)
+  axi_lite_slave.v     reusable AXI4-Lite register interface (shared by pic/mtimer)
   regfile.v            32x32 register file                      (REQ10)
   branch_unit.v        real branch/jump direction + target
   decode.v  imm_gen.v  alu.v  alu_top.v  writeback_mux.v   (reused, combinational)
@@ -201,35 +199,32 @@ vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
 ```
 
 The SVA layer found a real bug on its first run: the fetch unit drove
-`ARVALID` during reset (the issue logic is combinational and requested
-`RESET_PC` while `rst_n` was still low), which the AXI spec forbids. The
-procedural monitor could not catch this because it only arms after reset.
-The fix is one line in [fetch_unit.v](hdl/fetch_unit.v); details in
+`ARVALID` during reset (the issue logic is combinational, requested `RESET_PC`
+while `rst_n` was still low), which the AXI spec forbids. The procedural
+monitor missed it — it only arms after reset. One-line fix in
+[fetch_unit.v](hdl/fetch_unit.v); details in
 [debug/VERIFICATION.md](debug/VERIFICATION.md).
 
-The test plan and results are in
-[debug/VERIFICATION.md](debug/VERIFICATION.md). Short version: every mcause
-exercised with exact trap counting (including every PIC channel except the
-deliberately-masked one), CSR negative tests, PIC priority / in-service
-suppression / double masking / SLVERR negatives, an interrupt held through
-an AXI stall, BTB aliasing, RAS call/return nesting, WFI wake both ways
-with the instruction bus checked silent, the mtimer end to end, CPI = 1.00
-measured on a latency-1 memory, protocol monitors on all four AXI ports,
-seeded random backpressure, and the dual-core handshake. Functional
-coverage: 88/92 bins hit; the four misses are the two intentional ch5
-negatives and the two backpressure bins covered by the regression configs
-instead of the default run.
+Test plan and results: [debug/VERIFICATION.md](debug/VERIFICATION.md). Short
+version: every mcause exercised with exact trap counting (every PIC channel
+except the deliberately-masked one), CSR negative tests, PIC priority /
+in-service suppression / double masking / SLVERR negatives, an interrupt held
+through an AXI stall, BTB aliasing, RAS call/return nesting, WFI wake both ways
+with the instruction bus checked silent, the mtimer end to end, CPI = 1.00 on a
+latency-1 memory, protocol monitors on all four AXI ports, seeded random
+backpressure, the dual-core handshake. Functional coverage: 88/92 bins hit; the
+four misses are the two intentional ch5 negatives and the two backpressure bins
+the regression configs cover instead of the default run.
 
 ## Open points (system level)
 
 - Global memory map undecided — the reset vector is the `RESET_PC` parameter
-  (default 0x0), and the PIC / mtimer base addresses are TB decoder parameters
-  (0x3000_0000 / 0x3001_0000 for now).
-- PIC and mtimer have no spec of their own — the CPU-side interface is fixed
-  by the CPU brief and implemented; the internals (priority order, register
-  maps, D19–D22, D26–D27) are our proposal to confirm with the team/mentor.
-  The source-to-channel mapping is DMA 0..3, DP-SRAM 4, mtimer 7; 5–6 free.
+  (default 0x0); PIC / mtimer bases are TB decoder parameters (0x3000_0000 /
+  0x3001_0000 for now).
+- PIC and mtimer have no spec of their own — the CPU-side interface is fixed by
+  the CPU brief and implemented; the internals (priority order, register maps,
+  D19–D22, D26–D27) are our proposal to confirm with the team/mentor.
+  Source-to-channel mapping: DMA 0..3, DP-SRAM 4, mtimer 7; 5–6 free.
 - Reset type differs between blocks (CPU/DMA async, DP-SRAM sync).
 - With more than one core, "which PIC channel targets which core" is undefined
-  — the current PIC serves one CPU, and each core would want its own mtimer
-  compare.
+  — the current PIC serves one CPU; each core would want its own mtimer compare.

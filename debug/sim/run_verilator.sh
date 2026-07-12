@@ -17,20 +17,14 @@
 set -e
 cd "$(dirname "$0")"
 
-RTL="../../hdl"
-TBH="../hdl"
 SVA="../sva"
 
+# RTL + tb collateral come from the shared filelists (same rtl.f / tb_cpu.f the
+# ModelSim flow uses); only the Verilator-only SVA layer is listed here.
 verilator --cc --exe --build --timing --assert --coverage -Wno-fatal \
   --top-module tb_cpu_axi -o Vtb_cpu_axi +incdir+. \
   sim_main.cpp \
-  "$RTL"/alu.v "$RTL"/alu_top.v "$RTL"/branch_predictor.v "$RTL"/branch_unit.v \
-  "$RTL"/control.v "$RTL"/cpu_top.v "$RTL"/csr_file.v "$RTL"/decode.v \
-  "$RTL"/exception_unit.v "$RTL"/fetch_unit.v "$RTL"/hazard_unit.v \
-  "$RTL"/imm_gen.v "$RTL"/lsu.v "$RTL"/mtimer.v "$RTL"/pic.v "$RTL"/regfile.v \
-  "$RTL"/writeback_mux.v \
-  "$TBH"/ck_rst_tb.v "$TBH"/axi_lite_mem_model.v "$TBH"/axi_lite_dec2.v \
-  "$TBH"/axi_lite_monitor.v "$TBH"/tb_cpu_axi.v \
+  -f rtl.f -f tb_cpu.f \
   "$SVA"/axi_lite_sva.sv "$SVA"/cpu_core_sva.sv "$SVA"/pic_sva.sv \
   "$SVA"/cpu_func_cov.sv "$SVA"/bind_sva.sv
 

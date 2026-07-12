@@ -52,15 +52,15 @@ module pic (
     input             s_axi_wvalid,
     output            s_axi_wready,
     output     [1:0]  s_axi_bresp,
-    output reg        s_axi_bvalid,
+    output            s_axi_bvalid,
     input             s_axi_bready,
     input      [31:0] s_axi_araddr,
     input      [2:0]  s_axi_arprot,
     input             s_axi_arvalid,
     output            s_axi_arready,
-    output reg [31:0] s_axi_rdata,
+    output     [31:0] s_axi_rdata,
     output     [1:0]  s_axi_rresp,
-    output reg        s_axi_rvalid,
+    output            s_axi_rvalid,
     input             s_axi_rready
 );
 
@@ -69,9 +69,6 @@ localparam OFF_ENABLE  = 6'd0;
 localparam OFF_PENDING = 6'd1;
 localparam OFF_RAW     = 6'd2;
 localparam OFF_ACTIVE  = 6'd3;
-
-localparam RESP_OKAY   = 2'b00;
-localparam RESP_SLVERR = 2'b10;
 
 reg [7:0] enable_q;         // IRQ_ENABLE
 reg [7:0] in_service_q;     // channels acked and still being handled (D21)
@@ -119,110 +116,47 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // --- AXI4-Lite slave (D22) ---
-// Write: collect AW and W independently (the channels are allowed to complete
-// in either order), apply + respond once both are in, hold B until BREADY.
+// The handshake lives in the shared axi_lite_slave; the PIC just describes its
+// four registers (only IRQ_ENABLE is writable; offsets past IRQ_ACTIVE SLVERR).
+wire        reg_wr;
+wire [5:0]  reg_waddr, reg_raddr;
+wire [31:0] reg_wdata, reg_rdata;
+wire [3:0]  reg_wstrb;
 
-reg       aw_got_q, w_got_q;
-reg [5:0] awoff_q;
-reg [7:0] wbyte0_q;
-reg       wstrb0_q;
+axi_lite_slave pic_slv (
+    .clk(clk), .rst_n(rst_n),
+    .s_axi_awaddr(s_axi_awaddr), .s_axi_awvalid(s_axi_awvalid), .s_axi_awready(s_axi_awready),
+    .s_axi_wdata(s_axi_wdata), .s_axi_wstrb(s_axi_wstrb),
+    .s_axi_wvalid(s_axi_wvalid), .s_axi_wready(s_axi_wready),
+    .s_axi_bresp(s_axi_bresp), .s_axi_bvalid(s_axi_bvalid), .s_axi_bready(s_axi_bready),
+    .s_axi_araddr(s_axi_araddr), .s_axi_arvalid(s_axi_arvalid), .s_axi_arready(s_axi_arready),
+    .s_axi_rdata(s_axi_rdata), .s_axi_rresp(s_axi_rresp),
+    .s_axi_rvalid(s_axi_rvalid), .s_axi_rready(s_axi_rready),
+    .wr_en(reg_wr), .wr_addr(reg_waddr), .wr_data(reg_wdata), .wr_strb(reg_wstrb),
+    .wr_ok(reg_waddr == OFF_ENABLE),
+    .rd_addr(reg_raddr), .rd_data(reg_rdata), .rd_ok(reg_raddr <= OFF_ACTIVE)
+);
 
-wire aw_hs     = s_axi_awvalid && s_axi_awready;
-wire w_hs      = s_axi_wvalid  && s_axi_wready;
-wire wr_commit = aw_got_q && w_got_q && !s_axi_bvalid;
-wire wr_ok     = (awoff_q == OFF_ENABLE);
-
-assign s_axi_awready = !aw_got_q && !s_axi_bvalid;
-assign s_axi_wready  = !w_got_q  && !s_axi_bvalid;
-
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        aw_got_q <= 1'b0;
-    else if (aw_hs)
-        aw_got_q <= 1'b1;
-    else if (wr_commit)
-        aw_got_q <= 1'b0;
-end
-
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        w_got_q <= 1'b0;
-    else if (w_hs)
-        w_got_q <= 1'b1;
-    else if (wr_commit)
-        w_got_q <= 1'b0;
-end
-
-// command payload — consumed only under the got/valid bits above, no reset
-always @(posedge clk) begin
-    if (aw_hs)
-        awoff_q <= s_axi_awaddr[7:2];
-end
-
-always @(posedge clk) begin
-    if (w_hs) begin
-        wbyte0_q <= s_axi_wdata[7:0];
-        wstrb0_q <= s_axi_wstrb[0];
-    end
-end
-
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        s_axi_bvalid <= 1'b0;
-    else if (wr_commit)
-        s_axi_bvalid <= 1'b1;
-    else if (s_axi_bready)
-        s_axi_bvalid <= 1'b0;
-end
-
-reg bresp_err_q;
-always @(posedge clk) begin
-    if (wr_commit)
-        bresp_err_q <= !wr_ok;
-end
-assign s_axi_bresp = bresp_err_q ? RESP_SLVERR : RESP_OKAY;
-
-// the one writable register; a write with byte lane 0 off changes nothing
-// but still answers OKAY (partial-strobe writes are legal AXI)
+// IRQ_ENABLE is the only writable register; a write with byte lane 0 off
+// changes nothing but still answers OKAY (partial-strobe writes are legal AXI)
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         enable_q <= 8'b0;
-    else if (wr_commit && wr_ok && wstrb0_q)
-        enable_q <= wbyte0_q;
+    else if (reg_wr && reg_waddr == OFF_ENABLE && reg_wstrb[0])
+        enable_q <= reg_wdata[7:0];
 end
 
-// Read: accept AR whenever no response is pending, answer next cycle.
-
-wire ar_hs = s_axi_arvalid && s_axi_arready;
-
-assign s_axi_arready = !s_axi_rvalid;
-
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        s_axi_rvalid <= 1'b0;
-    else if (ar_hs)
-        s_axi_rvalid <= 1'b1;
-    else if (s_axi_rready)
-        s_axi_rvalid <= 1'b0;
+// read mux — combinational; the slave registers it on the AR handshake
+reg [31:0] reg_rmux;
+always @(*) begin
+    case (reg_raddr)
+        OFF_ENABLE:  reg_rmux = {24'b0, enable_q};
+        OFF_PENDING: reg_rmux = {24'b0, cpu_irq};
+        OFF_RAW:     reg_rmux = {24'b0, irq_src};
+        OFF_ACTIVE:  reg_rmux = {24'b0, in_service_q};
+        default:     reg_rmux = 32'b0;
+    endcase
 end
-
-reg rresp_err_q;
-always @(posedge clk) begin
-    if (ar_hs)
-        rresp_err_q <= (s_axi_araddr[7:2] > OFF_ACTIVE);
-end
-assign s_axi_rresp = rresp_err_q ? RESP_SLVERR : RESP_OKAY;
-
-always @(posedge clk) begin
-    if (ar_hs) begin
-        case (s_axi_araddr[7:2])
-            OFF_ENABLE:  s_axi_rdata <= {24'b0, enable_q};
-            OFF_PENDING: s_axi_rdata <= {24'b0, cpu_irq};
-            OFF_RAW:     s_axi_rdata <= {24'b0, irq_src};
-            OFF_ACTIVE:  s_axi_rdata <= {24'b0, in_service_q};
-            default:     s_axi_rdata <= 32'b0;
-        endcase
-    end
-end
+assign reg_rdata = reg_rmux;
 
 endmodule

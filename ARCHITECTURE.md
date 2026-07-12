@@ -1,9 +1,9 @@
 # Architecture
 
-RV32I CPU, 3-stage pipeline, two AXI4-Lite master ports. This file describes
-the block structure, the pipeline timing and the implementation choices per
-module. Requirement tags (`REQ#`) and design-decision tags (`D#`) match the
-index in the README and the comments in the code.
+RV32I CPU, 3-stage pipeline, two AXI4-Lite master ports. Describes the block
+structure, pipeline timing, and per-module implementation choices. Requirement
+tags (`REQ#`) and design-decision tags (`D#`) match the README index and the
+code comments.
 
 ## 1. Top level
 
@@ -44,13 +44,12 @@ Interfaces (REQ2, REQ3):
 | `cpu_in_trap` | out | high from trap entry until MRET |
 
 Parameters: `RESET_PC` (boot address) and `HART_ID` (drives `mhartid`, D5).
-The port list has not changed since the first pipeline version; all later
-features (WFI, RAS, counters) are internal, and the PIC/mtimer are separate
-blocks.
+The port list hasn't changed since the first pipeline version; all later
+features (WFI, RAS, counters) internal, PIC/mtimer separate blocks.
 
-The repo also contains two blocks that are not part of the CPU but that the
-system needs and no other block owns: the interrupt controller `pic.v`
-(section 7) and the machine timer `mtimer.v` (section 8).
+The repo also carries two blocks not part of the CPU but that the system needs
+and no block owns: the interrupt controller `pic.v` (section 7) and the machine
+timer `mtimer.v` (section 8).
 
 ## 2. Pipeline
 
@@ -60,14 +59,13 @@ system needs and no other block owns: the interrupt controller `pic.v`
 | S2 | Decode + Execute | decode, regfile read, ALU, branch resolve, CSR access, load/store on `dbus`, all trap/interrupt decisions |
 | S3 | Writeback | register file write |
 
-Everything interesting is in S2 on purpose: with decode+execute+memory in
-one stage, an instruction either completes fully or not at all, which is
-what makes the traps precise (REQ1).
+Everything interesting is in S2 on purpose: decode+execute+memory in one stage
+means an instruction either completes fully or not at all — that's what makes
+the traps precise (REQ1).
 
-Pipeline registers (D1): each one is a `valid` bit plus a payload. Only the
-valid bit has a reset; the payload is ignored whenever valid=0, so a flush
-or a reset produces a guaranteed safe bubble without caring what the
-payload holds.
+Pipeline registers (D1): each a `valid` bit plus a payload. Only the valid bit
+has a reset; the payload is ignored when valid=0, so a flush or reset produces
+a safe bubble no matter what the payload holds.
 
 ### Timing of the common cases
 
@@ -108,10 +106,10 @@ Three different mechanisms, all owned by `hazard_unit` (REQ6):
 - **flush** — S2 decided the younger instruction is wrong-path
   (mispredict, trap entry, MRET). Exactly one fetch is dropped.
 
-Priority (D14): flush beats stall, and an S2 stall finishes before S2 can
-raise a flush that depends on the result of the stalled op (e.g. a bus
-error only known when the response lands). Both rules come from gating
-everything with one signal, `s2_advance`.
+Priority (D14): flush beats stall, and an S2 stall finishes before S2 can raise
+a flush that depends on the stalled op's result (e.g. a bus error known only
+when the response lands). Both rules come from gating everything with one
+signal, `s2_advance`.
 
 ## 3. Module descriptions
 
@@ -299,12 +297,12 @@ mtimer ──────┘ (level) ──────►│ pending = src & en
                                     cpu_irq_ack / cpu_in_trap ◄──
 ```
 
-CPU side (REQ4): an interrupt is taken only under `mstatus.MIE`, only if
-the channel's `mie` bit is set, and only at an instruction boundary — a
-pending interrupt during a multi-cycle AXI stall waits for the response
-beat. The victim instruction is squashed before it does anything, so it
-can re-run after MRET. mepc holds the resume PC (D4); the one exception is
-a WFI wake, where mepc = wfi+4 per the privileged spec.
+CPU side (REQ4): an interrupt is taken only under `mstatus.MIE`, only if the
+channel's `mie` bit is set, only at an instruction boundary — a pending
+interrupt during a multi-cycle AXI stall waits for the response beat. The victim
+instruction is squashed before doing anything, so it re-runs after MRET. mepc
+holds the resume PC (D4); the one exception is a WFI wake, where mepc = wfi+4
+per the privileged spec.
 
 PIC side (D19..D22):
 - Level-sensitive inputs, no latching (D19): a peripheral holds its line
@@ -326,12 +324,11 @@ PIC side (D19..D22):
 
 Anything else, and any write to a read-only register, answers SLVERR.
 
-Two masks stack on purpose: PIC IRQ_ENABLE = "this source may reach the
-CPU", `mie` = "current software cares". A consequence of the fixed
-priority, found while testing: a source that is PIC-enabled but
-mie-masked keeps `cpu_irq_id` pointed at itself and starves all
-lower-priority channels. Integration rule: only route a source into the
-PIC if some handler will actually clear it.
+Two masks stack on purpose: PIC IRQ_ENABLE = "this source may reach the CPU",
+`mie` = "current software cares". A consequence of the fixed priority, found
+while testing: a source PIC-enabled but mie-masked pins `cpu_irq_id` on itself
+and starves all lower-priority channels. Integration rule: route a source into
+the PIC only if some handler will clear it.
 
 ## 6. WFI + mtimer
 
@@ -362,29 +359,26 @@ priority: a tick should not outrank DMA/DP-SRAM service).
   the handler clears the line by moving mtimecmp — consistent with the
   level-sensitive contract of the PIC (D19).
 
-Together they give the SoC an idle mode: program the DMA, arm the timer
-as a deadline, execute WFI. The CPU generates zero interconnect traffic
-while the DMA works, and either the completion interrupt or the timer
-wakes it; a timeout handler can abort a stuck channel over the DMA's
-CHx_CONTROL register.
+Together they give the SoC an idle mode: program the DMA, arm the timer as a
+deadline, execute WFI. The CPU generates zero interconnect traffic while the DMA
+works; either the completion interrupt or the timer wakes it, and a timeout
+handler can abort a stuck channel over the DMA's CHx_CONTROL register.
 
 ## 7. Multi-core
 
-The core keeps no global state: memories are external, identity comes
-from `RESET_PC`/`HART_ID`, and each instance is a normal AXI master an
-interconnect can arbitrate. RV32I has no LR/SC, but every memory op here
-is in-order and blocking (one outstanding, no store buffer), so each hart
-is sequentially consistent and flag handshakes through shared memory
-work. `debug/hdl/tb_dual_core.v` runs two cores against one shared memory
-behind a 2:1 arbiter and checks both results.
+The core keeps no global state: memories external, identity from
+`RESET_PC`/`HART_ID`, each instance a normal AXI master an interconnect can
+arbitrate. RV32I has no LR/SC, but every memory op here is in-order and blocking
+(one outstanding, no store buffer), so each hart is sequentially consistent and
+flag handshakes through shared memory work. `debug/hdl/tb_dual_core.v` runs two
+cores against one shared memory behind a 2:1 arbiter and checks both results.
 
 ## 8. Verification
 
-The testbench (`debug/hdl/tb_cpu_axi.v`) builds a small SoC around the
-CPU: instruction memory, two address decoders (PIC at 0x3000_0000, mtimer
-at 0x3001_0000, data memory as default), the real `pic.v` and `mtimer.v`,
-protocol monitors on all four AXI ports, and a directed self-checking
-program. A separate SVA + functional-coverage layer (`debug/sva/`) binds
-the same contracts as assertions and runs under Verilator. The test plan,
-the coverage results and the bugs found along the way are documented in
-`debug/VERIFICATION.md`.
+The testbench (`debug/hdl/tb_cpu_axi.v`) builds a small SoC around the CPU:
+instruction memory, two address decoders (PIC at 0x3000_0000, mtimer at
+0x3001_0000, data memory as default), the real `pic.v` and `mtimer.v`, protocol
+monitors on all four AXI ports, a directed self-checking program. A separate
+SVA + functional-coverage layer (`debug/sva/`) binds the same contracts as
+assertions, runs under Verilator. Test plan, coverage results, and the bugs
+found along the way: `debug/VERIFICATION.md`.

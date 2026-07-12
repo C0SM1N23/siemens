@@ -1,35 +1,14 @@
-# one canonical compile list, shared by sim.do and regress.do
+# one canonical compile, shared by sim.do and regress.do
 
 vlib work
 vmap work work
 
-# modules carried over from the single-cycle core
-vlog ../../hdl/decode.v
-vlog ../../hdl/imm_gen.v
-vlog ../../hdl/regfile.v
-vlog ../../hdl/alu.v
-vlog ../../hdl/alu_top.v
-vlog ../../hdl/branch_unit.v
-vlog ../../hdl/writeback_mux.v
+# RTL + the tb_cpu_axi collateral come from the shared filelists (rtl.f /
+# tb_cpu.f), so a new module is added in one place for both flows.
+# +incdir+. lets tb_cpu_axi find program_axi_sym.vh (label addresses from asm.py)
+vlog -f rtl.f
+vlog +incdir+. -f tb_cpu.f
 
-# extended / new modules for the 3-stage AXI pipeline
-vlog ../../hdl/control.v
-vlog ../../hdl/csr_file.v
-vlog ../../hdl/exception_unit.v
-vlog ../../hdl/branch_predictor.v
-vlog ../../hdl/fetch_unit.v
-vlog ../../hdl/lsu.v
-vlog ../../hdl/hazard_unit.v
-vlog ../../hdl/cpu_top.v
-vlog ../../hdl/pic.v
-vlog ../../hdl/mtimer.v
-
-# testbench collateral
-vlog ../hdl/ck_rst_tb.v
-vlog ../hdl/axi_lite_mem_model.v
-vlog ../hdl/axi_lite_monitor.v
+# dual-core bench is ModelSim-only (Verilator runs the single-core bench)
 vlog ../hdl/axi_lite_arb2.v
-vlog ../hdl/axi_lite_dec2.v
-# +incdir+. so tb_cpu_axi finds program_axi_sym.vh (label addresses from asm.py)
-vlog +incdir+. ../hdl/tb_cpu_axi.v
 vlog ../hdl/tb_dual_core.v
