@@ -13,6 +13,8 @@
 // illegal=1 and clears every other line, so an illegal op has no side effects
 // and just traps in S2.
 
+`include "defines.vh"
+
 module control (
     input      [6:0]  opcode,
     input      [2:0]  funct3,
@@ -26,7 +28,7 @@ module control (
     output reg [3:0]  ALUOp,
     output reg        MemRead,
     output reg        MemWrite,
-    output reg [1:0]  MemtoReg,    // 00=ALU, 01=mem, 10=PC+4, 11=CSR
+    output reg [1:0]  MemtoReg,    // WB_* select (CSR reads ride the WB_ALU slot)
     output reg        Branch,
     output reg        Jump,        // JAL/JALR
     output reg        csr_instr,   // CSR op (Zicsr)
@@ -41,57 +43,57 @@ module control (
 
 always @(*) begin
     // default: nothing (safe bubble)
-    RegWrite  = 0; ALUSrc = 0; ALUOp = 4'b0000;
-    MemRead   = 0; MemWrite = 0; MemtoReg = 2'b00;
+    RegWrite  = 0; ALUSrc = 0; ALUOp = `ALUOP_ADD;
+    MemRead   = 0; MemWrite = 0; MemtoReg = `WB_ALU;
     Branch    = 0; Jump = 0;
     csr_instr = 0; csr_op = 2'b00; csr_imm = 0;
     mret      = 0; ecall = 0; ebreak = 0; wfi = 0; illegal = 0;
 
     case (opcode)
-        7'b0110011: begin // R-type
-            RegWrite = 1; ALUOp = 4'b0010;
+        `OPC_OP: begin // R-type
+            RegWrite = 1; ALUOp = `ALUOP_FUNCT;
             // funct7=0100000 only exists for SUB and SRA
             if (funct7 == 7'b0100000) begin
                 if (funct3 != 3'b000 && funct3 != 3'b101) illegal = 1;
             end else if (funct7 != 7'b0000000)
                 illegal = 1;
         end
-        7'b0010011: begin // I-type arithmetic
-            RegWrite = 1; ALUSrc = 1; ALUOp = 4'b0010;
+        `OPC_OP_IMM: begin // I-type arithmetic
+            RegWrite = 1; ALUSrc = 1; ALUOp = `ALUOP_FUNCT;
             // shifts carry shamt + a fixed funct7
             if (funct3 == 3'b001 && funct7 != 7'b0000000) illegal = 1;
             if (funct3 == 3'b101 && funct7 != 7'b0000000
                                  && funct7 != 7'b0100000) illegal = 1;
         end
-        7'b0000011: begin // LB/LH/LW/LBU/LHU
-            RegWrite = 1; ALUSrc = 1; MemRead = 1; MemtoReg = 2'b01;
+        `OPC_LOAD: begin // LB/LH/LW/LBU/LHU
+            RegWrite = 1; ALUSrc = 1; MemRead = 1; MemtoReg = `WB_MEM;
             if (funct3 == 3'b011 || funct3[2:1] == 2'b11) illegal = 1;
         end
-        7'b0100011: begin // SB/SH/SW
+        `OPC_STORE: begin // SB/SH/SW
             ALUSrc = 1; MemWrite = 1;
             if (funct3[2] || funct3 == 3'b011) illegal = 1;
         end
-        7'b1100011: begin // branches
-            ALUOp = 4'b0001; Branch = 1;
+        `OPC_BRANCH: begin // direction/target come from branch_unit, not the ALU
+            Branch = 1;
             if (funct3 == 3'b010 || funct3 == 3'b011) illegal = 1;
         end
-        7'b0110111: begin // LUI
-            RegWrite = 1; ALUSrc = 1; ALUOp = 4'b0011;
+        `OPC_LUI: begin
+            RegWrite = 1; ALUSrc = 1; ALUOp = `ALUOP_LUI;
         end
-        7'b0010111: begin // AUIPC
-            RegWrite = 1; ALUSrc = 1; ALUOp = 4'b0100;
+        `OPC_AUIPC: begin
+            RegWrite = 1; ALUSrc = 1; ALUOp = `ALUOP_AUIPC;
         end
-        7'b1101111: begin // JAL
-            RegWrite = 1; ALUSrc = 1; Jump = 1; MemtoReg = 2'b10;
+        `OPC_JAL: begin
+            RegWrite = 1; ALUSrc = 1; Jump = 1; MemtoReg = `WB_PC4;
         end
-        7'b1100111: begin // JALR
-            RegWrite = 1; ALUSrc = 1; Jump = 1; MemtoReg = 2'b10;
+        `OPC_JALR: begin
+            RegWrite = 1; ALUSrc = 1; Jump = 1; MemtoReg = `WB_PC4;
             if (funct3 != 3'b000) illegal = 1;
         end
-        7'b0001111: begin // FENCE = NOP: single hart, in-order
+        `OPC_FENCE: begin // FENCE = NOP: single hart, in-order
             if (funct3 != 3'b000) illegal = 1;   // FENCE.I (Zifencei) not implemented
         end
-        7'b1110011: begin // SYSTEM
+        `OPC_SYSTEM: begin
             if (funct3 == 3'b000) begin
                 // exact encodings only, anything else is illegal
                 if      (imm12 == 12'h000 && rs1 == 5'b0 && rd == 5'b0) ecall  = 1;
@@ -100,8 +102,9 @@ always @(*) begin
                 else if (imm12 == 12'h105 && rs1 == 5'b0 && rd == 5'b0) wfi    = 1;
                 else illegal = 1;
             end else if (funct3[1:0] != 2'b00) begin
-                // CSRRW/S/C (+I): rd gets the old CSR value
-                RegWrite  = 1; MemtoReg = 2'b11;
+                // CSRRW/S/C (+I): rd gets the old CSR value, muxed into the
+                // ALU-result slot at the end of S2 -> WB_ALU selects it
+                RegWrite  = 1; MemtoReg = `WB_ALU;
                 csr_instr = 1;
                 csr_op    = funct3[1:0];
                 csr_imm   = funct3[2];

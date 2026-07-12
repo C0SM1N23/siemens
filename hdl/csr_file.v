@@ -26,6 +26,8 @@
 // over a same-cycle software write, so the trapping instruction never commits
 // its own write.
 
+`include "defines.vh"
+
 module csr_file #(
     parameter HART_ID = 32'd0
 )(
@@ -35,7 +37,7 @@ module csr_file #(
     // CSR access from S2
     input      [11:0] csr_addr,
     input      [31:0] csr_wdata,     // forwarded rs1 or zext(uimm5)
-    input      [1:0]  csr_op,        // 01=RW, 10=RS, 11=RC
+    input      [1:0]  csr_op,        // CSROP_RW / _RS / _RC
     input             csr_ren,       // valid CSR instruction (address check)
     input             csr_wen,       // effective write requested
     output reg [31:0] csr_rdata,
@@ -132,10 +134,10 @@ function [31:0] csr_new_val;
     input [31:0] write_data;
     input [1:0]  op;
     case (op)
-        2'b01:   csr_new_val = write_data;            // CSRRW
-        2'b10:   csr_new_val = old_val |  write_data; // CSRRS
-        2'b11:   csr_new_val = old_val & ~write_data; // CSRRC
-        default: csr_new_val = old_val;
+        `CSROP_RW: csr_new_val = write_data;
+        `CSROP_RS: csr_new_val = old_val |  write_data;
+        `CSROP_RC: csr_new_val = old_val & ~write_data;
+        default:   csr_new_val = old_val;
     endcase
 endfunction
 

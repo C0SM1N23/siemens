@@ -14,6 +14,9 @@
 // each core is in-order with blocking memory ops (sequentially consistent), so
 // no LR/SC is needed.
 
+// AXI4-Lite wiring macros, shared with tb_cpu_axi
+`include "axi_lite_macros.vh"
+
 module tb_dual_core;
 
 wire clk, rst_n;
@@ -23,128 +26,82 @@ ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst_inst (
     .rst_n (rst_n)
 );
 
-// per-core ibus, dbus; shared slave-side bus
-wire [31:0] ib_araddr  [0:1];
-wire [2:0]  ib_arprot  [0:1];
-wire        ib_arvalid [0:1], ib_arready [0:1], ib_rvalid [0:1], ib_rready [0:1];
-wire [31:0] ib_rdata   [0:1];
-wire [1:0]  ib_rresp   [0:1];
-
-wire [31:0] db_awaddr [0:1], db_wdata [0:1], db_araddr [0:1], db_rdata [0:1];
-wire [2:0]  db_awprot [0:1], db_arprot [0:1];
-wire [3:0]  db_wstrb  [0:1];
-wire        db_awvalid[0:1], db_awready[0:1], db_wvalid[0:1], db_wready[0:1];
-wire        db_bvalid [0:1], db_bready [0:1], db_arvalid[0:1], db_arready[0:1];
-wire        db_rvalid [0:1], db_rready [0:1];
-wire [1:0]  db_bresp  [0:1], db_rresp  [0:1];
-
-wire [31:0] s_awaddr, s_wdata, s_araddr, s_rdata;
-wire [3:0]  s_wstrb;
-wire        s_awvalid, s_awready, s_wvalid, s_wready, s_bvalid, s_bready;
-wire        s_arvalid, s_arready, s_rvalid, s_rready;
-wire [1:0]  s_bresp, s_rresp;
+// per-core ibus/dbus bundles; s = the shared bus behind the arbiter
+`AXIL_RD_WIRES(ib0);
+`AXIL_RD_WIRES(ib1);
+`AXIL_WIRES(db0);
+`AXIL_WIRES(db1);
+`AXIL_WIRES(s);
 
 wire [7:0]  ack    [0:1];
 wire        intrap [0:1];
 
-genvar g;
-generate
-for (g = 0; g < 2; g = g + 1) begin : core
-    cpu_top #(.HART_ID(g)) cpu (
-        .clk              (clk),
-        .rst_n            (rst_n),
-        .ibus_axi_araddr  (ib_araddr[g]),
-        .ibus_axi_arprot  (ib_arprot[g]),
-        .ibus_axi_arvalid (ib_arvalid[g]),
-        .ibus_axi_arready (ib_arready[g]),
-        .ibus_axi_rdata   (ib_rdata[g]),
-        .ibus_axi_rresp   (ib_rresp[g]),
-        .ibus_axi_rvalid  (ib_rvalid[g]),
-        .ibus_axi_rready  (ib_rready[g]),
-        .dbus_axi_awaddr  (db_awaddr[g]),
-        .dbus_axi_awprot  (db_awprot[g]),
-        .dbus_axi_awvalid (db_awvalid[g]),
-        .dbus_axi_awready (db_awready[g]),
-        .dbus_axi_wdata   (db_wdata[g]),
-        .dbus_axi_wstrb   (db_wstrb[g]),
-        .dbus_axi_wvalid  (db_wvalid[g]),
-        .dbus_axi_wready  (db_wready[g]),
-        .dbus_axi_bresp   (db_bresp[g]),
-        .dbus_axi_bvalid  (db_bvalid[g]),
-        .dbus_axi_bready  (db_bready[g]),
-        .dbus_axi_araddr  (db_araddr[g]),
-        .dbus_axi_arprot  (db_arprot[g]),
-        .dbus_axi_arvalid (db_arvalid[g]),
-        .dbus_axi_arready (db_arready[g]),
-        .dbus_axi_rdata   (db_rdata[g]),
-        .dbus_axi_rresp   (db_rresp[g]),
-        .dbus_axi_rvalid  (db_rvalid[g]),
-        .dbus_axi_rready  (db_rready[g]),
-        .cpu_irq          (8'b0),
-        .cpu_irq_ack      (ack[g]),
-        .cpu_irq_id       (3'b0),
-        .cpu_in_trap      (intrap[g])
-    );
+cpu_top #(.HART_ID(0)) cpu0 (
+    .clk         (clk),
+    .rst_n       (rst_n),
+    `AXIL_M_RD(ibus_axi, ib0),
+    `AXIL_M(dbus_axi, db0),
+    .cpu_irq     (8'b0),
+    .cpu_irq_ack (ack[0]),
+    .cpu_irq_id  (3'b0),
+    .cpu_in_trap (intrap[0])
+);
 
-    // private instruction memory, same binary in both
-    axi_lite_mem_model #(
-        .WORDS(256), .BASE(32'h0000_0000), .INIT_FILE("program_dual.hex"),
-        .READ_LAT(0)
-    ) imem (
-        .clk(clk), .rst_n(rst_n),
-        .awaddr(32'b0), .awvalid(1'b0), .awready(),
-        .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(),
-        .bresp(), .bvalid(), .bready(1'b0),
-        .araddr(ib_araddr[g]), .arvalid(ib_arvalid[g]), .arready(ib_arready[g]),
-        .rdata(ib_rdata[g]), .rresp(ib_rresp[g]), .rvalid(ib_rvalid[g]),
-        .rready(ib_rready[g])
-    );
-end
-endgenerate
+cpu_top #(.HART_ID(1)) cpu1 (
+    .clk         (clk),
+    .rst_n       (rst_n),
+    `AXIL_M_RD(ibus_axi, ib1),
+    `AXIL_M(dbus_axi, db1),
+    .cpu_irq     (8'b0),
+    .cpu_irq_ack (ack[1]),
+    .cpu_irq_id  (3'b0),
+    .cpu_in_trap (intrap[1])
+);
+
+// private instruction memories, same binary in both
+axi_lite_mem_model #(
+    .WORDS(256), .BASE(32'h0000_0000), .INIT_FILE("program_dual.hex"),
+    .READ_LAT(0)
+) imem0 (
+    .clk(clk), .rst_n(rst_n),
+    .awaddr(32'b0), .awvalid(1'b0), .awready(),
+    .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(),
+    .bresp(), .bvalid(), .bready(1'b0),
+    .araddr(ib0_araddr), .arvalid(ib0_arvalid), .arready(ib0_arready),
+    .rdata(ib0_rdata), .rresp(ib0_rresp), .rvalid(ib0_rvalid), .rready(ib0_rready)
+);
+
+axi_lite_mem_model #(
+    .WORDS(256), .BASE(32'h0000_0000), .INIT_FILE("program_dual.hex"),
+    .READ_LAT(0)
+) imem1 (
+    .clk(clk), .rst_n(rst_n),
+    .awaddr(32'b0), .awvalid(1'b0), .awready(),
+    .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(),
+    .bresp(), .bvalid(), .bready(1'b0),
+    .araddr(ib1_araddr), .arvalid(ib1_arvalid), .arready(ib1_arready),
+    .rdata(ib1_rdata), .rresp(ib1_rresp), .rvalid(ib1_rvalid), .rready(ib1_rready)
+);
 
 // both data buses share one memory through the arbiter
 axi_lite_arb2 arb (
     .clk(clk), .rst_n(rst_n),
-    .m0_awaddr(db_awaddr[0]), .m0_awvalid(db_awvalid[0]), .m0_awready(db_awready[0]),
-    .m0_wdata(db_wdata[0]), .m0_wstrb(db_wstrb[0]), .m0_wvalid(db_wvalid[0]),
-    .m0_wready(db_wready[0]), .m0_bresp(db_bresp[0]), .m0_bvalid(db_bvalid[0]),
-    .m0_bready(db_bready[0]), .m0_araddr(db_araddr[0]), .m0_arvalid(db_arvalid[0]),
-    .m0_arready(db_arready[0]), .m0_rdata(db_rdata[0]), .m0_rresp(db_rresp[0]),
-    .m0_rvalid(db_rvalid[0]), .m0_rready(db_rready[0]),
-    .m1_awaddr(db_awaddr[1]), .m1_awvalid(db_awvalid[1]), .m1_awready(db_awready[1]),
-    .m1_wdata(db_wdata[1]), .m1_wstrb(db_wstrb[1]), .m1_wvalid(db_wvalid[1]),
-    .m1_wready(db_wready[1]), .m1_bresp(db_bresp[1]), .m1_bvalid(db_bvalid[1]),
-    .m1_bready(db_bready[1]), .m1_araddr(db_araddr[1]), .m1_arvalid(db_arvalid[1]),
-    .m1_arready(db_arready[1]), .m1_rdata(db_rdata[1]), .m1_rresp(db_rresp[1]),
-    .m1_rvalid(db_rvalid[1]), .m1_rready(db_rready[1]),
-    .s_awaddr(s_awaddr), .s_awvalid(s_awvalid), .s_awready(s_awready),
-    .s_wdata(s_wdata), .s_wstrb(s_wstrb), .s_wvalid(s_wvalid), .s_wready(s_wready),
-    .s_bresp(s_bresp), .s_bvalid(s_bvalid), .s_bready(s_bready),
-    .s_araddr(s_araddr), .s_arvalid(s_arvalid), .s_arready(s_arready),
-    .s_rdata(s_rdata), .s_rresp(s_rresp), .s_rvalid(s_rvalid), .s_rready(s_rready)
+    `AXIL_NP(m0, db0),
+    `AXIL_NP(m1, db1),
+    `AXIL_NP(s, s)
 );
 
 axi_lite_mem_model #(
     .WORDS(1024), .BASE(32'h0000_2000),
     .READ_LAT(1), .WRITE_LAT(1)
 ) dmem_inst (
-    .clk(clk), .rst_n(rst_n),
-    .awaddr(s_awaddr), .awvalid(s_awvalid), .awready(s_awready),
-    .wdata(s_wdata), .wstrb(s_wstrb), .wvalid(s_wvalid), .wready(s_wready),
-    .bresp(s_bresp), .bvalid(s_bvalid), .bready(s_bready),
-    .araddr(s_araddr), .arvalid(s_arvalid), .arready(s_arready),
-    .rdata(s_rdata), .rresp(s_rresp), .rvalid(s_rvalid), .rready(s_rready)
+    .clk(clk), .rst_n(rst_n), `AXIL_BARE(s)
 );
 
 // keep the arbitrated link protocol-clean too
 wire [15:0] mon_err;
 axi_lite_monitor #(.NAME("shared"), .HAS_WRITE(1)) mon (
-    .clk(clk), .rst_n(rst_n),
-    .awaddr(s_awaddr), .awvalid(s_awvalid), .awready(s_awready),
-    .wdata(s_wdata), .wstrb(s_wstrb), .wvalid(s_wvalid), .wready(s_wready),
-    .bresp(s_bresp), .bvalid(s_bvalid), .bready(s_bready),
-    .araddr(s_araddr), .arvalid(s_arvalid), .arready(s_arready),
-    .rdata(s_rdata), .rresp(s_rresp), .rvalid(s_rvalid), .rready(s_rready),
+    .clk(clk), .rst_n(rst_n), `AXIL_BARE(s),
     .err_cnt(mon_err), .rd_cnt(), .wr_cnt()
 );
 

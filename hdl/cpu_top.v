@@ -30,6 +30,8 @@
 //     mie-enabled pending interrupt regardless of mstatus.MIE, and a WFI-ending
 //     interrupt records mepc = wfi+4 so MRET resumes past it.
 
+`include "defines.vh"
+
 module cpu_top #(
     parameter RESET_PC = 32'h0000_0000,  // reset vector; pending the global memory map
     parameter HART_ID  = 32'd0           // mhartid value; lets 2..N cores share one SoC
@@ -266,8 +268,7 @@ assign s2_pc4 = ifdx_pc_q + 32'd4;
 
 // ALU; AUIPC takes the PC as operand A
 wire [31:0] alu_result;
-wire        alu_zero;
-wire [31:0] alu_opa = (ALUOp == 4'b0100) ? ifdx_pc_q : rs1_v;
+wire [31:0] alu_opa = (ALUOp == `ALUOP_AUIPC) ? ifdx_pc_q : rs1_v;
 
 alu_top alu_top_inst (
     .operand_a     (alu_opa),
@@ -277,8 +278,7 @@ alu_top alu_top_inst (
     .ALUOp         (ALUOp),
     .funct3        (funct3),
     .funct7        (funct7),
-    .result        (alu_result),
-    .zero          (alu_zero)
+    .result        (alu_result)
 );
 
 // real direction + target of the control transfer
@@ -293,7 +293,6 @@ branch_unit branch_unit_inst (
     .funct3        (funct3),
     .Branch        (Branch),
     .Jump          (Jump),
-    .zero          (alu_zero),
     .branch_target (actual_target),
     .pc_src        (pc_src)
 );
@@ -305,7 +304,7 @@ wire [31:0] csr_rdata, trap_vector, mepc_out;
 wire        csr_illegal;
 wire        csr_ren = dec_live && csr_instr;
 // CSRRS/C with rs1=x0 (uimm=0) is a pure read, per RISC-V
-wire        csr_wen = csr_ren && (csr_op == 2'b01 || rs1 != 5'b0);
+wire        csr_wen = csr_ren && (csr_op == `CSROP_RW || rs1 != 5'b0);
 wire [31:0] csr_wdata = csr_imm ? {27'b0, rs1} : rs1_v;
 
 wire        exception;
@@ -421,7 +420,7 @@ assign bp_update_en = dec_live && (Branch | Jump) && !exception && s2_advance;
 wire rd_link  = (rd  == 5'd1) || (rd  == 5'd5);
 wire rs1_link = (rs1 == 5'd1) || (rs1 == 5'd5);
 assign ras_push = Jump && rd_link;
-assign ras_pop  = (opcode == 7'b1100111) && rs1_link && !(rd_link && rd == rs1);
+assign ras_pop  = (opcode == `OPC_JALR) && rs1_link && !(rd_link && rd == rs1);
 
 // redirect target: trap > MRET > corrected path after a mispredict
 assign redirect_pc = trap_take ? trap_vector :
@@ -497,7 +496,6 @@ writeback_mux writeback_mux_inst (
     .alu_result (dxwb_result_q),
     .mem_data   (dxwb_mem_q),
     .pc_plus4   (dxwb_pc4_q),
-    .csr_data   (dxwb_result_q),
     .MemtoReg   (dxwb_wbsel_q),
     .wb_data    (wb_data)
 );

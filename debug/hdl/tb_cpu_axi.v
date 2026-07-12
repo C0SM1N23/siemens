@@ -30,38 +30,8 @@
 // SoC base addresses in one place
 `include "soc_map.vh"
 
-// AXI4-Lite wiring macros — one ~20-signal bundle per port, so a port is
-// declared/connected in one line instead of twenty. Token-pasting (``) builds
-// the names: `p` is a wire prefix, `px` a module's port prefix (dbus_axi,
-// s_axi, m, s0, s1). AXIL_M = full port, AXIL_M_RD = read-only (AR/R), AXIL_BARE
-// = a model with bare `awaddr`-style ports (no prot).
-`define AXIL_WIRES(p) \
-  wire [31:0] p``_awaddr, p``_wdata, p``_araddr, p``_rdata; \
-  wire [2:0]  p``_awprot, p``_arprot; \
-  wire [3:0]  p``_wstrb; \
-  wire        p``_awvalid, p``_awready, p``_wvalid, p``_wready, p``_bvalid, p``_bready; \
-  wire        p``_arvalid, p``_arready, p``_rvalid, p``_rready; \
-  wire [1:0]  p``_bresp, p``_rresp
-`define AXIL_RD_WIRES(p) \
-  wire [31:0] p``_araddr, p``_rdata; \
-  wire [2:0]  p``_arprot; \
-  wire        p``_arvalid, p``_arready, p``_rvalid, p``_rready; \
-  wire [1:0]  p``_rresp
-`define AXIL_M(px, w) \
-  .px``_awaddr(w``_awaddr), .px``_awprot(w``_awprot), .px``_awvalid(w``_awvalid), .px``_awready(w``_awready), \
-  .px``_wdata(w``_wdata), .px``_wstrb(w``_wstrb), .px``_wvalid(w``_wvalid), .px``_wready(w``_wready), \
-  .px``_bresp(w``_bresp), .px``_bvalid(w``_bvalid), .px``_bready(w``_bready), \
-  .px``_araddr(w``_araddr), .px``_arprot(w``_arprot), .px``_arvalid(w``_arvalid), .px``_arready(w``_arready), \
-  .px``_rdata(w``_rdata), .px``_rresp(w``_rresp), .px``_rvalid(w``_rvalid), .px``_rready(w``_rready)
-`define AXIL_M_RD(px, w) \
-  .px``_araddr(w``_araddr), .px``_arprot(w``_arprot), .px``_arvalid(w``_arvalid), .px``_arready(w``_arready), \
-  .px``_rdata(w``_rdata), .px``_rresp(w``_rresp), .px``_rvalid(w``_rvalid), .px``_rready(w``_rready)
-`define AXIL_BARE(w) \
-  .awaddr(w``_awaddr), .awvalid(w``_awvalid), .awready(w``_awready), \
-  .wdata(w``_wdata), .wstrb(w``_wstrb), .wvalid(w``_wvalid), .wready(w``_wready), \
-  .bresp(w``_bresp), .bvalid(w``_bvalid), .bready(w``_bready), \
-  .araddr(w``_araddr), .arvalid(w``_arvalid), .arready(w``_arready), \
-  .rdata(w``_rdata), .rresp(w``_rresp), .rvalid(w``_rvalid), .rready(w``_rready)
+// AXI4-Lite wiring macros, shared with tb_dual_core
+`include "axi_lite_macros.vh"
 
 module tb_cpu_axi;
 
@@ -199,8 +169,8 @@ localparam
   W_WFI_MEPC    = 204/4, W_WFI_FALL   = 208/4, W_RAS         = 212/4,
   W_AUIPC       = 216/4, W_BRANCHES   = 220/4, W_CSRRCI      = 224/4,
   W_FWD_BOTH    = 228/4, W_MTIME_DEL  = 232/4, W_HPM3        = 236/4,
-  W_HPM5        = 260/4, W_HPM6       = 264/4, W_HPM7        = 268/4,
-  W_HPM4        = 272/4, W_MTIME_HI   = 276/4;
+  W_TRIGGER     = 248/4, W_HPM5       = 260/4, W_HPM6        = 264/4,
+  W_HPM7        = 268/4, W_HPM4       = 272/4, W_MTIME_HI    = 276/4;
 
 integer errors;
 
@@ -309,6 +279,19 @@ end
 // would — raise on an event, hold until "the handler clears the peripheral"
 time t_rbeat2, t_ack2, t_ack2_first, t_ack3;
 
+// one sweep step: the program writes the trigger slot, the TB raises the
+// channel's source (held level) and drops it on the ack — the DMA/DP-SRAM handshake
+task sweep_channel;
+    input integer ch;
+    begin
+        while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
+                 db_awaddr === (`DMEM_BASE + W_TRIGGER*4))) @(posedge clk);
+        irq_src[ch] = 1'b1;
+        while (cpu_irq_ack[ch] !== 1'b1) @(posedge clk);
+        irq_src[ch] = 1'b0;
+    end
+endtask
+
 initial begin
     irq_src      = 8'b0;
     t_rbeat2     = 0;
@@ -343,9 +326,10 @@ initial begin
     while (cpu_in_trap === 1'b1) @(posedge clk);
     irq_src[3] = 1'b0;
 
-    // irq #3: raise ch2 while the magic load (0x2100) is in flight; the take
+    // irq #3: raise ch2 while the magic load is in flight; the take
     // must wait for the response (interrupt held through the stall)
-    while (!(db_arvalid === 1'b1 && db_araddr === 32'h0000_2100)) @(posedge clk);
+    while (!(db_arvalid === 1'b1 &&
+             db_araddr === (`DMEM_BASE + W_MAGIC*4))) @(posedge clk);
     irq_src[2] = 1'b1;
     while (!(db_rvalid === 1'b1 && db_rready === 1'b1)) @(posedge clk);
     t_rbeat2 = $time;
@@ -353,31 +337,11 @@ initial begin
     t_ack2 = $time;
     irq_src[2] = 1'b0;
 
-    // channel sweep: the program writes [248] once per channel, each write
-    // raises the next source (held level until its ack) — the DMA/DP-SRAM handshake
-    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
-             db_awaddr === 32'h0000_20F8)) @(posedge clk);
-    irq_src[0] = 1'b1;
-    while (cpu_irq_ack[0] !== 1'b1) @(posedge clk);
-    irq_src[0] = 1'b0;
-
-    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
-             db_awaddr === 32'h0000_20F8)) @(posedge clk);
-    irq_src[1] = 1'b1;
-    while (cpu_irq_ack[1] !== 1'b1) @(posedge clk);
-    irq_src[1] = 1'b0;
-
-    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
-             db_awaddr === 32'h0000_20F8)) @(posedge clk);
-    irq_src[4] = 1'b1;
-    while (cpu_irq_ack[4] !== 1'b1) @(posedge clk);
-    irq_src[4] = 1'b0;
-
-    while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
-             db_awaddr === 32'h0000_20F8)) @(posedge clk);
-    irq_src[6] = 1'b1;
-    while (cpu_irq_ack[6] !== 1'b1) @(posedge clk);
-    irq_src[6] = 1'b0;
+    // channel sweep, one trigger store per channel
+    sweep_channel(0);
+    sweep_channel(1);
+    sweep_channel(4);
+    sweep_channel(6);
 end
 
 // main sequence

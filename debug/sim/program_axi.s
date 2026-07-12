@@ -534,8 +534,8 @@ wfi2_spot:
     csrrs x30, 0xB05, x0     # mhpmcounter5: dbus stall cycles
     sw   x30, 260(x14)       # [260] > 0
     csrrs x30, 0xB06, x0     # mhpmcounter6: every trap entry, incl. the
-                             # vectored ecall = 15 + 1 + 8 irq
-    sw   x30, 264(x14)       # [264] = 24
+                             # vectored ecall = 17 direct + 1 vectored + 8 irq
+    sw   x30, 264(x14)       # [264] = 26
     csrrs x30, 0xB07, x0     # mhpmcounter7: WFI sleep cycles
     sw   x30, 268(x14)       # [268] > 0
 

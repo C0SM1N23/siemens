@@ -20,6 +20,8 @@
 // Interrupts don't come through here: cpu_top evaluates them before execution
 // and delivers valid=0 for a preempted instruction.
 
+`include "defines.vh"
+
 module exception_unit (
     input             valid,          // real, non-preempted instruction in S2
     input             fetch_fault,    // AXI error on this instruction's fetch
@@ -59,19 +61,26 @@ wire st_fault    = MemWrite && mem_done && mem_err;
 
 assign mem_misaligned = ld_misal | st_misal;
 
-assign exception = valid & (fetch_fault | illegal | ebreak | ecall | instr_misal |
-                            ld_misal | st_misal | ld_fault | st_fault);
-
+// one priority chain decides both the hit and the cause, so the cause list
+// exists in exactly one place
+reg exc;
 always @(*) begin
-    if      (fetch_fault) cause = 5'd1;
-    else if (illegal)     cause = 5'd2;
-    else if (ebreak)      cause = 5'd3;
-    else if (ecall)       cause = 5'd11;
-    else if (instr_misal) cause = 5'd0;
-    else if (ld_misal)    cause = 5'd4;
-    else if (st_misal)    cause = 5'd6;
-    else if (ld_fault)    cause = 5'd5;
-    else                  cause = 5'd7;   // st_fault
+    exc = 1'b1;
+    if      (fetch_fault) cause = `CAUSE_IFAULT;
+    else if (illegal)     cause = `CAUSE_ILLEGAL;
+    else if (ebreak)      cause = `CAUSE_BREAK;
+    else if (ecall)       cause = `CAUSE_ECALL_M;
+    else if (instr_misal) cause = `CAUSE_IMISALIGN;
+    else if (ld_misal)    cause = `CAUSE_LD_MISALIGN;
+    else if (st_misal)    cause = `CAUSE_ST_MISALIGN;
+    else if (ld_fault)    cause = `CAUSE_LD_FAULT;
+    else if (st_fault)    cause = `CAUSE_ST_FAULT;
+    else begin
+        exc   = 1'b0;
+        cause = 5'd0;
+    end
 end
+
+assign exception = valid & exc;
 
 endmodule

@@ -11,4 +11,4 @@ vlog +incdir+. -f tb_cpu.f
 
 # dual-core bench is ModelSim-only (Verilator runs the single-core bench)
 vlog ../hdl/axi_lite_arb2.v
-vlog ../hdl/tb_dual_core.v
+vlog +incdir+../hdl ../hdl/tb_dual_core.v
