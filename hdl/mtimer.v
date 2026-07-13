@@ -1,29 +1,28 @@
-// Machine timer (mtimer) — CLINT-style mtime/mtimecmp.
-// REQ# = spec requirement, D# = design choice; both tracked in the README.
+// Machine timer (mtimer): CLINT-style mtime/mtimecmp.
+// REQ# = spec requirement, D# = design choice, both tracked in the README.
 //
-// No block brief includes a timer, yet the SoC can't do preemptive scheduling
-// or watch a hung DMA transfer without one — the same unassigned gap the PIC
-// filled (D19). The RISC-V machine timer is the standard answer (Priv. spec
-// 3.2.1: mtime/mtimecmp are memory-mapped, not CSRs), and its interrupt gives
-// the DMA abort (CHx_CONTROL) a system-level use: a handler that aborts a
-// stuck channel.
+// No block brief asks for a timer, but the SoC can't do preemptive scheduling or
+// watch a hung DMA transfer without one (the same unassigned gap the PIC filled,
+// D19). The RISC-V machine timer is the standard answer (Priv. spec 3.2.1:
+// mtime/mtimecmp are memory-mapped, not CSRs), and its interrupt gives the DMA
+// abort (CHx_CONTROL) a real use: a handler that aborts a stuck channel.
 //
-// D26: 64-bit free-running mtime, 64-bit mtimecmp; registered level interrupt
+// D26: 64-bit free-running mtime, 64-bit mtimecmp, registered level interrupt
 //      irq = (mtime >= mtimecmp). mtimecmp resets to all-ones, so the timer is
-//      born disarmed. There is no INT_STATUS — the compare is the status, and
-//      the handler clears the line by moving mtimecmp (the PIC's level-sensitive
-//      contract, D19). Arming is free of false fires: write CMP_LO while CMP_HI
-//      still holds all-ones, then CMP_HI. 32-bit reads of a 64-bit counter tear,
-//      so software reads HI, LO, HI and retries if HI moved (mtime is far from
-//      2^32 in this SoC's lifetime anyway). Hookup: irq -> PIC channel 7, the
-//      lowest priority (D20) — a tick must not outrank DMA/DP-SRAM service.
+//      born disarmed. No INT_STATUS: the compare is the status, and the handler
+//      clears the line by moving mtimecmp (the PIC's level-sensitive contract,
+//      D19). Arming can't false-fire: write CMP_LO while CMP_HI is still all-ones,
+//      then CMP_HI. 32-bit reads of the 64-bit counter can tear, so software
+//      reads HI, LO, HI and retries if HI moved (mtime won't get near 2^32 in
+//      this SoC's lifetime anyway). Hookup: irq -> PIC channel 7, lowest priority
+//      (D20), since a tick must not outrank DMA/DP-SRAM service.
 // D27: AXI4-Lite slave, same machinery as the PIC's port (D22): AW and W
 //      collected independently, one transaction per direction, response held
 //      until accepted. Word registers at BASE+:
 //        0x0 MTIME_LO    R/W    0x4 MTIME_HI    R/W
 //        0x8 MTIMECMP_LO R/W    0xC MTIMECMP_HI R/W
 //      Anything else answers SLVERR. Writes honor WSTRB per lane; a write to an
-//      mtime half beats the increment on that half for that cycle.
+//      mtime half beats the increment on that half that cycle.
 
 module mtimer (
     input             clk,
@@ -132,7 +131,7 @@ always @(posedge clk or negedge rst_n) begin
         irq <= (mtime_q >= mtimecmp_q);
 end
 
-// read mux — combinational; the slave registers it on the AR handshake
+// read mux: combinational, the slave registers it on the AR handshake
 reg [31:0] reg_rmux;
 always @(*) begin
     case (reg_raddr)

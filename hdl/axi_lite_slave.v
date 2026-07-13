@@ -1,16 +1,15 @@
-// Reusable AXI4-Lite slave register interface — the handshake shared by pic.v
-// and mtimer.v (and available to any register-mapped peripheral, e.g. the
-// DP-SRAM ports or the DMA config port). It owns AW/W collection, the B
-// response and the AR/R response; the peripheral only describes its registers.
+// Reusable AXI4-Lite slave register interface: the handshake shared by pic.v and
+// mtimer.v (and open to any register-mapped peripheral, e.g. the DP-SRAM ports
+// or the DMA config port). It owns AW/W collection, the B response and the AR/R
+// response; the peripheral only describes its registers.
 //
 // Contract: <=1 transaction per direction, matching the CPU's 1-outstanding
 // master. AW and W are collected independently and may arrive in either order.
 //
-// Write: on wr_en (one cycle) wr_addr/wr_data/wr_strb are valid; the peripheral
-//   updates its registers gated by (wr_en && wr_addr == OFFSET). wr_ok is a
-//   combinational function of wr_addr from the peripheral — an offset that is
-//   not writable answers SLVERR.
-// Read: rd_addr is the requested word offset (valid while ARVALID); the
+// Write: on wr_en (one cycle) wr_addr/wr_data/wr_strb are valid, and the
+//   peripheral updates its registers gated by (wr_en && wr_addr == OFFSET).
+//   wr_ok is a combinational function of wr_addr; a non-writable offset SLVERRs.
+// Read: rd_addr is the requested word offset (valid while ARVALID). The
 //   peripheral drives rd_data and rd_ok combinationally from it, and the slave
 //   registers them into RDATA/RRESP on the AR handshake.
 
@@ -77,7 +76,7 @@ always @(posedge clk or negedge rst_n) begin
     else if (wr_commit) w_got_q <= 1'b0;
 end
 
-// command payload — consumed only under the got bits above, no reset
+// command payload: consumed only under the got bits above, no reset
 always @(posedge clk)
     if (aw_hs) awoff_q <= s_axi_awaddr[7:2];
 

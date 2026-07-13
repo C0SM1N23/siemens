@@ -1,4 +1,4 @@
-// Dual-core smoke test — the "2-3 cores in a bigger SoC" scenario in miniature.
+// Dual-core smoke test: the "2-3 cores in a bigger SoC" scenario in miniature.
 //
 // Setup: two cpu_top instances (HART_ID 0 and 1) with private instruction
 // memories running the same binary, one shared data memory behind a 2:1 arbiter,
@@ -10,8 +10,8 @@
 //
 // Why this proves scalability: the core is instantiable with no shared state,
 // mhartid differentiates the software paths, and two blocking AXI4-Lite masters
-// make progress through one arbitrated slave with no deadlock or corruption —
-// each core is in-order with blocking memory ops (sequentially consistent), so
+// make progress through one arbitrated slave with no deadlock or corruption.
+// Each core is in-order with blocking memory ops (sequentially consistent), so
 // no LR/SC is needed.
 
 // AXI4-Lite wiring macros, shared with tb_cpu_axi

@@ -1,28 +1,26 @@
-// Load/store unit — drives AXI4-Lite transactions on dbus.
-// REQ# = spec requirement, D# = design choice; both tracked in the README.
+// Load/store unit: drives AXI4-Lite transactions on dbus.
+// REQ# = spec requirement, D# = design choice, both tracked in the README.
 //
-// Keeps S2 stalled for the whole round-trip, builds the WSTRB pattern for
-// SB/SH/SW, extracts the byte/half on loads with sign/zero extension, and turns
-// AXI SLVERR/DECERR into access faults.
+// Keeps S2 stalled for the whole round-trip, builds the SB/SH/SW WSTRB pattern,
+// extracts the byte/half on loads with sign/zero extension, and turns AXI
+// SLVERR/DECERR into access faults.
 //
-// REQ5:  S2 stays stalled for the whole data transaction; `busy` drops only
-//        once the response handshake is done.
+// REQ5:  S2 stays stalled for the whole data transaction; `busy` drops only once
+//        the response handshake is done.
 // REQ11: store byte enables match the DP-SRAM slave directly (no adapter).
-//        WSTRB: SB = 0001<<addr[1:0] (byte replicated across lanes, WSTRB picks
-//        the active one); SH = 0011<<addr[1:0] (addr[0]=0 for aligned halfwords,
-//        halfword replicated); SW = 1111. Loads use addr[1:0] to pick the byte/
-//        half, then sign/zero-extend by funct3.
-// REQ12: SLVERR/DECERR raise an access fault in S2 — load -> cause 5, store -> 7.
+//        WSTRB: SB = 0001<<addr[1:0] (byte replicated, WSTRB picks the live one);
+//        SH = 0011<<addr[1:0] (addr[0]=0 for aligned halfwords); SW = 1111. Loads
+//        pick the byte/half by addr[1:0], then sign/zero-extend by funct3.
+// REQ12: SLVERR/DECERR raise an access fault in S2: load -> cause 5, store -> 7.
 // D12:   one outstanding transaction; address and write data are latched at
-//        request start, because forwarded operands are only valid in the first
+//        request start, since forwarded operands are only valid in the first
 //        cycle (S3 bubbles while S2 stalls) and AXI wants a stable payload.
-//        Handshake tracking is per AXI channel, so a later move to AXI4-Full is
-//        an extension, not a rewrite.
+//        Handshakes are tracked per channel, so moving to AXI4-Full later is an
+//        extension rather than a rewrite.
 //
 // `req` is raised only for a legal, aligned, non-squashed op (misaligned traps
-// earlier, so no transaction is issued here). The command latch has no reset:
-// it is read only while a transaction is active, and every new one overwrites
-// it first.
+// earlier, so nothing issues here). The command latch has no reset: it's read
+// only while a transaction is active, and each new one overwrites it first.
 
 module lsu (
     input             clk,
@@ -174,7 +172,7 @@ always @(posedge clk or negedge rst_n) begin
         w_sent_q <= 1'b1;
 end
 
-// command latch (no reset — see header)
+// command latch (no reset, see header)
 always @(posedge clk) begin
     if (start) begin
         addr_q  <= addr;

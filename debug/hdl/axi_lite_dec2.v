@@ -1,4 +1,4 @@
-// 1-master / 2-slave AXI4-Lite address decoder — TB stand-in for the SoC
+// 1-master / 2-slave AXI4-Lite address decoder: TB stand-in for the SoC
 // interconnect (like axi_lite_arb2, but for the slave side).
 //
 // Slave 1 owns the window (addr & S1_MASK) == S1_BASE; everything else goes to
@@ -7,9 +7,9 @@
 //
 // Routing per path: while the address is on the wire (xVALID high) the select
 // comes from the address; after the handshake it is held in a register until
-// the response completes. That covers both orders the CPU can produce — W
-// before AW (route W by the live AW address), and a response after the address
-// dropped (route by the latched select). Sound for ≤1 outstanding per direction.
+// the response completes. That covers both orders the CPU can produce: W before
+// AW (route W by the live AW address), and a response after the address dropped
+// (route by the latched select). Sound for <=1 outstanding per direction.
 //
 // The address compares are qualified with VALID: the master's address is
 // undefined between transactions (payload registers carry no reset), so an
@@ -87,7 +87,7 @@ module axi_lite_dec2 #(
     input             rst_n
 );
 
-// VALID-qualified on purpose — see the X note in the header
+// VALID-qualified on purpose, see the X note in the header
 wire aw_match = m_awvalid && ((m_awaddr & S1_MASK) == (S1_BASE & S1_MASK));
 wire ar_match = m_arvalid && ((m_araddr & S1_MASK) == (S1_BASE & S1_MASK));
 
@@ -111,7 +111,7 @@ end
 wire wr_sel = m_awvalid ? aw_match : wr_sel_q;
 wire rd_sel = m_arvalid ? ar_match : rd_sel_q;
 
-// AW — routed by the live address
+// AW: routed by the live address
 assign s0_awaddr  = m_awaddr;
 assign s1_awaddr  = m_awaddr;
 assign s0_awprot  = m_awprot;
@@ -120,7 +120,7 @@ assign s0_awvalid = m_awvalid & ~aw_match;
 assign s1_awvalid = m_awvalid &  aw_match;
 assign m_awready  = aw_match ? s1_awready : s0_awready;
 
-// W — carries no address; follows the write select
+// W: no address, follows the write select
 assign s0_wdata  = m_wdata;
 assign s1_wdata  = m_wdata;
 assign s0_wstrb  = m_wstrb;
@@ -129,13 +129,13 @@ assign s0_wvalid = m_wvalid & ~wr_sel;
 assign s1_wvalid = m_wvalid &  wr_sel;
 assign m_wready  = wr_sel ? s1_wready : s0_wready;
 
-// B — response of the selected write target
+// B: response of the selected write target
 assign m_bresp   = wr_sel ? s1_bresp  : s0_bresp;
 assign m_bvalid  = wr_sel ? s1_bvalid : s0_bvalid;
 assign s0_bready = m_bready & ~wr_sel;
 assign s1_bready = m_bready &  wr_sel;
 
-// AR — routed by the live address
+// AR: routed by the live address
 assign s0_araddr  = m_araddr;
 assign s1_araddr  = m_araddr;
 assign s0_arprot  = m_arprot;
@@ -144,7 +144,7 @@ assign s0_arvalid = m_arvalid & ~ar_match;
 assign s1_arvalid = m_arvalid &  ar_match;
 assign m_arready  = ar_match ? s1_arready : s0_arready;
 
-// R — response of the selected read target
+// R: response of the selected read target
 assign m_rdata   = rd_sel ? s1_rdata  : s0_rdata;
 assign m_rresp   = rd_sel ? s1_rresp  : s0_rresp;
 assign m_rvalid  = rd_sel ? s1_rvalid : s0_rvalid;

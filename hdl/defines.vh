@@ -1,6 +1,6 @@
-// Shared encodings — one name per bit pattern, so a value produced in one
-// file and tested in another (control -> cpu_top, decode -> imm_gen) reads
-// the same everywhere. Values only; no behavior lives here.
+// Shared encodings: one name per bit pattern, so a value produced in one file and
+// tested in another (control -> cpu_top, decode -> imm_gen) reads the same
+// everywhere. Values only, no behavior lives here.
 `ifndef CPU_DEFINES_VH
 `define CPU_DEFINES_VH
 

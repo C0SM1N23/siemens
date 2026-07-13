@@ -1,5 +1,5 @@
-// Behavioral AXI4-Lite slave with internal memory — testbench only, stands in
-// for interconnect + slave in one.
+// Behavioral AXI4-Lite slave with internal memory: testbench only, stands in for
+// interconnect + slave in one.
 //
 // Address in [BASE, BASE + WORDS*4) -> OKAY (WSTRB lanes), anything else DECERR.
 //
@@ -78,7 +78,7 @@ end
 
 // read channel. With READ_LAT=0 and no backpressure this is a true latency-1
 // memory: a new AR is accepted in the same cycle the R beat drains, data one
-// cycle later — the case the CPU's back-to-back fetch claim is stated for
+// cycle later, the case the CPU's back-to-back fetch claim is stated for
 // (1 instr/cycle). Any latency/stall setting falls back to the
 // one-at-a-time path.
 reg        rd_busy;

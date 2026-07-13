@@ -1,5 +1,5 @@
-// Sync exception detect in S2 — precise traps.
-// D# = design choice; tracked in the README.
+// Sync exception detect in S2, kept precise.
+// D# = design choice, tracked in the README.
 //
 // D3: the supported mcause set, resolved at the end of S2 so the offending
 //     instruction never reaches writeback. A priority chain picks one cause
@@ -14,8 +14,8 @@
 //     (external-interrupt causes 16..23 live in csr_file, also D3.)
 // D17: load/store misalignment is checked before the access, so a misaligned op
 //      (cause 4/6) never issues an AXI transaction.
-// D18: a bus error becomes an access fault, not "illegal" — fetch to cause 1,
-//      load to 5, store to 7.
+// D18: a bus error maps to an access fault: fetch to cause 1, load to 5, store
+//      to 7.
 //
 // Interrupts don't come through here: cpu_top evaluates them before execution
 // and delivers valid=0 for a preempted instruction.

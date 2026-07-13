@@ -1,30 +1,30 @@
 // M-mode CSR file.
-// REQ# = spec requirement, D# = design choice; both tracked in the README.
+// REQ# = spec requirement, D# = design choice, both tracked in the README.
 //
-// REQ9: the 7 required CSRs at their addresses — mstatus 0x300, mie 0x304,
-//       mtvec 0x305, mscratch 0x340, mepc 0x341, mcause 0x342, mip 0x344 (mip
-//       read-only, driven by the PIC). Live fields only, the rest read 0/WPRI:
-//       mstatus MIE(3)/MPIE(7), MPP(12:11) hardwired 2'b11; mtvec BASE[31:2] +
-//       MODE[1:0]; mepc [1:0] forced to 0.
+// REQ9: the 7 required CSRs at their addresses: mstatus 0x300, mie 0x304,
+//       mtvec 0x305, mscratch 0x340, mepc 0x341, mcause 0x342, mip 0x344 (mip is
+//       read-only, driven by the PIC). Only the live fields exist, the rest read
+//       0/WPRI: mstatus MIE(3)/MPIE(7), MPP(12:11) hardwired to 2'b11; mtvec
+//       BASE[31:2] + MODE[1:0]; mepc[1:0] forced to 0.
 // D3:  the 8 PIC channels map to mie/mip bits 16..23 (external-interrupt causes
-//      16..23) — the interrupt half of the supported-cause set.
-// D5:  read-only mhartid (0xF14) from HART_ID; read-only mcycle/minstret as
+//      16..23), i.e. the interrupt half of the supported-cause set.
+// D5:  read-only mhartid (0xF14) from HART_ID, plus read-only mcycle/minstret as
 //      verification aids.
 // D25: read-only mhpmcounter3..7 at the standard addresses, wired to the events
 //      software needs to tune the SoC (pairs with the DP-SRAM BANDWIDTH_A/B and
 //      DMA throttling): 3 mispredicts, 4 fetch-starved cycles, 5 dbus stall
 //      cycles, 6 traps taken, 7 WFI sleep cycles. Higher hpm addresses stay
-//      unimplemented -> illegal (D15).
-// D15: access to an unimplemented CSR, or an effective write to a read-only one,
-//      raises illegal in S2 (not DECERR — CSRs are internal). csr_wen already
+//      unimplemented and trap illegal (D15).
+// D15: reading an unimplemented CSR, or writing a read-only one, raises illegal
+//      in S2 (illegal, not DECERR, since CSRs are internal). csr_wen already
 //      drops the "CSRRS/C with x0/uimm=0 = pure read" case, so those don't trap.
-// D16: vectored mtvec — interrupts to BASE+4*cause, exceptions to BASE; direct
-//      mode sends everything to BASE.
+// D16: vectored mtvec sends interrupts to BASE+4*cause and exceptions to BASE;
+//      direct mode sends everything to BASE.
 //
-// Trap entry / MRET are sequenced by cpu_top: trap_set commits mepc / mcause /
-// MPIE<-MIE / MIE<-0 atomically, mret does MIE<-MPIE, MPIE<-1. trap_set wins
-// over a same-cycle software write, so the trapping instruction never commits
-// its own write.
+// Trap entry and MRET are sequenced by cpu_top: trap_set commits mepc, mcause,
+// MPIE<-MIE and MIE<-0 atomically, mret does MIE<-MPIE and MPIE<-1. trap_set
+// wins over a same-cycle software write, so the trapping instruction never
+// commits its own write.
 
 `include "defines.vh"
 
@@ -48,6 +48,7 @@ module csr_file #(
     input             trap_is_irq,
     input      [4:0]  trap_code,     // cause code (0..23)
     input      [31:0] trap_pc,       // -> mepc
+    input      [31:0] trap_val,      // -> mtval (fault address, or instruction on illegal)
     input             mret,
 
     // interrupt side
@@ -68,13 +69,18 @@ module csr_file #(
 );
 
 // CSR addresses (Privileged ISA v20211203)
+localparam MISA     = 12'h301;
 localparam MSTATUS  = 12'h300;
 localparam MIE      = 12'h304;
 localparam MTVEC    = 12'h305;
 localparam MSCRATCH = 12'h340;
 localparam MEPC     = 12'h341;
 localparam MCAUSE   = 12'h342;
+localparam MTVAL    = 12'h343;
 localparam MIP      = 12'h344;
+localparam MVENDID  = 12'hF11;
+localparam MARCHID  = 12'hF12;
+localparam MIMPID   = 12'hF13;
 localparam MCYCLE   = 12'hB00;
 localparam MINSTRET = 12'hB02;
 localparam MHPMC3   = 12'hB03;   // mispredicts        (D25)
@@ -86,10 +92,11 @@ localparam MHARTID  = 12'hF14;
 
 reg        mstatus_mie_q, mstatus_mpie_q;
 reg [7:0]  mie_q;
-reg [31:0] mtvec_q, mscratch_q, mepc_q, mcause_q, mcycle_q, minstret_q;
+reg [31:0] mtvec_q, mscratch_q, mepc_q, mcause_q, mtval_q, mcycle_q, minstret_q;
 reg [31:0] mhpm3_q, mhpm4_q, mhpm5_q, mhpm6_q, mhpm7_q;
 
 wire [31:0] mstatus_rd = {19'b0, 2'b11, 3'b0, mstatus_mpie_q, 3'b0, mstatus_mie_q, 3'b0};
+wire [31:0] misa_rd    = 32'h4000_0100;   // MXL=32, extension I (RV32I)
 
 // combinational read + address check
 reg addr_ok;
@@ -98,12 +105,17 @@ always @(*) begin
     addr_ok = 1; addr_ro = 0;
     case (csr_addr)
         MSTATUS:  csr_rdata = mstatus_rd;
+        MISA:     csr_rdata = misa_rd;   // WARL, writes ignored
         MIE:      csr_rdata = {8'b0, mie_q, 16'b0};
         MTVEC:    csr_rdata = mtvec_q;
         MSCRATCH: csr_rdata = mscratch_q;
         MEPC:     csr_rdata = mepc_q;
         MCAUSE:   csr_rdata = mcause_q;
+        MTVAL:    csr_rdata = mtval_q;
         MIP:      begin csr_rdata = {8'b0, irq_lines, 16'b0}; addr_ro = 1; end
+        MVENDID:  begin csr_rdata = 32'b0; addr_ro = 1; end
+        MARCHID:  begin csr_rdata = 32'b0; addr_ro = 1; end
+        MIMPID:   begin csr_rdata = 32'b0; addr_ro = 1; end
         MCYCLE:   begin csr_rdata = mcycle_q;   addr_ro = 1; end
         MINSTRET: begin csr_rdata = minstret_q; addr_ro = 1; end
         MHPMC3:   begin csr_rdata = mhpm3_q;    addr_ro = 1; end
@@ -147,8 +159,8 @@ wire [31:0] mepc_nv    = csr_new_val(mepc_q, csr_wdata, csr_op);
 
 // committed software write. It never coincides with trap_set or mret: an
 // interrupt kills csr_wen, a CSR op's only exception is its own illegal access
-// (blocked here), and MRET is a different instruction. The trap arms below
-// still come first, so each register reads as "hardware beats software".
+// (blocked here), and MRET is a different instruction. The trap arms below are
+// still checked first anyway, so hardware always wins over a software write.
 wire csr_wr = csr_wen && !csr_illegal;
 
 wire wr_mstatus  = csr_wr && (csr_addr == MSTATUS);
@@ -157,8 +169,9 @@ wire wr_mtvec    = csr_wr && (csr_addr == MTVEC);
 wire wr_mscratch = csr_wr && (csr_addr == MSCRATCH);
 wire wr_mepc     = csr_wr && (csr_addr == MEPC);
 wire wr_mcause   = csr_wr && (csr_addr == MCAUSE);
+wire wr_mtval    = csr_wr && (csr_addr == MTVAL);
 
-// mstatus.MIE/MPIE — the pair swaps on trap entry and swaps back on MRET
+// mstatus.MIE/MPIE: the pair swaps on trap entry and swaps back on MRET
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
         mstatus_mie_q  <= 1'b0;      // interrupts off at boot
@@ -175,7 +188,7 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-// mepc — trap entry records the return address, bits [1:0] always 0
+// mepc: trap entry records the return address, bits [1:0] always 0
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         mepc_q <= 32'b0;
@@ -185,7 +198,7 @@ always @(posedge clk or negedge rst_n) begin
         mepc_q <= {mepc_nv[31:2], 2'b00};
 end
 
-// mcause — interrupt flag in bit 31, code in the low bits
+// mcause: interrupt flag in bit 31, code in the low bits
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         mcause_q <= 32'b0;
@@ -193,6 +206,16 @@ always @(posedge clk or negedge rst_n) begin
         mcause_q <= {trap_is_irq, 26'b0, trap_code};
     else if (wr_mcause)
         mcause_q <= csr_new_val(mcause_q, csr_wdata, csr_op);
+end
+
+// mtval: trap entry records the fault address (or the instruction on illegal)
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mtval_q <= 32'b0;
+    else if (trap_set)
+        mtval_q <= trap_val;
+    else if (wr_mtval)
+        mtval_q <= csr_new_val(mtval_q, csr_wdata, csr_op);
 end
 
 // software-only CSRs
@@ -233,8 +256,8 @@ always @(posedge clk or negedge rst_n) begin
         minstret_q <= minstret_q + 1;
 end
 
-// hardware performance counters (D25) — one per event, same shape as
-// mcycle/minstret: free-running, read-only, reset to 0
+// hardware performance counters (D25): one per event, same shape as
+// mcycle/minstret (free-running, read-only, reset to 0)
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
         mhpm3_q <= 32'b0;

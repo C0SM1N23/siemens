@@ -1,4 +1,4 @@
-// AXI4-Lite wiring macros — one ~20-signal bundle per port, so a port is
+// AXI4-Lite wiring macros: one ~20-signal bundle per port, so a port is
 // declared/connected in one line instead of twenty. Token-pasting (``) builds
 // the names: `p` is a wire prefix, `px` a module's port prefix (dbus_axi,
 // s_axi, m, s0, s1). AXIL_M = full port, AXIL_M_RD = read-only (AR/R),

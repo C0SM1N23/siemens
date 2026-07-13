@@ -1,23 +1,19 @@
-// Hazard & control unit — the single owner of stall/flush.
-// REQ# = spec requirement, D# = design choice; both tracked in the README.
+// Hazard & control unit: the single owner of stall/flush.
+// REQ# = spec requirement, D# = design choice, both tracked in the README.
 //
-// Tells each stage to advance, bubble or squash (stages never manage their own
-// stalls) and detects when S3's result must forward into S2.
+// Tells each stage to advance, bubble or squash, and works out S3->S2 forwarding.
 //
-// REQ6: dedicated centralized hazard/stall/flush unit. Stall sources: fetch AXI
-//       not done -> S2 bubble, PC held in S1; data AXI not done -> lsu_busy
-//       freezes S2 and S1 with it.
-// D13: load-use is solved by S3->S2 forwarding, not a stall — a load feeding
-//      the next instruction costs zero extra cycles.
+// REQ6: centralized hazard/stall/flush unit. Stalls: fetch AXI not done -> S2
+//       bubble, PC held in S1; data AXI not done -> lsu_busy freezes S2 and S1.
+// D13: load-use uses S3->S2 forwarding instead of a stall, so zero extra cycles.
 // D14: flush beats stall. Every flush (mispredict/trap/MRET) is gated by
-//      s2_advance, which encodes both priority rules: an older flush overrides a
-//      younger stall, and a multi-cycle S2 stall finishes before S2 emits a
-//      flush that depends on the op's result (e.g. an access fault known only
-//      once the AXI response lands).
-// D23: WFI sleeps here as a third stall source — wfi_wait freezes S2 like
-//      lsu_busy, and S1 with it (the parked fetch stops all ibus traffic).
-//      cpu_top drops wfi_wait on wake, so no extra rule is needed: an interrupt
-//      wake becomes a normal trap_take, a masked wake just commits.
+//      s2_advance, which folds in both rules: an older flush overrides a younger
+//      stall, and a multi-cycle stall finishes before S2 emits a flush that
+//      depends on the op's result (e.g. an access fault known only once the AXI
+//      response lands).
+// D23: WFI is a third stall source: wfi_wait freezes S2 (and S1) like lsu_busy,
+//      so the parked fetch stops ibus traffic. cpu_top drops wfi_wait on wake,
+//      so an interrupt wake is just a normal trap_take, a masked wake commits.
 
 module hazard_unit (
     // pipeline state

@@ -1,15 +1,15 @@
 // RV32I control decoder.
-// REQ# = spec requirement, D# = design choice; both tracked in the README.
+// REQ# = spec requirement, D# = design choice, both tracked in the README.
 //
 // REQ7: control signals for every RV32I group.
 //   - FENCE = NOP (single hart, in-order, nothing to fence)
 //   - ECALL/EBREAK/CSR handled downstream (trap or CSR)
-//   - SYSTEM decoded strictly: ECALL/EBREAK/MRET/WFI + CSR* (incl. immediate
-//     forms); anything else is illegal
-// D23: WFI decode only (Priv. spec 3.3.3); sleep/wake lives in cpu_top +
-//   hazard_unit, so a committed WFI leaves every line inactive (a NOP).
+//   - SYSTEM is decoded strictly: ECALL/EBREAK/MRET/WFI and CSR* (including the
+//     immediate forms), anything else is illegal
+// D23: we only decode WFI here (Priv. spec 3.3.3); the sleep/wake logic lives in
+//   cpu_top + hazard_unit, so a committed WFI leaves every line inactive (a NOP).
 //
-// Illegal detection feeds D3: an unknown opcode or bad funct field sets
+// Illegal detection feeds D3: an unknown opcode or a bad funct field sets
 // illegal=1 and clears every other line, so an illegal op has no side effects
 // and just traps in S2.
 

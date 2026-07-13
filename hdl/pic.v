@@ -1,11 +1,10 @@
 // Programmable interrupt controller (PIC).
-// REQ# = spec requirement, D# = design choice; both tracked in the README.
+// REQ# = spec requirement, D# = design choice, both tracked in the README.
 //
 // Every peripheral brief routes its irq line "to the system interrupt
-// controller" (DMA irq[3:0], DP-SRAM irq) and the CPU brief fixes a complete
-// interface to it, but no brief specifies the PIC or assigns building it. This
-// module fills that gap: the CPU-side handshake is fixed by REQ4, everything
-// internal is a design choice.
+// controller" (DMA irq[3:0], DP-SRAM irq), and the CPU brief fixes the interface
+// to it, but no brief specifies the PIC itself. This module fills that gap: the
+// CPU-side handshake is fixed by REQ4, everything internal is a design choice.
 //
 // D19: level-sensitive aggregator, no latching. A source holds its line until
 //      its own INT_STATUS is cleared (how the DMA/DP-SRAM outputs behave), so
@@ -146,7 +145,7 @@ always @(posedge clk or negedge rst_n) begin
         enable_q <= reg_wdata[7:0];
 end
 
-// read mux — combinational; the slave registers it on the AR handshake
+// read mux: combinational, the slave registers it on the AR handshake
 reg [31:0] reg_rmux;
 always @(*) begin
     case (reg_raddr)

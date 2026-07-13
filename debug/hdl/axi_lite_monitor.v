@@ -1,4 +1,4 @@
-// Passive AXI4-Lite protocol monitor — testbench only.
+// Passive AXI4-Lite protocol monitor, testbench only.
 //
 // One instance watches one bus and flags violations as they happen, so protocol
 // legality is a checked property of every run, not trusted by inspection.

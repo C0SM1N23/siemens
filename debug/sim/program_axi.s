@@ -96,6 +96,8 @@ back:
     sh   x0, 1(x14)          # cause 6  -> x29 |= 64  (no AXI op issued)
     lui  x28, 8              # x28 = 0x8000, unmapped
     lw   x28, 0(x28)         # cause 5  -> x29 |= 8   (DECERR on read)
+    csrrs x30, 0x343, x0     # mtval = 0x8000, the faulting load address
+    sw   x30, 244(x14)       # [244] = 0x00008000
     lui  x28, 8              # reload: the handler trashes x28
     sw   x0, 0(x28)          # cause 7  -> x29 |= 16  (DECERR on write)
 
@@ -476,6 +478,16 @@ cv_done:
     addi x28, x0, 21
     add  x30, x28, x28       # rs1 and rs2 both forwarded from S3
     sw   x30, 228(x14)       # [228] = 42
+
+    # newly-exposed CSRs must read (0 is valid), never trap (D15)
+    csrrs x30, 0x301, x0     # misa
+    sw   x30, 252(x14)       # [252] = 0x40000100 (MXL=32, ext I)
+    csrrs x30, 0xF11, x0     # mvendorid
+    csrrs x28, 0xF12, x0     # marchid
+    or   x30, x30, x28
+    csrrs x28, 0xF13, x0     # mimpid
+    or   x30, x30, x28
+    sw   x30, 280(x14)       # [280] = 0 (all three read-only zero)
 
 # ---- WFI + mtimer (D23/D26): arm the timer ~250 cycles out, sleep, and
 # let the irq wake us. CMP_LO is written while CMP_HI still holds all-ones

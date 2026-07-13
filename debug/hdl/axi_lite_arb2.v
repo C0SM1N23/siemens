@@ -1,4 +1,4 @@
-// 2-master -> 1-slave AXI4-Lite arbiter — testbench model only.
+// 2-master -> 1-slave AXI4-Lite arbiter, testbench model only.
 //
 // Stands in for the SoC interconnect so the dual-core TB can share one memory
 // between two CPUs.
