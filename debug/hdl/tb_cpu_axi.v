@@ -59,7 +59,7 @@ wire        cpu_in_trap;
 reg  [7:0]  irq_src;        // peripheral lines into the PIC (DMA/SRAM stand-in)
 wire        tmr_irq;
 
-cpu_top uut (
+cpu_top #(.RESET_PC(`IMEM_BASE)) uut (
     .clk              (clk),
     .rst_n            (rst_n),
     `AXIL_M_RD(ibus_axi, ib),

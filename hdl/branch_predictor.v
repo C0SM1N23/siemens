@@ -27,7 +27,8 @@
 // small.
 
 module branch_predictor #(
-    parameter RAS_DEPTH = 8     // return-address stack entries; 0 disables (D24)
+    parameter RAS_DEPTH = 8,    // return-address stack entries; 0 disables (D24)
+    parameter ENTRIES   = 128   // BTB/BHT entries, power of 2 (index = PC[IDX_W+1:2])
 )(
     input             clk,
     input             rst_n,
@@ -50,14 +51,17 @@ module branch_predictor #(
     input      [31:0] update_link     // pc+4 of the committing call
 );
 
-reg [127:0] valid;              // packed: resets in one assignment
-reg [127:0] isret;              // entry predicts via the RAS (D24)
-reg  [22:0] tag    [0:127];
-reg         state  [0:127];
-reg  [31:0] target [0:127];
+localparam IDX_W = $clog2(ENTRIES);   // index bits: PC[IDX_W+1:2]
+localparam TAG_W = 32 - IDX_W - 2;    // the remaining high PC bits are the tag
 
-wire [6:0] r_idx = lookup_pc[8:2];
-wire       hit   = valid[r_idx] && (tag[r_idx] == lookup_pc[31:9]);
+reg [ENTRIES-1:0] valid;              // packed: resets in one assignment
+reg [ENTRIES-1:0] isret;              // entry predicts via the RAS (D24)
+reg  [TAG_W-1:0]  tag    [0:ENTRIES-1];
+reg               state  [0:ENTRIES-1];
+reg  [31:0]       target [0:ENTRIES-1];
+
+wire [IDX_W-1:0] r_idx = lookup_pc[IDX_W+1:2];
+wire             hit   = valid[r_idx] && (tag[r_idx] == lookup_pc[31:IDX_W+2]);
 
 // RAS top + non-empty flag, tied off when the stack is disabled
 wire [31:0] ras_top;
@@ -68,12 +72,12 @@ wire        ras_ok;
 assign pred_taken  = hit && state[r_idx];
 assign pred_target = (isret[r_idx] && ras_ok) ? ras_top : target[r_idx];
 
-wire [6:0] w_idx = update_pc[8:2];
+wire [IDX_W-1:0] w_idx = update_pc[IDX_W+1:2];
 
 // valid bits: the only resettable state
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        valid <= 128'b0;
+        valid <= {ENTRIES{1'b0}};
     else if (update_en)
         valid[w_idx] <= 1'b1;
 end
@@ -81,7 +85,7 @@ end
 // entry payload, written together with the valid bit (no reset, see header)
 always @(posedge clk) begin
     if (update_en) begin
-        tag   [w_idx] <= update_pc[31:9];
+        tag   [w_idx] <= update_pc[31:IDX_W+2];
         state [w_idx] <= update_taken;
         target[w_idx] <= update_target;
         isret [w_idx] <= update_is_ret;

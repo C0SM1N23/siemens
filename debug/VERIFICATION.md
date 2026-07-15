@@ -34,19 +34,81 @@ edition) — so the methodology leans on five pillars:
 
 ## How to run
 
+All commands run from `debug/sim` (the .do scripts, filelists and hex live
+there). ModelSim is the primary flow; Verilator adds the SVA + coverage layer.
+Run only one `vsim` at a time — they share `work/` and a second one blocks on
+`work/_lock`; if a run was killed, clear a stale lock with `rm work/_lock`.
+
+**Prep — only after editing a `.s` program** (Windows shell: PowerShell / cmd /
+git-bash). Regenerates the hex image and the `*_sym.vh` label table the checks
+resolve against:
+
 ```
-cd debug/sim
-py asm.py program_axi.s  program_axi.hex    # only after editing a program
+py asm.py program_axi.s  program_axi.hex
 py asm.py program_dual.s program_dual.hex
-vsim -c -do "do regress.do; quit -f"        # full 5-config regression
-vsim -c -do "do sim.do; quit -f"            # quick single run
-
-bash run_verilator.sh                       # SVA + functional coverage (Linux/WSL)
-.\run_verilator.ps1                         # same, one command from Windows
 ```
 
-Pass criterion: every run ends in `ALL TESTS PASSED` / `DUAL-CORE TEST
-PASSED`, zero `FAIL:` lines, monitor error counters zero.
+### A. Batch, one command, no GUI (Windows shell)
+
+```
+vsim -c -do "do sim.do;     quit -f"     # quick single run (tb_cpu_axi)
+vsim -c -do "do regress.do; quit -f"     # full 5-config regression + dual-core
+```
+
+`-c` is console mode. Each ends in `ALL TESTS PASSED` / `DUAL-CORE TEST PASSED`,
+zero `FAIL:`, monitor error counters 0. The regression echoes every config's
+parameters read back from the elaborated design, so a silently-ignored override
+can't hide behind a green run.
+
+### B. Interactive GUI with the AXI waveform (what to type, and where)
+
+1. In a Windows shell, from `debug/sim`, launch the GUI: `vsim`
+2. Everything below goes in ModelSim's **Transcript** pane (the command line at
+   the bottom of the GUI):
+
+   ```
+   do compile.do                          ;# compile RTL + TB into work/
+   vsim -voptargs=+acc work.tb_cpu_axi    ;# elaborate (+acc keeps signals visible)
+   do wave.do                             ;# add the AXI-grouped waves
+   run -all                               ;# run to $finish
+   ```
+3. The Wave window now shows every AXI link. Press `f` in the Wave pane (zoom
+   full) to see the whole run. To rerun after editing RTL: `do compile.do` again,
+   or `restart -f` then `run -all` for the same build.
+
+**What `wave.do` shows — AXI at both ends.** Signals are grouped so each link
+shows the master side (what the CPU drives OUT) and the slave side (what
+memory/peripheral answers), split by channel with the VALID/READY pair right
+next to the payload:
+
+- **IBUS  CPU-M <-> imem** — AR (the address the fetch unit requests) and R (the
+  instruction word + RRESP the memory returns). One link, both ends on `ib_*`.
+- **DBUS @ CPU master** (`db_*`) — the load/store master before the decoder:
+  AW/W/B (write address, data+WSTRB, response) and AR/R (read address,
+  data+RRESP).
+- **DBUS -> dmem (slave)** (`d0_*`) — the same five channels as the memory sees
+  them after the address decoder (the default dbus leg).
+- **DBUS -> PIC (slave)** (`pp_*`) and **DBUS -> mtimer (slave)** (`t_*`) — the
+  peripheral register accesses (PIC ENABLE/PENDING/RAW/ACTIVE, mtimer
+  MTIME/MTIMECMP), each on its own decoded port.
+- **IRQ / TRAP** — `irq_src`, `tmr_irq`, `cpu_irq`, `cpu_irq_id`, `cpu_irq_ack`,
+  `cpu_in_trap`, to line an interrupt up against the bus traffic around it.
+
+Reading a beat: data transfers on the cycle where both VALID and READY are high;
+the address/data must stay stable while VALID waits for READY (the core AXI rule
+the monitors and SVA also enforce).
+
+### C. SVA + functional coverage (Verilator, in WSL)
+
+```
+bash run_verilator.sh          # from Linux/WSL
+.\run_verilator.ps1            # same, one command from Windows (spawns WSL)
+```
+
+Ends in `ALL TESTS PASSED`, a `[FCOV]` table, and `COVERAGE GATE PASSED`.
+
+**Pass criterion (all flows):** every run ends green, zero `FAIL:` lines, zero
+assertion violations, monitor error counters 0.
 
 ## Test plan
 
@@ -65,6 +127,7 @@ tags as the README index and the code.
 | D17 | Misaligned access issues **no** AXI transaction | must trap before issuing any transaction | LH/SH @odd trap cause 4/6; dmem[0] untouched; monitors see no extra transaction |
 | D8,D18 | SLVERR/DECERR on fetch/load/store -> mcause 1/5/7 | bus errors must be precise traps | jumps/accesses into unmapped space; cause-1 handler resumes via mscratch (its intended purpose) |
 | REQ9,D15 | CSRRW/S/C + immediate forms; read-only CSR write and unimplemented CSR -> illegal; CSRRS x0 = pure read | CSR access rules, incl. negatives | mscratch round-trip 21/31; csrrs 0x7C0, csrrw mip/mhartid all trap; csrrs mip with x0 does *not* trap |
+| Priv | `mtval` records the fault address (load/store access fault) / the instruction on illegal; `misa`/`mvendorid`/`marchid`/`mimpid` are readable (0 is valid), not illegal | strict M-mode compliance: these CSRs must exist and read back, and a fault must leave its address in mtval | mtval readback after a DECERR load = 0x8000; misa = 0x40000100 (RV32I); the three id CSRs read 0; none of the reads trap (sync trap count stays exactly 17) |
 | D16 | Vectored mtvec: irq -> BASE+4*cause, exception -> BASE | the two vectored paths differ | irq lands at 0x348 slot (cause 18); ecall in vectored mode records at BASE |
 | REQ4 | irq sampled only under MIE, only enabled channels, held through AXI stalls, taken at instruction boundaries | the CPU side of the PIC contract | src5 pending whole run, never acked; ch2 raised mid-load: ack timestamp > R-beat timestamp, mepc = boundary instruction, load value intact |
 | REQ4 | ack = 1-cycle pulse on the right bit; cpu_in_trap spans entry..MRET | PIC handshake shape | pulse-width invariant, ack counts ch2=2 / ch3=1, in_trap sampled in handler and after |
@@ -114,8 +177,8 @@ them:
   acks, bus response/backpressure bins. Prints the `[FCOV]` table with a
   hit/MISS verdict per bin and a summary percentage at end of run.
 
-Current evidence: **all 87 TB checks pass under Verilator, zero assertion
-violations, 88/92 functional bins hit (95%)**. The first measurement of this
+Current evidence: **all 90 TB checks pass (ModelSim and Verilator), zero
+assertion violations, 88/92 functional bins hit (95%)**. The first measurement of this
 table (59/85) exposed real test-plan holes — AUIPC never committed,
 BLT/BGE/BLTU/BGEU and CSRRCI never executed, both-operand forwarding never
 hit, PIC channels 0/1/4/6/7 never taken — and `program_axi.s` now covers all
