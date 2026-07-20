@@ -64,11 +64,8 @@ axi_lite_mem_model #(
     .READ_LAT(0)
 ) imem0 (
     .clk(clk), .rst_n(rst_n),
-    .awaddr(32'b0), .awvalid(1'b0), .awready(),
-    .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(),
-    .bresp(), .bvalid(), .bready(1'b0),
-    .araddr(ib0_araddr), .arvalid(ib0_arvalid), .arready(ib0_arready),
-    .rdata(ib0_rdata), .rresp(ib0_rresp), .rvalid(ib0_rvalid), .rready(ib0_rready)
+    `AXIL_BARE_WR_TIEOFF,
+    `AXIL_BARE_RD(ib0)
 );
 
 axi_lite_mem_model #(
@@ -76,11 +73,8 @@ axi_lite_mem_model #(
     .READ_LAT(0)
 ) imem1 (
     .clk(clk), .rst_n(rst_n),
-    .awaddr(32'b0), .awvalid(1'b0), .awready(),
-    .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(),
-    .bresp(), .bvalid(), .bready(1'b0),
-    .araddr(ib1_araddr), .arvalid(ib1_arvalid), .arready(ib1_arready),
-    .rdata(ib1_rdata), .rresp(ib1_rresp), .rvalid(ib1_rvalid), .rready(ib1_rready)
+    `AXIL_BARE_WR_TIEOFF,
+    `AXIL_BARE_RD(ib1)
 );
 
 // both data buses share one memory through the arbiter
@@ -106,21 +100,7 @@ axi_lite_monitor #(.NAME("shared"), .HAS_WRITE(1)) mon (
 );
 
 integer errors;
-
-task check;
-    input [31:0] expected;
-    input [31:0] got;
-    input [255:0] test_name;
-    begin
-        if (expected === got)
-            $display("PASS: %0s = 0x%08h", test_name, got);
-        else begin
-            $display("FAIL: %0s -> expected 0x%08h, got 0x%08h",
-                     test_name, expected, got);
-            errors = errors + 1;
-        end
-    end
-endtask
+`include "tb_check.vh"
 
 integer i, tmo;
 

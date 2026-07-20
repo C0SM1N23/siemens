@@ -43,9 +43,11 @@ Interfaces (REQ2, REQ3):
 | `cpu_irq_ack[7:0]` | out | 1-cycle pulse on the accepted channel |
 | `cpu_in_trap` | out | high from trap entry until MRET |
 
-Parameters: `RESET_PC` (boot address) and `HART_ID` (drives `mhartid`, D5).
-The port list hasn't changed since the first pipeline version; all later
-features (WFI, RAS, counters) internal, PIC/mtimer separate blocks.
+Parameters: `RESET_PC` (boot address), `HART_ID` (drives `mhartid`, D5), and
+`BP_ENTRIES` / `RAS_DEPTH`, forwarded to the branch predictor (D9/D24) so a
+SoC can size it without editing the module. The port list hasn't changed since
+the first pipeline version; all later features (WFI, RAS, counters) internal,
+PIC/mtimer separate blocks.
 
 The repo also carries two blocks not part of the CPU but that the system needs
 and no block owns: the interrupt controller `pic.v` (section 7) and the machine

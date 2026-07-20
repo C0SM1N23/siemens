@@ -29,6 +29,10 @@ module exception_unit (
     input             ecall,
     input             ebreak,
 
+    // mtval sources (picked by the same chain that picks the cause)
+    input      [31:0] pc,             // S2 instruction address
+    input      [31:0] instr,          // raw S2 instruction word
+
     // resolved control transfer (branch/jump)
     input             ctl_taken,      // real direction = taken
     input      [31:0] ctl_target,     // real target
@@ -44,6 +48,7 @@ module exception_unit (
 
     output            exception,
     output reg [4:0]  cause,
+    output reg [31:0] tval,           // mtval payload for the picked cause
     output            mem_misaligned  // blocks the AXI issue (D17)
 );
 
@@ -61,23 +66,26 @@ wire st_fault    = MemWrite && mem_done && mem_err;
 
 assign mem_misaligned = ld_misal | st_misal;
 
-// one priority chain decides both the hit and the cause, so the cause list
-// exists in exactly one place
+// one priority chain decides the hit, the cause and the mtval payload, so the
+// cause list exists in exactly one place. mtval: the PC for fetch faults /
+// breakpoint, the instruction on illegal, the target/address on misalign and
+// access faults, 0 for ecall
 reg exc;
 always @(*) begin
     exc = 1'b1;
-    if      (fetch_fault) cause = `CAUSE_IFAULT;
-    else if (illegal)     cause = `CAUSE_ILLEGAL;
-    else if (ebreak)      cause = `CAUSE_BREAK;
-    else if (ecall)       cause = `CAUSE_ECALL_M;
-    else if (instr_misal) cause = `CAUSE_IMISALIGN;
-    else if (ld_misal)    cause = `CAUSE_LD_MISALIGN;
-    else if (st_misal)    cause = `CAUSE_ST_MISALIGN;
-    else if (ld_fault)    cause = `CAUSE_LD_FAULT;
-    else if (st_fault)    cause = `CAUSE_ST_FAULT;
+    if      (fetch_fault) begin cause = `CAUSE_IFAULT;      tval = pc;         end
+    else if (illegal)     begin cause = `CAUSE_ILLEGAL;     tval = instr;      end
+    else if (ebreak)      begin cause = `CAUSE_BREAK;       tval = pc;         end
+    else if (ecall)       begin cause = `CAUSE_ECALL_M;     tval = 32'b0;      end
+    else if (instr_misal) begin cause = `CAUSE_IMISALIGN;   tval = ctl_target; end
+    else if (ld_misal)    begin cause = `CAUSE_LD_MISALIGN; tval = mem_addr;   end
+    else if (st_misal)    begin cause = `CAUSE_ST_MISALIGN; tval = mem_addr;   end
+    else if (ld_fault)    begin cause = `CAUSE_LD_FAULT;    tval = mem_addr;   end
+    else if (st_fault)    begin cause = `CAUSE_ST_FAULT;    tval = mem_addr;   end
     else begin
         exc   = 1'b0;
         cause = 5'd0;
+        tval  = 32'b0;
     end
 end
 

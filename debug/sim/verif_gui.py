@@ -24,6 +24,7 @@ import os
 import re
 import sys
 import time
+import glob
 import queue
 import shutil
 import threading
@@ -36,7 +37,18 @@ from datetime import datetime
 SIM_DIR = Path(__file__).resolve().parent
 IS_WIN = os.name == "nt"
 
-VSIM_FALLBACK = r"D:\Facultate\modelsim_ase\win32aloem\vsim.exe"
+# vsim resolution order: PATH, then this env var (set it on your own machine
+# instead of editing the script), then a best-effort guess at the usual
+# ModelSim/Questa - Intel FPGA (Starter) Edition install roots. None of this
+# is machine-specific, so the script works unedited on any teammate's PC.
+VSIM_ENV_VAR = "VSIM_EXE"
+VSIM_GLOBS = [
+    r"C:\intelFPGA*\*\modelsim_ase\win32aloem\vsim.exe",
+    r"C:\intelFPGA_lite\*\modelsim_ase\win32aloem\vsim.exe",
+    r"C:\altera*\*\modelsim_ase\win32aloem\vsim.exe",
+    r"D:\intelFPGA*\*\modelsim_ase\win32aloem\vsim.exe",
+    r"D:\altera*\*\modelsim_ase\win32aloem\vsim.exe",
+]
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 # TB defaults — only values CHANGED from these are emitted as -G overrides
@@ -159,7 +171,14 @@ straturi pe care ModelSim ASE nu le poate compila:
    de configuratiile din regresie). Regresia are gate: sub prag = FAIL.
 
 Verdict: exit code 0 + "COVERAGE GATE PASSED" (aici exit code-ul e fiabil,
-scriptul are set -e)."""),
+scriptul are set -e). Daca simularea nici n-a pornit (build intrerupt cu
+Stop, WSL cazut, compilare g++ omorata), verdictul e MEDIU (portocaliu),
+nu FAIL — zero linii PASS:/FAIL: inseamna ca nu s-a testat nimic.
+
+Nota: prima rulare dupa un Assemble care chiar schimba programul
+recompileaza tot modelul Verilator (cateva minute in WSL). asm.py nu mai
+atinge *_sym.vh cand continutul e neschimbat, deci un RUN ALL fara
+modificari de .s pastreaza build-ul incremental."""),
 
     ("Assemble", """\
 Ce face: asambleaza programele de test din sursa in imaginile pe care le
@@ -222,8 +241,13 @@ def find_vsim():
     p = shutil.which("vsim")
     if p:
         return p
-    if Path(VSIM_FALLBACK).exists():
-        return VSIM_FALLBACK
+    env = os.environ.get(VSIM_ENV_VAR)
+    if env and Path(env).is_file():
+        return env
+    for pattern in VSIM_GLOBS:
+        hits = sorted(glob.glob(pattern))
+        if hits:
+            return hits[-1]     # highest version string sorts last
     return None
 
 
@@ -307,6 +331,13 @@ def verdict_verilator(lines, rc):
         return "PASS", "SVA curat" + fcov
     if rc != 0 and "%Error" in txt:
         return "FAIL", "asertiune picata / test FAIL" + fcov
+    # exit != 0 without a single PASS:/FAIL: line means the simulation never
+    # started (build intrerupt, WSL cazut, Stop in timpul compilarii g++) —
+    # asta e mediu, nu un test picat
+    sim_ran = any(l.startswith(("PASS:", "FAIL:")) for l in lines)
+    if rc != 0 and not sim_ran:
+        return "INFRA", "build intrerupt — simularea n-a pornit " \
+                        "(exit != 0, zero linii de sim)"
     return ("FAIL", "gate/teste picate" + fcov) if rc else \
            ("FAIL", "banner lipsa" + fcov)
 
@@ -594,8 +625,11 @@ class App(tk.Tk):
         if not self.vsim:
             for k in ("msgui", "regress", "dual"):
                 self.buttons[k].config(state="disabled")
-            self._log_line("[gui] vsim negasit (nici in PATH, nici la "
-                           f"{VSIM_FALLBACK}) — butoanele ModelSim sunt oprite")
+            self._log_line("[gui] vsim negasit (nici in PATH, nici in "
+                           f"${VSIM_ENV_VAR}, nici in locatiile uzuale de "
+                           "instalare) — seteaza variabila de mediu "
+                           f"{VSIM_ENV_VAR}=<cale catre vsim.exe> sau adauga "
+                           "vsim in PATH — butoanele ModelSim sunt oprite")
         if not self.wsl:
             self.buttons["vlt"].config(state="disabled")
             self._log_line("[gui] wsl negasit — butonul Verilator e oprit")

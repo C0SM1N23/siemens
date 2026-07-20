@@ -3,8 +3,9 @@
 // the names: `p` is a wire prefix, `px` a module's port prefix (dbus_axi,
 // s_axi, m, s0, s1). AXIL_M = full port, AXIL_M_RD = read-only (AR/R),
 // AXIL_BARE = a model with bare `awaddr`-style ports (no prot), AXIL_NP =
-// prefixed ports without prot (the arb2 m0/m1/s side). Shared by both
-// testbenches; the RTL never sees these.
+// prefixed ports without prot (the arb2 m0/m1/s side), AXIL_BARE_RD +
+// AXIL_BARE_WR_TIEOFF = a mem model used read-only (the imem hookup). Shared
+// by both testbenches; the RTL never sees these.
 `ifndef AXI_LITE_MACROS_VH
 `define AXI_LITE_MACROS_VH
 
@@ -39,6 +40,17 @@
   .bresp(w``_bresp), .bvalid(w``_bvalid), .bready(w``_bready), \
   .araddr(w``_araddr), .arvalid(w``_arvalid), .arready(w``_arready), \
   .rdata(w``_rdata), .rresp(w``_rresp), .rvalid(w``_rvalid), .rready(w``_rready)
+
+// mem model as a read-only slave: AR/R to the bare-port wires, write side
+// tied off (outputs left open, inputs quiet)
+`define AXIL_BARE_RD(w) \
+  .araddr(w``_araddr), .arvalid(w``_arvalid), .arready(w``_arready), \
+  .rdata(w``_rdata), .rresp(w``_rresp), .rvalid(w``_rvalid), .rready(w``_rready)
+
+`define AXIL_BARE_WR_TIEOFF \
+  .awaddr(32'b0), .awvalid(1'b0), .awready(), \
+  .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(), \
+  .bresp(), .bvalid(), .bready(1'b0)
 
 `define AXIL_NP(px, w) \
   .px``_awaddr(w``_awaddr), .px``_awvalid(w``_awvalid), .px``_awready(w``_awready), \

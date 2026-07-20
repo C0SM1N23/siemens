@@ -76,11 +76,8 @@ axi_lite_mem_model #(
     .READ_LAT(0), .SEED(11)
 ) imem_inst (
     .clk(clk), .rst_n(rst_n),
-    .awaddr(32'b0), .awvalid(1'b0), .awready(),
-    .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(),
-    .bresp(), .bvalid(), .bready(1'b0),
-    .araddr(ib_araddr), .arvalid(ib_arvalid), .arready(ib_arready),
-    .rdata(ib_rdata), .rresp(ib_rresp), .rvalid(ib_rvalid), .rready(ib_rready)
+    `AXIL_BARE_WR_TIEOFF,
+    `AXIL_BARE_RD(ib)
 );
 
 // dbus interconnect: peripheral window (PIC + mtimer), dmem is the default
@@ -174,60 +171,33 @@ localparam
   W_MTVAL       = 244/4, W_MISA       = 252/4, W_MID         = 280/4;
 
 integer errors;
-
-task check;
-    input [31:0] expected;
-    input [31:0] got;
-    input [255:0] test_name;
-    begin
-        if (expected === got)
-            $display("PASS: %0s = 0x%08h", test_name, got);
-        else begin
-            $display("FAIL: %0s -> expected 0x%08h, got 0x%08h",
-                     test_name, expected, got);
-            errors = errors + 1;
-        end
-    end
-endtask
+`include "tb_check.vh"
 
 // cycle-by-cycle invariants
-reg        ack5_seen;      // masked channel must never be acknowledged
 reg        ack_double;     // ack is a 1-cycle pulse
 reg        ack_in_stall;   // never accept an irq mid data transaction
 reg [7:0]  ack_prev;
-integer    ack2_count, ack3_count;
-integer    ack0_count, ack1_count, ack4_count, ack6_count, ack7_count;
+integer    ack_cnt [0:7];  // ack pulses per channel (ch5 must stay at 0)
+integer    ch;
 reg        id_bad;         // cpu_irq_id must be the lowest pending channel
 reg        suppress_fail;  // an in-service channel must stay out of cpu_irq
 reg [3:0]  ack3_age;       // cycles since ack[3], to skip the update pipeline
 
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
-        ack5_seen  <= 0;
         ack_double <= 0;
         ack_in_stall <= 0;
         ack_prev   <= 8'b0;
-        ack2_count <= 0;
-        ack3_count <= 0;
-        ack0_count <= 0;
-        ack1_count <= 0;
-        ack4_count <= 0;
-        ack6_count <= 0;
-        ack7_count <= 0;
+        for (ch = 0; ch < 8; ch = ch + 1)
+            ack_cnt[ch] <= 0;
         id_bad     <= 0;
         suppress_fail <= 0;
         ack3_age   <= 4'd0;
     end else begin
-        if (cpu_irq_ack[5])            ack5_seen  <= 1;
         if (|(cpu_irq_ack & ack_prev)) ack_double <= 1;
         if (|cpu_irq_ack && uut.lsu_inst.active) ack_in_stall <= 1;
-        if (cpu_irq_ack[0])            ack0_count <= ack0_count + 1;
-        if (cpu_irq_ack[1])            ack1_count <= ack1_count + 1;
-        if (cpu_irq_ack[2])            ack2_count <= ack2_count + 1;
-        if (cpu_irq_ack[3])            ack3_count <= ack3_count + 1;
-        if (cpu_irq_ack[4])            ack4_count <= ack4_count + 1;
-        if (cpu_irq_ack[6])            ack6_count <= ack6_count + 1;
-        if (cpu_irq_ack[7])            ack7_count <= ack7_count + 1;
+        for (ch = 0; ch < 8; ch = ch + 1)
+            if (cpu_irq_ack[ch]) ack_cnt[ch] <= ack_cnt[ch] + 1;
         ack_prev <= cpu_irq_ack;
 
         // the id must point at a set cpu_irq bit with nothing below it
@@ -427,14 +397,14 @@ initial begin
     check(32'h80000017,  uut.regfile_inst.regs[31], "x31 last irq mcause (timer)");
     check(32'h00200000,  dmem_inst.mem[W_MIP],         "mip shows masked ch5 only");
     check(32'd8,         dmem_inst.mem[W_IRQ_COUNT],         "irq handler entered 8x");
-    check(32'd2,         ack2_count,                "exactly two ack[2] pulses");
-    check(32'd1,         ack3_count,                "exactly one ack[3] pulse");
-    check(32'd1,         ack0_count,                "sweep: one ack[0]");
-    check(32'd1,         ack1_count,                "sweep: one ack[1]");
-    check(32'd1,         ack4_count,                "sweep: one ack[4]");
-    check(32'd1,         ack6_count,                "sweep: one ack[6]");
-    check(32'd1,         ack7_count,                "timer: one ack[7]");
-    check(32'd0,         {31'b0, ack5_seen},        "masked ch5 never acked");
+    check(32'd2,         ack_cnt[2],                "exactly two ack[2] pulses");
+    check(32'd1,         ack_cnt[3],                "exactly one ack[3] pulse");
+    check(32'd1,         ack_cnt[0],                "sweep: one ack[0]");
+    check(32'd1,         ack_cnt[1],                "sweep: one ack[1]");
+    check(32'd1,         ack_cnt[4],                "sweep: one ack[4]");
+    check(32'd1,         ack_cnt[6],                "sweep: one ack[6]");
+    check(32'd1,         ack_cnt[7],                "timer: one ack[7]");
+    check(32'd0,         ack_cnt[5],                "masked ch5 never acked");
     check(32'd0,         {31'b0, ack_double},       "ack is a 1-cycle pulse");
     check(32'd0,         {31'b0, ack_in_stall},     "no ack during a data stall");
     check(32'd0,         {31'b0, id_bad},           "cpu_irq_id = lowest pending");

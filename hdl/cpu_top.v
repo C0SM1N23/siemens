@@ -36,8 +36,10 @@
 `include "defines.vh"
 
 module cpu_top #(
-    parameter RESET_PC = 32'h0000_0000,  // reset vector, until the memory map is settled
-    parameter HART_ID  = 32'd0           // mhartid value; lets 2..N cores share one SoC
+    parameter RESET_PC   = 32'h0000_0000, // reset vector, until the memory map is settled
+    parameter HART_ID    = 32'd0,         // mhartid value; lets 2..N cores share one SoC
+    parameter BP_ENTRIES = 128,           // BTB/BHT entries, power of 2 (D9)
+    parameter RAS_DEPTH  = 8              // return-address stack depth, 0 disables (D24)
 )(
     input             clk,
     input             rst_n,             // async reset, active low
@@ -134,7 +136,7 @@ fetch_unit #(.RESET_PC(RESET_PC)) fetch_unit_inst (
 wire        bp_update_en;
 wire [31:0] actual_target;
 
-branch_predictor branch_predictor_inst (
+branch_predictor #(.ENTRIES(BP_ENTRIES), .RAS_DEPTH(RAS_DEPTH)) branch_predictor_inst (
     .clk           (clk),
     .rst_n         (rst_n),
     .lookup_pc     (bp_lookup_pc),
@@ -315,15 +317,8 @@ wire [4:0]  exc_cause;
 wire        trap_take = irq_take | exception;
 wire [4:0]  trap_code = irq_take ? {2'b10, cpu_irq_id} : exc_cause;  // irq: 16+id
 
-// mtval: fault address for address faults, the instruction on illegal, the PC
-// for fetch faults / breakpoint, 0 for ecall and interrupts
-wire [31:0] exc_tval =
-    (exc_cause == `CAUSE_IFAULT || exc_cause == `CAUSE_BREAK) ? ifdx_pc_q     :
-    (exc_cause == `CAUSE_IMISALIGN)                           ? actual_target :
-    (exc_cause == `CAUSE_ILLEGAL)                             ? ifdx_instr_q  :
-    (exc_cause == `CAUSE_LD_MISALIGN || exc_cause == `CAUSE_LD_FAULT ||
-     exc_cause == `CAUSE_ST_MISALIGN || exc_cause == `CAUSE_ST_FAULT) ? alu_result :
-    32'b0;
+// mtval payload: exception_unit picks it with the cause; interrupts write 0
+wire [31:0] exc_tval;
 wire [31:0] trap_val = irq_take ? 32'b0 : exc_tval;
 
 csr_file #(.HART_ID(HART_ID)) csr_file_inst (
@@ -404,6 +399,8 @@ exception_unit exception_unit_inst (
     .illegal        (ctrl_illegal | csr_illegal),
     .ecall          (ctrl_ecall),
     .ebreak         (ctrl_ebreak),
+    .pc             (ifdx_pc_q),
+    .instr          (ifdx_instr_q),
     .ctl_taken      (ctl_taken_raw),
     .ctl_target     (actual_target),
     .MemRead        (MemRead),
@@ -415,6 +412,7 @@ exception_unit exception_unit_inst (
     .mem_err        (lsu_err),
     .exception      (exception),
     .cause          (exc_cause),
+    .tval           (exc_tval),
     .mem_misaligned (mem_misaligned)
 );
 
