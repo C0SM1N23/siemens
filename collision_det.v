@@ -83,15 +83,15 @@ module collision_det #(
         endcase
 
     //trecem la starea urmatoare
-    always @(posedge clk) begin
+    always @(posedge clk or negedge rst_n) 
         if (~rst_n)
             state <= S_IDLE;
         else
             state <= next_state;
-    end
+    
 
     //numaram coliziunile
-    always @(posedge clk)
+    always @(posedge clk or negedge rst_n)
         if (~rst_n)
             collision_cnt <= {CNT_W{1'b0}};
         else if (state == S_IDLE && real_conflict) begin
@@ -106,7 +106,7 @@ module collision_det #(
     
 
     //numaram cooldownul
-    always @(posedge clk)
+    always @(posedge clk or negedge rst_n)
         if (~rst_n)
             cooldown_cnt <= {COOLDOWN_W{1'b0}};
         else if (state == S_COOLDOWN)

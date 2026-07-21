@@ -67,7 +67,12 @@ module axi4lite_slave_fsm #(
     reg [31:0]       wdata_reg;  // registru date de scris
     reg [3:0]        wstrb_reg;  // registru care byte
     reg [ADDR_W-1:0] araddr_reg; // registru adresa de citit
+    reg aw_have;
+    reg w_have;
 
+    wire aw_done = aw_have || awready; // adresa disponibila
+    wire w_done  = w_have  || wready;  // datele disponibile
+    
     //logica de tranzitie
     always @(*)
         case (state)
@@ -75,9 +80,9 @@ module axi4lite_slave_fsm #(
             S_IDLE:
                 if (stall_i)
                     next_state = S_IDLE;            
-                else if (arvalid)
+                else if (arvalid && ~aw_have && ~w_have)
                     next_state = S_RD_RESP;          // citire ceruta
-                else if (awvalid && wvalid)
+                else if (aw_done && w_done)
                     next_state = S_WR_RESP;          // scriere ceruta
                 else
                     next_state = S_IDLE;             
@@ -92,45 +97,61 @@ module axi4lite_slave_fsm #(
 
 
     //trecem la starea urmatoare
-    always @(posedge clk)
+    always @(posedge clk or negedge rst_n)
         if (~rst_n)
             state <= S_IDLE;
         else
             state <= next_state;
 
     //adaugam valori in awaddr_reg
-    always @(posedge clk)
-        if (~rst_n)
+    always @(posedge clk or negedge rst_n)
+        if (~rst_n )
             awaddr_reg <= {ADDR_W{1'b0}};
-        else if (state == S_IDLE && awvalid && wvalid && ~arvalid && ~stall_i)
+        else if (awready)
             awaddr_reg <= awaddr;
 
     //adaugam valori in wdata_reg
-    always @(posedge clk)
+    always @(posedge clk or negedge rst_n)
         if (~rst_n)
             wdata_reg <= 32'd0;
-        else if (state == S_IDLE && awvalid && wvalid && ~arvalid && ~stall_i)
+        else if (wready)
             wdata_reg <= wdata;
 
     //adaugam valori in wstrb_reg
-    always @(posedge clk)
+    always @(posedge clk or negedge rst_n)
         if (~rst_n)
             wstrb_reg <= 4'd0; 
-        else if (state == S_IDLE && awvalid && wvalid && ~arvalid && ~stall_i)
+        else if (wready)
             wstrb_reg <= wstrb;
 
     //adaugam valori in araddr_reg
-    always @(posedge clk)
+    always @(posedge clk or negedge rst_n)
         if (~rst_n)
             araddr_reg <= {ADDR_W{1'b0}};
-        else if (state == S_IDLE && arvalid && ~stall_i)
+        else if (arready)
             araddr_reg <= araddr;
 
 
+    always @(posedge clk or negedge rst_n)
+    if (~rst_n)
+        aw_have <= 1'b0;
+    else if (state == S_WR_RESP && bready)
+        aw_have <= 1'b0;   
+    else if (awready)
+        aw_have <= 1'b1;   
+
+    always @(posedge clk or negedge rst_n)
+    if (~rst_n)
+        w_have <= 1'b0;
+    else if (state == S_WR_RESP && bready)
+        w_have <= 1'b0;
+    else if (wready)
+        w_have <= 1'b1;
+
     //semnale de handshake
-    assign awready = (state == S_IDLE) && awvalid && wvalid && ~arvalid && ~stall_i;
-    assign wready  = awready;
-    assign arready = (state == S_IDLE) && arvalid && ~stall_i;
+    assign awready = (state == S_IDLE) && awvalid && ~aw_have && ~stall_i;
+    assign wready  = (state == S_IDLE) && wvalid  && ~w_have  && ~stall_i;
+    assign arready = (state == S_IDLE) && arvalid && ~aw_have && ~w_have && ~stall_i;
     assign bvalid  = (state == S_WR_RESP); 
     assign bresp   = mem_error ? RESP_SLVERR : RESP_OKAY;
     assign rvalid  = (state == S_RD_RESP);
