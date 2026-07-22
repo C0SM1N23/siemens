@@ -11,10 +11,13 @@
 //
 // REQ1: the 3-stage pipeline above.
 // REQ2: two AXI4-Lite master ports, ibus (read only) and dbus (read+write).
-// REQ3: one sync clock, async active-low reset, PIC lines cpu_irq / cpu_irq_id
-//       / cpu_irq_ack / cpu_in_trap.
+// REQ3: one sync clock, async active-low reset, PIC lines cpu_irq / cpu_irq_vec
+//       / cpu_irq_ack / cpu_irq_eoi (cpu_in_trap kept for observability/SVA).
 // REQ4: interrupts sampled only under mstatus.MIE, at instruction boundaries.
-//       cpu_irq_ack pulses one cycle, cpu_in_trap is held from trap entry to MRET.
+//       cpu_irq_ack pulses one cycle at claim; cpu_irq_eoi pulses one cycle when
+//       an interrupt handler returns (MRET), so the PIC pops its nesting stack.
+//       The advanced-scheduling PIC drives a single request line plus a 4-bit
+//       vector (id 0..15); the CPU gates it with mie[16+vec] and mstatus.MIE.
 //
 // D1: pipeline registers carry a valid bit, so valid=0 is always a safe bubble
 //     and we don't lean on the NOP encoding. S3->S2 forwarding kills the
@@ -75,10 +78,11 @@ module cpu_top #(
     input             dbus_axi_rvalid,
     output            dbus_axi_rready,
 
-    // PIC interface (see D3)
-    input      [7:0]  cpu_irq,
-    output reg [7:0]  cpu_irq_ack,
-    input      [2:0]  cpu_irq_id,
+    // PIC interface (see D3): single request + 4-bit vector, claim/eoi pulses
+    input             cpu_irq,
+    input      [3:0]  cpu_irq_vec,
+    output reg        cpu_irq_ack,
+    output reg        cpu_irq_eoi,
     output reg        cpu_in_trap
 );
 
@@ -251,10 +255,15 @@ wire [31:0] rs2_v = fwd_rs2 ? wb_data : rs2_data;
 // goes out (D2, REQ4); lsu_active blocks it for the rest of the op
 wire        lsu_busy, lsu_done, lsu_err, lsu_active;
 wire        mie_global;
-wire [7:0]  irq_enable;
+wire [15:0] irq_enable;
 
-wire irq_take = ifdx_valid_q && !lsu_active && mie_global &&
-                cpu_irq[cpu_irq_id] && irq_enable[cpu_irq_id];
+// the PIC offers one prioritised source; the CPU still masks it per-source with
+// mie[16+vec] (independent of the PIC's own INT_ENABLE) and globally with MIE
+wire irq_deliverable = cpu_irq && irq_enable[cpu_irq_vec];
+wire irq_take = ifdx_valid_q && !lsu_active && mie_global && irq_deliverable;
+
+// the offered source as a one-hot for mip[31:16] (the machine external window)
+wire [15:0] irq_onehot = cpu_irq ? (16'b1 << cpu_irq_vec) : 16'b0;
 
 // instruction actually executes: not preempted, and the fetch was clean
 wire dec_live = ifdx_valid_q && !irq_take && !ifdx_fault_q;
@@ -264,7 +273,7 @@ wire dec_live = ifdx_valid_q && !irq_take && !ifdx_fault_q;
 // frozen and S1 parks its fetch, so the ibus goes quiet. If MIE is set we get a
 // normal irq_take (dec_live drops and releases the stall); if masked, the WFI
 // just commits as a NOP and falls through.
-wire wfi_wake = |(cpu_irq & irq_enable);
+wire wfi_wake = irq_deliverable;
 wire wfi_wait = dec_live && ctrl_wfi && !wfi_wake;
 
 // one shared PC+4 adder for S2: mispredict fall-through, JAL/JALR link and the
@@ -315,7 +324,7 @@ wire [31:0] csr_wdata = csr_imm ? {27'b0, rs1} : rs1_v;
 wire        exception;
 wire [4:0]  exc_cause;
 wire        trap_take = irq_take | exception;
-wire [4:0]  trap_code = irq_take ? {2'b10, cpu_irq_id} : exc_cause;  // irq: 16+id
+wire [4:0]  trap_code = irq_take ? {1'b1, cpu_irq_vec} : exc_cause;  // irq: 16+vec
 
 // mtval payload: exception_unit picks it with the cause; interrupts write 0
 wire [31:0] exc_tval;
@@ -339,7 +348,7 @@ csr_file #(.HART_ID(HART_ID)) csr_file_inst (
     .trap_pc     (irq_take && ctrl_wfi && !ifdx_fault_q ? s2_pc4 : ifdx_pc_q),
     .trap_val    (trap_val),
     .mret        (mret_exec),
-    .irq_lines   (cpu_irq),
+    .irq_lines   (irq_onehot),
     .irq_enable  (irq_enable),
     .mie_global  (mie_global),
     .trap_vector (trap_vector),
@@ -461,12 +470,32 @@ hazard_unit hazard_unit_inst (
     .fwd_rs2      (fwd_rs2)
 );
 
-// ack pulses one cycle at acceptance (REQ4)
+// interrupt-in-progress flag: set when an interrupt trap is accepted, cleared on
+// MRET. It drives cpu_irq_eoi so the PIC pops exactly one nesting level per
+// interrupt-handler return. One level is exact for the integrated CPU (handlers
+// run with MIE=0 and take no synchronous trap of their own); the PIC verifies
+// deeper hardware nesting standalone in tb_pic, driven by the ack/eoi pulses.
+reg in_irq;
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)                       in_irq <= 1'b0;
+    else if (irq_take && s2_advance)  in_irq <= 1'b1;
+    else if (mret_exec && s2_advance) in_irq <= 1'b0;
+end
+
+// claim pulses one cycle at acceptance (REQ4)
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        cpu_irq_ack <= 8'b0;
+        cpu_irq_ack <= 1'b0;
     else
-        cpu_irq_ack <= (irq_take && s2_advance) ? (8'h01 << cpu_irq_id) : 8'b0;
+        cpu_irq_ack <= irq_take && s2_advance;
+end
+
+// eoi pulses one cycle when an interrupt handler returns (REQ4)
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        cpu_irq_eoi <= 1'b0;
+    else
+        cpu_irq_eoi <= mret_exec && s2_advance && in_irq;
 end
 
 // cpu_in_trap holds until MRET; a nested sync trap in the handler keeps it up (REQ4)

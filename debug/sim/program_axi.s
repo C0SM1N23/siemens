@@ -10,21 +10,21 @@
 #   - illegal ops must have no side effects (illegal store leaves mem alone)
 #   - CSR negatives: unimplemented address, writes to RO mip/mhartid
 #   - CSR immediate forms + mscratch round-trip + mhartid read
-#   - PIC software interface: program IRQ_ENABLE over AXI, read back ENABLE/
-#     RAW/PENDING, read IRQ_ACTIVE inside the irq handler; a read of an
-#     unmapped PIC register and a write to a read-only one answer SLVERR ->
-#     precise access faults (causes 5 and 7 again, from a real peripheral)
+#   - PIC software interface: program INT_ENABLE over AXI, read back it +
+#     SRC5_STATUS + INT_STATUS, read ACTIVE_VEC inside the irq handler; a read
+#     of an unmapped PIC word and a write to a read-only register answer
+#     SLVERR -> precise access faults (causes 5 and 7 again, from the PIC)
 #   - irq masking: source 5 pending the whole run, enabled in the PIC but
-#     never in mie -> never taken; ch2+ch3 raised together -> PIC priority
-#     serves ch2 first; ch2 also taken DURING an AXI data stall (the
-#     interrupt is held to the instruction boundary)
+#     never in mie -> never taken; src2+src3 raised together -> PIC bands
+#     serve the lower index (src2) first; src2 also taken DURING an AXI data
+#     stall (the interrupt is held to the instruction boundary)
 #   - vectored mtvec: irq -> BASE+4*cause, exception -> BASE
 #   - BTB aliasing: three branches sharing an index, different tags
 #   - CPI evidence: 32 dependent ALU ops in ~33 cycles (checked when imem
 #     has no added latency)
 #   - PIC channel sweep: ch0/1/4/6 raised by the TB on trigger stores, each
 #     taken exactly once (ch5 gets PIC-disabled first: a mie-masked pending
-#     channel would otherwise hold cpu_irq_id and starve the ones below it)
+#     channel would otherwise sit as the PIC's offer and starve the rest)
 #   - RAS: returns from alternating call sites + a nested call chain (D24)
 #   - WFI + mtimer (D23/D26): sleep until the timer irq (mepc must be
 #     wfi+4), then a second WFI with MIE=0 that must fall through untrapped;
@@ -103,9 +103,9 @@ back:
 
     # same two causes again, but as SLVERR from a real peripheral (the PIC)
     lui  x28, 0x30000        # PIC config window
-    lw   x30, 16(x28)        # unmapped PIC register -> SLVERR -> cause 5
+    lw   x30, 0xF0(x28)      # unmapped PIC word (0xF0) -> SLVERR -> cause 5
     lui  x28, 0x30000        # reload: the handler trashes x28
-    sw   x0, 4(x28)          # IRQ_PENDING is read-only -> SLVERR -> cause 7
+    sw   x0, 0x80(x28)       # SRC0_STATUS is read-only -> SLVERR -> cause 7
 
     # and again from the mtimer: an offset past MTIMECMP_HI (0xC) is unmapped
     # inside the peripheral -> SLVERR -> access fault (D27)
@@ -137,17 +137,24 @@ back:
 ff_resume:
 
     # ---- interrupts + vectored mtvec ------------------------------------
-    # program the PIC over AXI: enable ch2, ch3, ch5 (0x2C) and read back.
-    # ch5 stays masked at the CPU (mie) to prove the two masks are independent.
+    # program the PIC over AXI: enable src2, src3, src5 (INT_ENABLE=0x2C) and
+    # read back. src5 stays masked at the CPU (mie) to prove the two masks are
+    # independent.
     lui  x28, 0x30000
     addi x30, x0, 0x2C
-    sw   x30, 0(x28)         # IRQ_ENABLE = 0x2C
-    lw   x30, 0(x28)
+    sw   x30, 0xD8(x28)      # INT_ENABLE = 0x2C
+    lw   x30, 0xD8(x28)
     sw   x30, 180(x14)       # [180] = 0x2C readback
-    lw   x30, 8(x28)         # IRQ_RAW: source 5 held high by the TB
-    sw   x30, 184(x14)       # [184] = 0x20
-    lw   x30, 4(x28)         # IRQ_PENDING: ch5 enabled + pending, MIE still 0
-    sw   x30, 188(x14)       # [188] = 0x20
+    lw   x30, 0x94(x28)      # SRC5_STATUS: enabled + pending (bit0), MIE still 0
+    sw   x30, 184(x14)       # [184] = 0x1
+    lw   x30, 0xDC(x28)      # INT_STATUS: no spurious/escalation/overflow yet
+    sw   x30, 188(x14)       # [188] = 0x0
+
+    # with MIE still 0 only the masked src5 is pending, so the PIC's single
+    # offer names it: mip[21] set, everything else clear (the one-hot the CPU
+    # builds from cpu_irq_vec). Read it here, before any lower source is raised.
+    csrrs x30, mip, x0
+    sw   x30, 136(x14)       # [136] = mip: masked src5 offered = 0x00200000
 
     addi x28, x0, vec_base
     ori  x28, x28, 1         # MODE = 01 (vectored)
@@ -159,8 +166,6 @@ ff_resume:
     csrrs x0, mstatus, x28   # mstatus.MIE = 1
 wait_irq:
     beq  x31, x0, wait_irq   # irq #1 lands on this boundary
-    csrrs x30, mip, x0
-    sw   x30, 136(x14)       # [136] = mip: only ch5 pending = 0x00200000
     lw   x30, 256(x14)       # magic load; TB raises ch2 when it sees this AR
 irq2_victim:
     sw   x30, 160(x14)       # [160] = 0xCAFE0001; irq #2 preempts this sw,
@@ -269,11 +274,11 @@ vec_base:
     jal  x0, irq_handler     # cause 23, ch7 = mtimer
 
 # ---- irq handler: preserves x30 through mscratch, counts entries,
-# snapshots the PIC's in-service mask (proves the ack was registered).
+# snapshots the PIC's ACTIVE_VEC (proves the claim was registered).
 # The timer (cause 23) is level-sensitive off its own compare, so the
 # handler must clear the source before MRET: push mtimecmp_hi back to
-# all-ones (D26) — otherwise the line re-enters the moment MRET releases
-# the in-service mask. x28 is only trashed on the timer path, where main
+# all-ones (D26) — otherwise the line re-enters the moment MRET pops the
+# active source. x28 is only trashed on the timer path, where main
 # reloads it right after the WFI anyway. -----------------------------------
 .org 0x380
 irq_handler:
@@ -283,8 +288,8 @@ irq_handler:
     addi x30, x30, 1
     sw   x30, 196(x14)       # [196] = irq entry count
     lui  x30, 0x30000
-    lw   x30, 12(x30)        # PIC IRQ_ACTIVE = 1 << current channel
-    sw   x30, 164(x14)       # [164] = in-service mask of the last irq taken
+    lw   x30, 0xCC(x30)      # ACTIVE_VEC = valid | id of the top-of-stack source
+    sw   x30, 164(x14)       # [164] = ACTIVE_VEC of the last irq taken
     lui  x30, 0x80000
     addi x30, x30, 0x17      # 0x80000017 = interrupt, cause 23
     bne  x31, x30, ih_ret
@@ -388,16 +393,16 @@ jl_tgt:
 
 # ---- PIC channel sweep: every channel taken once (ch5 excepted) ----------
 # The TB raises src0/1/4/6 in order, one per trigger store to [248], and
-# drops each line on its ack. ch5 is PIC-disabled first: a pending channel
-# that is mie-masked would pin cpu_irq_id at 5 and starve channels 6..7
-# (fixed priority, D20) — the same reason the real SoC must not leave a
-# routed-but-unhandled source enabled.
+# drops each line on its claim. ch5 is PIC-disabled first: a pending channel
+# that is mie-masked would sit as the PIC's offer (never claimed) and starve
+# the others — the same reason the real SoC must not leave a routed-but-
+# unhandled source enabled.
 .org 0xA00
 phase_h:
     sw   x31, 200(x14)       # [200] = irq #3 mcause, before the sweep moves x31
     lui  x28, 0x30000
     addi x30, x0, 0xDF
-    sw   x30, 0(x28)         # IRQ_ENABLE = 0xDF (all but ch5)
+    sw   x30, 0xD8(x28)      # INT_ENABLE = 0xDF (all but src5)
     lui  x28, 0xDF0
     csrrs x0, mie, x28       # mie |= ch0,1,4,6,7 (ch5 stays masked forever)
     addi x28, x0, 8

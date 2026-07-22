@@ -2,7 +2,8 @@
 //
 // Each assertion states one architectural promise from the README/ARCHITECTURE,
 // so a passing regression proves the promise, not just the test program:
-// - REQ4:  cpu_irq_ack is a one-cycle one-hot pulse; cpu_in_trap rises with it, holds to MRET
+// - REQ4:  cpu_irq_ack is a one-cycle claim pulse; cpu_irq_eoi a one-cycle return pulse;
+//          cpu_in_trap rises with the claim and holds to MRET
 // - D2:    an interrupt is accepted only at an instruction boundary, never mid data transaction
 // - D3:    a trapping instruction never commits (precise traps)
 // - REQ10: x0 reads zero on both register-file ports
@@ -16,7 +17,8 @@ module cpu_core_sva (
     input        rst_n,
 
     // PIC interface (cpu_top ports)
-    input [7:0]  cpu_irq_ack,
+    input        cpu_irq_ack,
+    input        cpu_irq_eoi,
     input        cpu_in_trap,
 
     // S2 control (cpu_top internals, wired up by the bind)
@@ -47,17 +49,22 @@ module cpu_core_sva (
 
 // --- interrupt interface shape (REQ4) ---
 
-ack_onehot: assert property (@(posedge clk) disable iff (!rst_n)
-    $onehot0(cpu_irq_ack))
-    else $error("[core] cpu_irq_ack not one-hot");
-
 ack_pulse: assert property (@(posedge clk) disable iff (!rst_n)
-    |cpu_irq_ack |=> cpu_irq_ack == 8'b0)
+    cpu_irq_ack |=> !cpu_irq_ack)
     else $error("[core] cpu_irq_ack longer than one cycle");
 
 ack_in_trap: assert property (@(posedge clk) disable iff (!rst_n)
-    |cpu_irq_ack |-> cpu_in_trap)
+    cpu_irq_ack |-> cpu_in_trap)
     else $error("[core] ack without cpu_in_trap");
+
+// eoi is a one-cycle pulse that only follows an interrupt-returning MRET
+eoi_pulse: assert property (@(posedge clk) disable iff (!rst_n)
+    cpu_irq_eoi |=> !cpu_irq_eoi)
+    else $error("[core] cpu_irq_eoi longer than one cycle");
+
+eoi_after_mret: assert property (@(posedge clk) disable iff (!rst_n)
+    cpu_irq_eoi |-> $past(mret_exec && s2_advance))
+    else $error("[core] cpu_irq_eoi without a returning MRET");
 
 // --- interrupts only at instruction boundaries (D2, REQ4) ---
 
@@ -66,7 +73,7 @@ irq_at_boundary: assert property (@(posedge clk) disable iff (!rst_n)
     else $error("[core] interrupt taken mid data transaction");
 
 ack_not_in_stall: assert property (@(posedge clk) disable iff (!rst_n)
-    |cpu_irq_ack |-> !lsu_active)
+    cpu_irq_ack |-> !lsu_active)
     else $error("[core] ack while a data transaction is active");
 
 // --- trap entry / return sequencing (REQ4, D3) ---

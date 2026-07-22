@@ -6,8 +6,10 @@
 //       read-only, driven by the PIC). Only the live fields exist, the rest read
 //       0/WPRI: mstatus MIE(3)/MPIE(7), MPP(12:11) hardwired to 2'b11; mtvec
 //       BASE[31:2] + MODE[1:0]; mepc[1:0] forced to 0.
-// D3:  the 8 PIC channels map to mie/mip bits 16..23 (external-interrupt causes
-//      16..23), i.e. the interrupt half of the supported-cause set.
+// D3:  the 16 PIC sources map to mie/mip bits 16..31 (external-interrupt causes
+//      16..31), i.e. the interrupt half of the supported-cause set. The PIC does
+//      the priority resolution and drives one request + a 4-bit vector; cpu_top
+//      turns that into a one-hot mip[16+vec] so software still masks per source.
 // D5:  read-only mhartid (0xF14) from HART_ID, plus read-only mcycle/minstret as
 //      verification aids.
 // D25: read-only mhpmcounter3..7 at the standard addresses, wired to the events
@@ -46,14 +48,14 @@ module csr_file #(
     // trap entry / return
     input             trap_set,
     input             trap_is_irq,
-    input      [4:0]  trap_code,     // cause code (0..23)
+    input      [4:0]  trap_code,     // cause code (sync 0..11, irq 16..31)
     input      [31:0] trap_pc,       // -> mepc
     input      [31:0] trap_val,      // -> mtval (fault address, or instruction on illegal)
     input             mret,
 
     // interrupt side
-    input      [7:0]  irq_lines,     // cpu_irq -> mip[23:16]
-    output     [7:0]  irq_enable,    // mie[23:16]
+    input      [15:0] irq_lines,     // pending one-hot -> mip[31:16]
+    output     [15:0] irq_enable,    // mie[31:16]
     output            mie_global,    // mstatus.MIE
 
     // architectural targets
@@ -91,7 +93,7 @@ localparam MHPMC7   = 12'hB07;   // WFI sleep cycles
 localparam MHARTID  = 12'hF14;
 
 reg        mstatus_mie_q, mstatus_mpie_q;
-reg [7:0]  mie_q;
+reg [15:0] mie_q;
 reg [31:0] mtvec_q, mscratch_q, mepc_q, mcause_q, mtval_q, mcycle_q, minstret_q;
 reg [31:0] mhpm3_q, mhpm4_q, mhpm5_q, mhpm6_q, mhpm7_q;
 
@@ -106,13 +108,13 @@ always @(*) begin
     case (csr_addr)
         MSTATUS:  csr_rdata = mstatus_rd;
         MISA:     csr_rdata = misa_rd;   // WARL, writes ignored
-        MIE:      csr_rdata = {8'b0, mie_q, 16'b0};
+        MIE:      csr_rdata = {mie_q, 16'b0};
         MTVEC:    csr_rdata = mtvec_q;
         MSCRATCH: csr_rdata = mscratch_q;
         MEPC:     csr_rdata = mepc_q;
         MCAUSE:   csr_rdata = mcause_q;
         MTVAL:    csr_rdata = mtval_q;
-        MIP:      begin csr_rdata = {8'b0, irq_lines, 16'b0}; addr_ro = 1; end
+        MIP:      begin csr_rdata = {irq_lines, 16'b0}; addr_ro = 1; end
         MVENDID:  begin csr_rdata = 32'b0; addr_ro = 1; end
         MARCHID:  begin csr_rdata = 32'b0; addr_ro = 1; end
         MIMPID:   begin csr_rdata = 32'b0; addr_ro = 1; end
@@ -154,7 +156,7 @@ function [31:0] csr_new_val;
 endfunction
 
 wire [31:0] mstatus_nv = csr_new_val(mstatus_rd, csr_wdata, csr_op);
-wire [31:0] mie_nv     = csr_new_val({8'b0, mie_q, 16'b0}, csr_wdata, csr_op);
+wire [31:0] mie_nv     = csr_new_val({mie_q, 16'b0}, csr_wdata, csr_op);
 wire [31:0] mepc_nv    = csr_new_val(mepc_q, csr_wdata, csr_op);
 
 // committed software write. It never coincides with trap_set or mret: an
@@ -221,9 +223,9 @@ end
 // software-only CSRs
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        mie_q <= 8'b0;
+        mie_q <= 16'b0;
     else if (wr_mie)
-        mie_q <= mie_nv[23:16];
+        mie_q <= mie_nv[31:16];
 end
 
 always @(posedge clk or negedge rst_n) begin

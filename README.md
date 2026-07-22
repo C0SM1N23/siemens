@@ -61,7 +61,7 @@ own in full. These tables are the index.
 |-----|----------|---------|
 | D1  | `valid`-bit pipeline registers → guaranteed safe bubble (not the NOP encoding) | [cpu_top.v](hdl/cpu_top.v) |
 | D2  | S2 priority: interrupt > sync exception > mispredict, as a sequential check | [cpu_top.v](hdl/cpu_top.v) |
-| D3  | Supported mcause set 0,1,2,3,4,5,6,7,11 + external interrupts on 8 PIC channels (causes 16..23) | [exception_unit.v](hdl/exception_unit.v), [csr_file.v](hdl/csr_file.v) |
+| D3  | Supported mcause set 0,1,2,3,4,5,6,7,11 + external interrupts on 16 PIC sources (causes 16..31) | [exception_unit.v](hdl/exception_unit.v), [csr_file.v](hdl/csr_file.v) |
 | D4  | Trap return: exceptions → offending PC, interrupts → resume PC | [cpu_top.v](hdl/cpu_top.v) |
 | D5  | `RESET_PC` + `HART_ID` params → `mhartid` (multi-core; beyond spec) | [cpu_top.v](hdl/cpu_top.v), [csr_file.v](hdl/csr_file.v) |
 | D6  | ibus master fully independent, ≤1 outstanding, back-to-back fetch (1 instr/cycle) | [fetch_unit.v](hdl/fetch_unit.v) |
@@ -77,15 +77,15 @@ own in full. These tables are the index.
 | D16 | Vectored mtvec: interrupts → BASE+4·cause, exceptions → BASE | [csr_file.v](hdl/csr_file.v) |
 | D17 | Misalignment checked pre-access → no AXI transaction issued | [exception_unit.v](hdl/exception_unit.v) |
 | D18 | Bus error → access fault (load 5 / store 7) | [exception_unit.v](hdl/exception_unit.v) |
-| D19 | PIC built here (unassigned in the briefs): level-sensitive aggregator, no latching; `cpu_irq`/`cpu_irq_id` registered from one pending vector | [pic.v](hdl/pic.v) |
-| D20 | PIC priority fixed, channel 0 highest (id = lowest pending channel) | [pic.v](hdl/pic.v) |
-| D21 | In-service suppression: acked channel masked from ack until MRET (`cpu_in_trap` low); sized for non-nested handlers | [pic.v](hdl/pic.v) |
-| D22 | PIC register map (ENABLE / PENDING / RAW / ACTIVE); unmapped or read-only-write access answers SLVERR | [pic.v](hdl/pic.v) |
+| D19 | PIC implements the "Advanced Scheduling" brief: 16 hardware + 16 software sources → one prioritised `cpu_irq`/`cpu_irq_vec`, registered off the source timing path (D-LAT) | [pic.v](hdl/pic.v) |
+| D20 | Custom priority grouping: 4 bands (per-band urgency in `BAND_CONFIG`) + per-source intra-band priority + lowest-index tie-break; deadline-aware escalation bumps a starved source's effective band (D-BAND / D-DDL) | [pic.v](hdl/pic.v) |
+| D21 | Preemption with a nesting stack (depth ≤ `NEST_MAX`): `cpu_irq_ack` claims/pushes, `cpu_irq_eoi` returns/pops; a source that deasserts before its claim is flagged spurious + logged, never corrupts the stack (D-NEST / D-SPUR) | [pic.v](hdl/pic.v) |
+| D22 | Full register map (SRCx_CONFIG/SW_TRIG/STATUS, BAND_CONFIG, NEST_STATUS/MAX, ACTIVE_VEC, SPURIOUS_LOG, ESCALATION_CFG, INT_ENABLE/STATUS); keyed software triggers; unmapped or read-only-write access answers SLVERR (D-SW / D-AXI) | [pic.v](hdl/pic.v) |
 | D23 | WFI (Priv. spec 3.3.3): S2 sleeps, S1 parks → zero ibus traffic; wake on any mie-enabled pending irq, `mstatus.MIE` decides trap-vs-fall-through; interrupt wake sets mepc = wfi+4 | [control.v](hdl/control.v), [cpu_top.v](hdl/cpu_top.v), [hazard_unit.v](hdl/hazard_unit.v) |
 | D24 | Return-address stack (8 entries, parameterized, 0 = off): calls/returns keyed on the ISA JALR hint regs (x1/x5); BTB entries tagged `is_ret` predict the RAS top; learned at commit like the BTB (never speculative) | [branch_predictor.v](hdl/branch_predictor.v) |
 | D25 | Read-only `mhpmcounter3..7`: mispredicts, fetch-starved cycles, dbus stall cycles, traps taken, WFI sleep cycles — the CPU-side numbers that pair with DP-SRAM BANDWIDTH_A/B and DMA throttling | [csr_file.v](hdl/csr_file.v) |
-| D26 | Machine timer (unassigned in the briefs, like the PIC): 64-bit mtime/mtimecmp, level irq = compare, born disarmed; handler clears by moving mtimecmp — feeds PIC channel 7 (lowest priority) | [mtimer.v](hdl/mtimer.v) |
-| D27 | mtimer AXI4-Lite slave port, same discipline as the PIC's (D22): 4 R/W word registers, SLVERR elsewhere, WSTRB honored per lane | [mtimer.v](hdl/mtimer.v) |
+| D26 | Machine timer (unassigned in the briefs): 64-bit mtime/mtimecmp, level irq = compare, born disarmed; handler clears by moving mtimecmp — feeds PIC source 7 | [mtimer.v](hdl/mtimer.v) |
+| D27 | mtimer AXI4-Lite slave port, same discipline as the PIC's (D-AXI): 4 R/W word registers, SLVERR elsewhere, WSTRB honored per lane | [mtimer.v](hdl/mtimer.v) |
 
 ## AXI4-Lite interface (SoC integration)
 
@@ -102,27 +102,36 @@ DMA config port and DP-SRAM Port A see a standard master.
 
 ## Interrupts (PIC)
 
-The CPU side: `cpu_irq[7:0]` in, `cpu_irq_id[2:0]` in (highest-priority
-pending channel), `cpu_irq_ack[7:0]` out (1-cycle pulse), `cpu_in_trap` out
-(held until MRET). Channels map to mcause 16..23; `mip[16+i]` mirrors
-`cpu_irq[i]`, `mie[16+i]` enables. An irq is taken only at an instruction
-boundary, only under `mstatus.MIE`, held through a multi-cycle AXI stall
-(REQ4; priority D2).
+The PIC implements the *Programmable Interrupt Controller with Advanced
+Scheduling* brief ([pic/](pic/)): 16 hardware sources + 16 software channels
+(32 logical sources), custom priority grouping, preemption with nesting,
+spurious detection, deadline-aware escalation, and software-triggered
+interrupts. Full design in [pic.v](hdl/pic.v) and [ARCHITECTURE.md](ARCHITECTURE.md) §7.
 
-The PIC side ([pic.v](hdl/pic.v), D19–D22): 8 level-sensitive source lines
-(DMA ch0..3, DP-SRAM on 4, mtimer on 7; 5–6 free),
-`pending = src & enable & ~in_service`, fixed priority with channel 0
-highest. The acked channel stays out of `cpu_irq` until MRET — the brief's
-"suppress re-assertion of the same interrupt" via `cpu_in_trap`, in practice.
-Software programs it over an AXI4-Lite slave port: `0x0 IRQ_ENABLE` (R/W),
-`0x4 IRQ_PENDING`, `0x8 IRQ_RAW`, `0xC IRQ_ACTIVE` (RO); anything else answers
-SLVERR. The PIC enable and the CPU's `mie` are two independent masks. One
-consequence of the fixed priority, covered by a test: a source left
-PIC-enabled while its `mie` bit is off pins `cpu_irq_id` on itself and starves
-the lower-priority channels. Route a source into the PIC only if some handler
-will clear it.
+The CPU side: `cpu_irq` in (single level request), `cpu_irq_vec[3:0]` in (id of
+the offered source), `cpu_irq_ack` out (1-cycle claim pulse at handler entry),
+`cpu_irq_eoi` out (1-cycle pulse on an interrupt-returning MRET). A source maps
+to mcause `16+vec`; the CPU builds a one-hot `mip[16+vec]` from the offer, and
+`mie[16+vec]` is the per-source CPU enable. An irq is taken only at an
+instruction boundary, only under `mstatus.MIE`, held through a multi-cycle AXI
+stall (REQ4; priority D2).
 
-The timer ([mtimer.v](hdl/mtimer.v), D26/D27) sits on PIC channel 7:
+The PIC side (D19–D22): a slot's request is `(level ? irq_src : edge_latch |
+sw) & INT_ENABLE`. The resolver builds an effective priority key
+`{band_urgency, intra_priority, ~index}` per source and offers the most urgent
+one that is strictly above the top of the nesting stack, so a higher source
+**preempts** a lower one; `cpu_irq_ack` pushes it (claim), `cpu_irq_eoi` pops it
+(return). A source whose deadline elapses before it is serviced has its band
+**escalated** (`ESCALATION_CFG`). A source that deasserts before its claim is
+flagged **spurious** (`SPURIOUS_LOG`, `INT_STATUS.SPUR`) without corrupting the
+stack. Software injects an interrupt with a keyed `SRCx_SW_TRIG` write. Everything
+is programmed over an AXI4-Lite slave port (register map in ARCHITECTURE.md §7);
+unmapped words and read-only writes answer SLVERR. The PIC's `INT_ENABLE` and the
+CPU's `mie` are two independent masks: a source PIC-enabled but `mie`-masked sits
+as the PIC's offer forever and starves the rest, so route a source into the PIC
+only if some handler will service it.
+
+The timer ([mtimer.v](hdl/mtimer.v), D26/D27) sits on PIC source 7:
 64-bit `mtime`/`mtimecmp` behind an AXI4-Lite slave port, level irq while
 `mtime >= mtimecmp`, disarmed at reset. With WFI (D23) it gives the SoC an
 idle mode: program the DMA, arm the timer as a deadline, execute WFI. The CPU
@@ -152,7 +161,7 @@ hdl/
   control.v            decoder (RV32I, FENCE=NOP, SYSTEM)       (REQ7)
   csr_file.v           M-mode CSRs + trap/MRET sequencing       (REQ9; D3,D5,D15,D16)
   exception_unit.v     sync exception detect                    (D3,D17,D18)
-  pic.v                system interrupt controller              (D19-D22)
+  pic.v                advanced-scheduling interrupt controller (D19-D22)
   mtimer.v             machine timer, AXI4-Lite + irq to PIC 7  (D26,D27)
   axi_lite_slave.v     reusable AXI4-Lite register interface (shared by pic/mtimer)
   regfile.v            32x32 register file                      (REQ10)
@@ -163,12 +172,14 @@ debug/
 debug/sva/
   axi_lite_sva.sv      AXI4-Lite contract as SVA (per port: ibus/dbus/PIC)
   cpu_core_sva.sv      pipeline invariants as SVA (REQ4,10,11; D2,D3,D12)
-  pic_sva.sv           PIC invariants as SVA (D19-D21)
+  pic_sva.sv           PIC invariants as SVA (D-LAT/D-BAND/D-NEST)
   cpu_func_cov.sv      functional coverage bins + end-of-run [FCOV] table
   bind_sva.sv          attaches everything with bind - zero RTL edits
 debug/hdl/
   tb_cpu_axi.v         self-checking TB: CPU + real PIC @ 0x3000_0000 + AXI
                        memories + monitors; the TB plays the peripherals
+  tb_pic.v             standalone PIC feature bench: bands, nesting, spurious,
+                       deadline escalation, software triggers, AXI responses
   tb_dual_core.v       2 CPUs + shared memory behind an arbiter (scalability proof)
   axi_lite_monitor.v   passive AXI4-Lite protocol checker (ibus, dbus, PIC port)
   axi_lite_mem_model.v behavioral AXI4-Lite slave (OKAY/DECERR, latency + seeded
@@ -206,24 +217,30 @@ monitor missed it — it only arms after reset. One-line fix in
 [debug/VERIFICATION.md](debug/VERIFICATION.md).
 
 Test plan and results: [debug/VERIFICATION.md](debug/VERIFICATION.md). Short
-version: every mcause exercised with exact trap counting (every PIC channel
+version: every mcause exercised with exact trap counting (every PIC source
 except the deliberately-masked one), CSR negative tests, PIC priority /
 in-service suppression / double masking / SLVERR negatives, an interrupt held
 through an AXI stall, BTB aliasing, RAS call/return nesting, WFI wake both ways
 with the instruction bus checked silent, the mtimer end to end, CPI = 1.00 on a
 latency-1 memory, protocol monitors on all four AXI ports, seeded random
-backpressure, the dual-core handshake. Functional coverage: 88/92 bins hit; the
-four misses are the two intentional ch5 negatives and the two backpressure bins
-the regression configs cover instead of the default run.
+backpressure, the dual-core handshake. The standalone `tb_pic.v` then drives the
+PIC's advanced features directly — priority bands, preemptive nesting, spurious
+detection, deadline escalation, keyed software triggers, AXI error responses.
+Functional coverage: 88/92 bins hit; the four misses are the two intentional ch5
+negatives and the two backpressure bins the regression configs cover instead of
+the default run.
 
 ## Open points (system level)
 
 - Global memory map undecided — the reset vector is the `RESET_PC` parameter
   (default 0x0); PIC / mtimer bases are TB decoder parameters (0x3000_0000 /
   0x3001_0000 for now).
-- PIC and mtimer have no spec of their own — the CPU-side interface is fixed by
-  the CPU brief and implemented; the internals (priority order, register maps,
-  D19–D22, D26–D27) are our proposal to confirm with the team/mentor.
+- The PIC implements the *Advanced Scheduling* brief ([pic/](pic/)); the
+  quantitative choices it delegates to the intern (4 bands, `NEST_MAX` default 8,
+  16-bit deadlines, jump-to-band escalation, the `0xA5A5` software key, exact
+  register offsets) are documented in [pic.v](hdl/pic.v)/[ARCHITECTURE.md](ARCHITECTURE.md)
+  and open to confirm with the team/mentor. The mtimer has no spec of its own
+  (D26–D27), same status.
   Source-to-channel mapping: DMA 0..3, DP-SRAM 4, mtimer 7; 5–6 free.
 - Reset type differs between blocks (CPU/DMA async, DP-SRAM sync).
 - With more than one core, "which PIC channel targets which core" is undefined

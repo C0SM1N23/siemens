@@ -89,10 +89,11 @@ next to the payload:
 - **DBUS -> dmem (slave)** (`d0_*`) — the same five channels as the memory sees
   them after the address decoder (the default dbus leg).
 - **DBUS -> PIC (slave)** (`pp_*`) and **DBUS -> mtimer (slave)** (`t_*`) — the
-  peripheral register accesses (PIC ENABLE/PENDING/RAW/ACTIVE, mtimer
-  MTIME/MTIMECMP), each on its own decoded port.
-- **IRQ / TRAP** — `irq_src`, `tmr_irq`, `cpu_irq`, `cpu_irq_id`, `cpu_irq_ack`,
-  `cpu_in_trap`, to line an interrupt up against the bus traffic around it.
+  peripheral register accesses (PIC INT_ENABLE / SRCx_STATUS / INT_STATUS /
+  ACTIVE_VEC, mtimer MTIME/MTIMECMP), each on its own decoded port.
+- **IRQ / TRAP** — `irq_src`, `tmr_irq`, `cpu_irq`, `cpu_irq_vec`, `cpu_irq_ack`,
+  `cpu_irq_eoi`, `cpu_in_trap`, to line an interrupt up against the bus traffic
+  around it.
 
 Reading a beat: data transfers on the cycle where both VALID and READY are high;
 the address/data must stay stable while VALID waits for READY (the core AXI rule
@@ -130,17 +131,18 @@ tags as the README index and the code.
 | Priv | `mtval` records the fault address (load/store access fault) / the instruction on illegal; `misa`/`mvendorid`/`marchid`/`mimpid` are readable (0 is valid), not illegal | strict M-mode compliance: these CSRs must exist and read back, and a fault must leave its address in mtval | mtval readback after a DECERR load = 0x8000; misa = 0x40000100 (RV32I); the three id CSRs read 0; none of the reads trap (sync trap count stays exactly 17) |
 | D16 | Vectored mtvec: irq -> BASE+4*cause, exception -> BASE | the two vectored paths differ | irq lands at 0x348 slot (cause 18); ecall in vectored mode records at BASE |
 | REQ4 | irq sampled only under MIE, only enabled channels, held through AXI stalls, taken at instruction boundaries | the CPU side of the PIC contract | src5 pending whole run, never acked; ch2 raised mid-load: ack timestamp > R-beat timestamp, mepc = boundary instruction, load value intact |
-| REQ4 | ack = 1-cycle pulse on the right bit; cpu_in_trap spans entry..MRET | PIC handshake shape | pulse-width invariant, ack counts ch2=2 / ch3=1, in_trap sampled in handler and after |
-| D20 | PIC priority: two channels pending together are served lowest-first | "highest-priority pending" must be deterministic | src2+src3 raised in the same cycle: ack2 timestamp < ack3 timestamp; per-cycle invariant `cpu_irq_id` = lowest set `cpu_irq` bit |
-| D21 | In-service suppression: an acked channel with its line still high disappears from `cpu_irq` until MRET | a handler that re-enables MIE must not be re-entered by its own interrupt | src3 held high through its whole handler; invariant checks `cpu_irq[3]`=0 in that window; ack3 count stays 1 |
-| D19,D22 | PIC software interface: ENABLE write+readback, RAW/PENDING/ACTIVE reads; PIC enable and `mie` are independent masks | the programmable half of the PIC, over real AXI | scoreboard: ENABLE=0x2C, RAW=PENDING=0x20 (src5), ACTIVE=0x04 read *inside* the handler; ch5 visible in mip yet never taken |
-| D22 | Unmapped PIC register read and read-only register write answer SLVERR -> precise access faults | error responses from a real peripheral, not just the TB model | both accesses trap (causes 5 and 7, counted in the exact 17); PIC-port monitor stays clean |
+| REQ4 | claim (`cpu_irq_ack`) and eoi (`cpu_irq_eoi`) are 1-cycle pulses; `cpu_in_trap` spans entry..MRET | PIC handshake shape | pulse-width invariants; per-source claim counts ch2=2 / ch3=1 (attributed via the PIC's own claim signals); in_trap sampled in handler and after |
+| D20 (D-BAND) | PIC priority: two sources pending together are served by band / intra-priority / index — default config = lowest index first | "highest-priority pending" must be deterministic | src2+src3 raised in the same cycle: claim2 timestamp < claim3 timestamp; strict-priority + offer-consistency invariants proven by `pic_sva` on the internal signals |
+| D21 (D-NEST) | In-service suppression: a claimed source with its line still high stays out of `cpu_irq` until its handler's eoi | a handler that re-enables MIE must not be re-entered by its own interrupt | src3 held high through its whole handler; `suppress_fail` checks `cpu_irq`/vec=3 never reappears in that window; claim3 count stays 1 |
+| D19,D22 (D-AXI) | PIC software interface: INT_ENABLE write+readback, SRC5_STATUS / INT_STATUS / ACTIVE_VEC reads; PIC enable and `mie` are independent masks | the programmable half of the PIC, over real AXI | scoreboard: INT_ENABLE=0x2C, SRC5_STATUS pending=0x1, INT_STATUS=0, ACTIVE_VEC=0x107 (valid\|src7) read *inside* the handler; src5 visible in mip yet never taken |
+| D22 (D-AXI) | Unmapped PIC word read and read-only register write answer SLVERR -> precise access faults | error responses from a real peripheral, not just the TB model | both accesses trap (causes 5 and 7, counted in the exact 17); PIC-port monitor stays clean |
+| D-BAND/NEST/SPUR/DDL/SW | Advanced-scheduling features driven directly in `tb_pic.v` | the system bench uses the default config; the feature set needs a dedicated bench | priority bands (inter/intra/tie), preemptive nesting + `NEST_MAX` overflow, a source re-banded while active keeping its claimed priority (grouping Q4), spurious detection + `SPURIOUS_LOG` W1C, deadline escalation that flips the offer *and* preempts an active lower source, bump+multi escalation, keyed software triggers, edge latching, SLVERR/OKAY responses — 139 checks, all pass |
 | REQ10 | x0 hardwired, regfile reset | | `addi x0,x0,5` then read; regs[0] === 0 |
 | D23 | WFI: sleep until wake, ibus silent, mepc = wfi+4 on an interrupt wake, fall-through (no trap) when MIE=0 | the CPU must idle without burning interconnect bandwidth the DMA needs | timer irq wakes the first WFI (mepc readback = wfi+4); second WFI with MIE=0 falls through to a marker store with the handler-entry count unchanged; TB measures ≤1 ibus read per sleep window + SVA `wfi_ibus_quiet` |
 | D24 | RAS: returns from 3 different call sites + a nested call chain (h→g→g) predict correctly and stay correct | the BTB's last-target scheme is systematically wrong for returns; the RAS may only change *time*, never results | accumulated signature 0x243 checked; FCOV separates returns predicted correctly vs mispredicted (first encounters only) |
 | D25 | mhpmcounter3..7 count mispredicts / fetch-starved / dbus-stall / traps / WFI cycles; writes to them trap | the CPU-side observability numbers for tuning DMA throttling | end-of-run readbacks: traps exactly 26 (17 direct + 1 vectored + 8 irq), the latency-dependent ones nonzero; RO-write trap covered by the existing mcycle negative |
-| D26,D27 | mtimer end to end: disarmed at reset, armed CMP_LO-then-CMP_HI without false fires, level irq through PIC ch7, handler clears by moving mtimecmp, software register write, unmapped offset SLVERR | the timer is a real peripheral on a real bus — and the WFI wake source | timer irq taken exactly once (ack7 = 1, cause 23 vectored slot), mtime monotonic readback, MTIME_HI write/read-back = 0x2AB, bad-offset read+write both trap (cause 5/7, counted in the 17), mtimer port protocol monitor + SVA clean |
-| D20 | Channel sweep: ch0/1/4/6 each raised once and served; ch5 PIC-disabled first because a mie-masked pending source pins `cpu_irq_id` and starves lower-priority channels | the starvation discipline every peripheral hookup must respect | one ack per swept channel, handler-entry count exactly 8, ack5 still never seen |
+| D26,D27 | mtimer end to end: disarmed at reset, armed CMP_LO-then-CMP_HI without false fires, level irq through PIC source 7, handler clears by moving mtimecmp, software register write, unmapped offset SLVERR | the timer is a real peripheral on a real bus — and the WFI wake source | timer irq taken exactly once (claim7 = 1, cause 23 vectored slot), mtime monotonic readback, MTIME_HI write/read-back = 0x2AB, bad-offset read+write both trap (cause 5/7, counted in the 17), mtimer port protocol monitor + SVA clean |
+| D20 | Channel sweep: ch0/1/4/6 each raised once and served; ch5 PIC-disabled first because a mie-masked source sits as the PIC's offer and starves the rest | the starvation discipline every peripheral hookup must respect | one claim per swept channel, handler-entry count exactly 8, claim5 still never seen |
 | D6 | Back-to-back fetch: 1 instr/cycle on a latency-1 memory | the throughput claim, measured not asserted | mcycle delta across 33 straight-line instrs = 33 (gated to the latency-1 config) |
 | REQ2,REQ12 | AXI4-Lite legality on both master ports | interoperability with DMA/DP-SRAM | protocol monitors, all runs, all configs |
 | D5 | 2 cores + shared memory via arbiter, mhartid split, flag handshake | "2-3 cores in a bigger SoC" | `tb_dual_core`: flags + both results + clean shared bus |
@@ -166,19 +168,21 @@ them:
   commits (D3), a stalled S2 feeds S3 bubbles, x0 reads zero (REQ10), WSTRB
   only ever carries an SB/SH/SW lane shape (REQ11), never read+write at
   once on the dbus (D12).
-- `pic_sva.sv` — the PIC contract (D19–D21): `cpu_irq` equals the registered
-  gated pending vector (compared against a same-edge shadow register, so a
-  TB that moves `irq_src` right after the clock edge cannot race the check),
-  id points at the lowest pending channel, ack lands in the in-service mask,
-  an in-service channel stays out of `cpu_irq`, MRET releases the mask.
+- `pic_sva.sv` — the PIC contract (D-LAT/D-BAND/D-NEST): `cpu_irq`/`cpu_irq_vec`
+  equal the registered offer (compared against a same-edge shadow register, so a
+  TB that moves `irq_src` right after the clock edge cannot race the check), the
+  offered source is a pending, non-in-service request, preemption is strict over
+  the top of the nesting stack, depth stays within `[0, NEST_MAX]` and moves only
+  by claim/eoi, and the depth limit masks further offers.
 - `cpu_func_cov.sv` — functional coverage: instruction classes, load/store
   sizes, each branch × taken/not-taken, predictor outcome matrix, every
   trap cause, CSR op forms, forwarding paths, irq scenarios, per-channel
   acks, bus response/backpressure bins. Prints the `[FCOV]` table with a
   hit/MISS verdict per bin and a summary percentage at end of run.
 
-Current evidence: **all 90 TB checks pass (ModelSim and Verilator), zero
-assertion violations, 88/92 functional bins hit (95%)**. The first measurement of this
+Current evidence: **all system-bench TB checks pass (ModelSim and Verilator),
+plus the standalone `tb_pic.v` (139 checks) for the PIC's advanced features,
+zero assertion violations, 88/92 functional bins hit (95%)**. The first measurement of this
 table (59/85) exposed real test-plan holes — AUIPC never committed,
 BLT/BGE/BLTU/BGEU and CSRRCI never executed, both-operand forwarding never
 hit, PIC channels 0/1/4/6/7 never taken — and `program_axi.s` now covers all
@@ -238,12 +242,17 @@ it end to end.
   the regress configs).
 - RAS depth is a parameter (8, 0 = off); a regress config sweeping it would
   quantify the return-mispredict win on a bigger program.
-- The PIC is now the real `pic.v`, exercised in-system (the TB plays the
-  peripherals on `irq_src`); a standalone PIC unit bench with randomized
-  line movement would still add value, esp. many channels toggling at once.
-- Nested interrupt handlers (a handler that sets MIE=1 and takes a *different*
-  channel) are not exercised; the PIC's in-service clear is tied to the single
-  `cpu_in_trap` bit, so nesting is documented as out of scope (D21).
+- The PIC is the real advanced-scheduling `pic.v`, exercised in-system (the TB
+  plays the peripherals on `irq_src`, default config = lowest-index priority)
+  and, feature by feature, by the standalone `tb_pic.v` (bands, nesting,
+  spurious, deadline escalation, software triggers, AXI responses).
+- The PIC supports preemptive nesting natively (hardware stack, `NEST_MAX`),
+  verified in `tb_pic.v`. In the integrated CPU, handlers run with MIE=0, so the
+  CPU exercises one nesting level via `cpu_irq_ack`/`cpu_irq_eoi`; multi-level
+  nesting through the CPU needs handler software to re-enable MIE and save
+  mepc/mcause/mstatus (standard RISC-V) — a small addition on top of the eoi
+  path, not an RTL gap. Randomized many-source toggling in `tb_pic.v` would
+  still add value.
 - The dbus decoder covers 2 slaves; richer fabrics (more slaves, DECERR from
   the fabric's own decoder) come with the real interconnect.
 - Reset assertion mid-transaction is not exercised (models and CPU reset

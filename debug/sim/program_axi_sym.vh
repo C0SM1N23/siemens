@@ -3,7 +3,7 @@
 `define ADDR_loop 32'h00000078
 `define ADDR_back 32'h00000090
 `define ADDR_ff_resume 32'h0000012c
-`define ADDR_wait_irq 32'h00000170
+`define ADDR_wait_irq 32'h00000178
 `define ADDR_irq2_victim 32'h00000180
 `define ADDR_vec_ecall 32'h0000018c
 `define ADDR_subr 32'h0000019c

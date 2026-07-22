@@ -45,8 +45,9 @@ module cpu_func_cov (
     input        ras_pop,        // committed return
 
     // PIC interface
-    input [7:0]  cpu_irq,
-    input [7:0]  cpu_irq_ack,
+    input        cpu_irq,
+    input [3:0]  cpu_irq_vec,
+    input        cpu_irq_ack,
 
     // bus response beats
     input        ib_arvalid,
@@ -107,7 +108,7 @@ integer trap_cnt[0:31];       // trap entries by mcause code (16+ = irq)
 integer csr_cnt [0:7];        // {imm, op}: CSRRW/S/C and immediate forms
 integer csr_ro;               // CSRRS/C with rs1=x0: pure read, no write
 integer fwd_cnt [0:2];        // forwarding: rs1 only / rs2 only / both
-integer ev_mret, ev_mispredict, ev_irq_in_stall, ev_multi_pending;
+integer ev_mret, ev_mispredict, ev_irq_in_stall, ev_irq_taken;
 integer wfi_commit, wfi_sleep, wfi_preempt;      // D23
 integer ras_pushes, ras_pops, ret_pred_ok, ret_pred_bad;  // D24
 integer ack_cnt [0:7];        // PIC acks per channel
@@ -127,7 +128,7 @@ initial begin
     for (i = 0; i < 8;  i = i + 1) csr_cnt[i]  = 0;
     for (i = 0; i < 3;  i = i + 1) fwd_cnt[i]  = 0;
     bp_tgt_wrong = 0; csr_ro = 0;
-    ev_mret = 0; ev_mispredict = 0; ev_irq_in_stall = 0; ev_multi_pending = 0;
+    ev_mret = 0; ev_mispredict = 0; ev_irq_in_stall = 0; ev_irq_taken = 0;
     wfi_commit = 0; wfi_sleep = 0; wfi_preempt = 0;
     ras_pushes = 0; ras_pops = 0; ret_pred_ok = 0; ret_pred_bad = 0;
     ib_ok = 0; ib_err = 0; ib_bp = 0;
@@ -156,7 +157,8 @@ always @(posedge clk) begin
     end
 end
 
-// trap entries, binned by cause; irq channels land on codes 16..23 (D3)
+// trap entries, binned by cause; irq sources land on codes 16..31 (D3);
+// the test program exercises sources 0..7 (codes 16..23)
 always @(posedge clk) begin
     if (rst_n && trap_take && s2_advance)
         trap_cnt[trap_code] <= trap_cnt[trap_code] + 1;
@@ -190,12 +192,14 @@ end
 // interrupt scenarios (cycle counts, not instruction counts)
 always @(posedge clk) begin
     if (rst_n) begin
-        if (|cpu_irq && lsu_active)
+        if (cpu_irq && lsu_active)
             ev_irq_in_stall <= ev_irq_in_stall + 1;
-        if (|(cpu_irq & (cpu_irq - 8'h01)))
-            ev_multi_pending <= ev_multi_pending + 1;
-        for (i = 0; i < 8; i = i + 1)
-            if (cpu_irq_ack[i]) ack_cnt[i] <= ack_cnt[i] + 1;
+        // the PIC now resolves priority and offers one prioritised source, so the
+        // channel is read from cpu_irq_vec at the (single) claim pulse
+        if (cpu_irq_ack) begin
+            ev_irq_taken <= ev_irq_taken + 1;
+            if (cpu_irq_vec < 4'd8) ack_cnt[cpu_irq_vec] <= ack_cnt[cpu_irq_vec] + 1;
+        end
     end
 end
 
@@ -322,7 +326,7 @@ final begin
     rep("MRET executed",              ev_mret,          REQ);
     rep("mispredict redirects",       ev_mispredict,    REQ);
     rep("irq pending during a stall", ev_irq_in_stall,  REQ);
-    rep("multiple irqs pending",      ev_multi_pending, REQ);
+    rep("interrupts taken (claims)",  ev_irq_taken,     REQ);
 
     rep("WFI committed (masked wake)", wfi_commit,   REQ);
     rep("WFI sleep cycles",            wfi_sleep,    REQ);

@@ -33,17 +33,20 @@ ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst_inst (
 `AXIL_WIRES(db1);
 `AXIL_WIRES(s);
 
-wire [7:0]  ack    [0:1];
+wire        ack    [0:1];
+wire        eoi    [0:1];
 wire        intrap [0:1];
 
+// no PIC in the dual-core bench: the interrupt inputs are tied off
 cpu_top #(.HART_ID(0)) cpu0 (
     .clk         (clk),
     .rst_n       (rst_n),
     `AXIL_M_RD(ibus_axi, ib0),
     `AXIL_M(dbus_axi, db0),
-    .cpu_irq     (8'b0),
+    .cpu_irq     (1'b0),
+    .cpu_irq_vec (4'b0),
     .cpu_irq_ack (ack[0]),
-    .cpu_irq_id  (3'b0),
+    .cpu_irq_eoi (eoi[0]),
     .cpu_in_trap (intrap[0])
 );
 
@@ -52,9 +55,10 @@ cpu_top #(.HART_ID(1)) cpu1 (
     .rst_n       (rst_n),
     `AXIL_M_RD(ibus_axi, ib1),
     `AXIL_M(dbus_axi, db1),
-    .cpu_irq     (8'b0),
+    .cpu_irq     (1'b0),
+    .cpu_irq_vec (4'b0),
     .cpu_irq_ack (ack[1]),
-    .cpu_irq_id  (3'b0),
+    .cpu_irq_eoi (eoi[1]),
     .cpu_in_trap (intrap[1])
 );
 

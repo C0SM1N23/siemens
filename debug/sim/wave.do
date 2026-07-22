@@ -132,10 +132,13 @@ add wave -noupdate -radix hexadecimal /tb_cpu_axi/t_rresp
 add wave -noupdate -divider {IRQ / TRAP}
 add wave -noupdate -radix binary   /tb_cpu_axi/irq_src
 add wave -noupdate                 /tb_cpu_axi/tmr_irq
-add wave -noupdate -radix binary   /tb_cpu_axi/cpu_irq
-add wave -noupdate -radix unsigned /tb_cpu_axi/cpu_irq_id
-add wave -noupdate -radix binary   /tb_cpu_axi/cpu_irq_ack
+add wave -noupdate                 /tb_cpu_axi/cpu_irq
+add wave -noupdate -radix unsigned /tb_cpu_axi/cpu_irq_vec
+add wave -noupdate                 /tb_cpu_axi/cpu_irq_ack
+add wave -noupdate                 /tb_cpu_axi/cpu_irq_eoi
 add wave -noupdate                 /tb_cpu_axi/cpu_in_trap
+add wave -noupdate -radix unsigned /tb_cpu_axi/pic_inst/depth
+add wave -noupdate -radix binary   /tb_cpu_axi/pic_inst/active
 
 configure wave -namecolwidth 240
 configure wave -valuecolwidth 100

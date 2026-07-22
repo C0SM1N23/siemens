@@ -1,4 +1,4 @@
-# full regression: one compile, five configurations.
+# full regression: one compile, six configurations.
 #   vsim -c -do "do regress.do; quit -f"
 # every run must end in "ALL TESTS PASSED" / "DUAL-CORE TEST PASSED".
 #
@@ -8,13 +8,13 @@
 
 do compile.do
 
-echo "=== run 1/5: single-core, default latencies (CPI check active) ==="
+echo "=== run 1/6: single-core, default latencies (CPI check active) ==="
 vsim -onfinish stop -voptargs=+acc work.tb_cpu_axi
 echo "cfg: imem RL=[examine -radix dec /tb_cpu_axi/imem_inst/READ_LAT] SP=[examine -radix dec /tb_cpu_axi/imem_inst/STALL_PROB] | dmem RL=[examine -radix dec /tb_cpu_axi/dmem_inst/READ_LAT] WL=[examine -radix dec /tb_cpu_axi/dmem_inst/WRITE_LAT] SP=[examine -radix dec /tb_cpu_axi/dmem_inst/STALL_PROB]"
 run -all
 quit -sim
 
-echo "=== run 2/5: single-core, high fixed AXI latencies ==="
+echo "=== run 2/6: single-core, high fixed AXI latencies ==="
 vsim -onfinish stop -voptargs=+acc work.tb_cpu_axi \
      -G/tb_cpu_axi/imem_inst/READ_LAT=2 \
      -G/tb_cpu_axi/dmem_inst/READ_LAT=3 \
@@ -23,7 +23,7 @@ echo "cfg: imem RL=[examine -radix dec /tb_cpu_axi/imem_inst/READ_LAT] SP=[exami
 run -all
 quit -sim
 
-echo "=== run 3/5: single-core, random READY backpressure, seed set A ==="
+echo "=== run 3/6: single-core, random READY backpressure, seed set A ==="
 vsim -onfinish stop -voptargs=+acc work.tb_cpu_axi \
      -G/tb_cpu_axi/imem_inst/STALL_PROB=25 -G/tb_cpu_axi/imem_inst/SEED=101 \
      -G/tb_cpu_axi/dmem_inst/STALL_PROB=35 -G/tb_cpu_axi/dmem_inst/SEED=202
@@ -31,7 +31,7 @@ echo "cfg: imem SP=[examine -radix dec /tb_cpu_axi/imem_inst/STALL_PROB] SEED=[e
 run -all
 quit -sim
 
-echo "=== run 4/5: single-core, random READY backpressure, seed set B ==="
+echo "=== run 4/6: single-core, random READY backpressure, seed set B ==="
 vsim -onfinish stop -voptargs=+acc work.tb_cpu_axi \
      -G/tb_cpu_axi/imem_inst/STALL_PROB=40 -G/tb_cpu_axi/imem_inst/SEED=777 \
      -G/tb_cpu_axi/dmem_inst/STALL_PROB=20 -G/tb_cpu_axi/dmem_inst/SEED=888
@@ -39,8 +39,13 @@ echo "cfg: imem SP=[examine -radix dec /tb_cpu_axi/imem_inst/STALL_PROB] SEED=[e
 run -all
 quit -sim
 
-echo "=== run 5/5: dual-core shared-memory handshake ==="
+echo "=== run 5/6: dual-core shared-memory handshake ==="
 vsim -onfinish stop -voptargs=+acc work.tb_dual_core
+run -all
+quit -sim
+
+echo "=== run 6/6: standalone PIC feature bench ==="
+vsim -onfinish stop -voptargs=+acc work.tb_pic
 run -all
 quit -sim
 

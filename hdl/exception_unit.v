@@ -11,7 +11,7 @@
 //      11    env call (M-mode)
 //       4/6  load/store addr misaligned
 //       5/7  load/store access fault
-//     (external-interrupt causes 16..23 live in csr_file, also D3.)
+//     (external-interrupt causes 16..31 live in csr_file, also D3.)
 // D17: load/store misalignment is checked before the access, so a misaligned op
 //      (cause 4/6) never issues an AXI transaction.
 // D18: a bus error maps to an access fault: fetch to cause 1, load to 5, store

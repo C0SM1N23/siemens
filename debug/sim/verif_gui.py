@@ -156,11 +156,12 @@ straturi pe care ModelSim ASE nu le poate compila:
    - protocol AXI pe toate 4 porturile: VALID/payload stabile sub READY
      intarziat, raspuns doar dupa adresa, max 1 tranzactie outstanding,
      fara EXOKAY, VALID interzis in reset
-   - promisiuni de pipeline: ack one-hot exact 1 ciclu, intreruperi doar
-     la granite de instructiune, instructiunea care da trap nu comite,
-     x0 citeste 0, WSTRB doar in forme legale SB/SH/SW
-   - contractul PIC: cpu_irq = vectorul pending inregistrat, id = canalul
-     cel mai prioritar, canal in-service suprimat pana la MRET
+   - promisiuni de pipeline: claim (ack) si eoi = puls de exact 1 ciclu,
+     intreruperi doar la granite de instructiune, instructiunea care da
+     trap nu comite, x0 citeste 0, WSTRB doar in forme legale SB/SH/SW
+   - contractul PIC: cpu_irq/cpu_irq_vec = oferta inregistrata a sursei
+     celei mai prioritare, preemptare stricta peste varful stivei de
+     nesting, adancime marginita de NEST_MAX
    Diferenta fata de teste: testul verifica UN scenariu; asertiunea
    verifica invariantul in TOATE scenariile, in fiecare ciclu.
 

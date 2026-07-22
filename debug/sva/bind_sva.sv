@@ -88,6 +88,7 @@ bind cpu_top cpu_core_sva core_sva_i (
     .clk          (clk),
     .rst_n        (rst_n),
     .cpu_irq_ack  (cpu_irq_ack),
+    .cpu_irq_eoi  (cpu_irq_eoi),
     .cpu_in_trap  (cpu_in_trap),
     .irq_take     (irq_take),
     .trap_take    (trap_take),
@@ -135,15 +136,25 @@ bind mtimer axi_lite_sva #(
 
 // PIC invariants
 bind pic pic_sva pic_sva_i (
-    .clk          (clk),
-    .rst_n        (rst_n),
-    .irq_src      (irq_src),
-    .cpu_irq      (cpu_irq),
-    .cpu_irq_id   (cpu_irq_id),
-    .cpu_irq_ack  (cpu_irq_ack),
-    .cpu_in_trap  (cpu_in_trap),
-    .enable_q     (enable_q),
-    .in_service_q (in_service_q)
+    .clk         (clk),
+    .rst_n       (rst_n),
+    .irq_src     (irq_src),
+    .cpu_irq     (cpu_irq),
+    .cpu_irq_vec (cpu_irq_vec),
+    .cpu_irq_ack (cpu_irq_ack),
+    .cpu_irq_eoi (cpu_irq_eoi),
+    // internals
+    .offer_val   (offer_val),
+    .res_id      (res_id),
+    .res_key     (res_key),
+    .req         (req),
+    .active      (active),
+    .depth       (depth),
+    .nest_max    (nest_max),
+    .has_active  (has_active),
+    .top_key     (top_key),
+    .claim_push  (claim_push),
+    .eoi_pop     (eoi_pop)
 );
 
 // functional coverage
@@ -174,6 +185,7 @@ bind cpu_top cpu_func_cov func_cov_i (
     .ras_push    (ras_push),
     .ras_pop     (ras_pop),
     .cpu_irq     (cpu_irq),
+    .cpu_irq_vec (cpu_irq_vec),
     .cpu_irq_ack (cpu_irq_ack),
     .ib_arvalid  (ibus_axi_arvalid),
     .ib_arready  (ibus_axi_arready),

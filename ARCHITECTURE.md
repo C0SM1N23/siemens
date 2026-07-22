@@ -25,10 +25,10 @@ code comments.
  (full R/W)  │  │ AXI master │     load/store      └──────┬───────┘  │
              │  └────────────┘                            │ S3       │
              │                                     ┌──────▼───────┐  │
-  cpu_irq ──►│                                     │ writeback →  │  │
-  cpu_irq_id►│                                     │ regfile      │  │
-  ◄─ irq_ack │                                     └──────────────┘  │
-  ◄─ in_trap └───────────────────────────────────────────────────────┘
+  cpu_irq ───►│                                     │ writeback →  │  │
+  cpu_irq_vec►│                                     │ regfile      │  │
+  ◄─ irq_ack  │                                     └──────────────┘  │
+  ◄─ irq_eoi  └───────────────────────────────────────────────────────┘
 ```
 
 Interfaces (REQ2, REQ3):
@@ -38,10 +38,11 @@ Interfaces (REQ2, REQ3):
 | `ibus_axi_*` | master | instruction fetch, AR/R channels only |
 | `dbus_axi_*` | master | load/store, all 5 channels, WSTRB per byte lane |
 | `clk`, `rst_n` | in | one clock domain, async active-low reset |
-| `cpu_irq[7:0]` | in | pending interrupt per PIC channel |
-| `cpu_irq_id[2:0]` | in | highest-priority pending channel |
-| `cpu_irq_ack[7:0]` | out | 1-cycle pulse on the accepted channel |
-| `cpu_in_trap` | out | high from trap entry until MRET |
+| `cpu_irq` | in | interrupt request from the PIC (single level line) |
+| `cpu_irq_vec[3:0]` | in | id (0..15) of the highest-priority offered source |
+| `cpu_irq_ack` | out | 1-cycle claim pulse at handler entry |
+| `cpu_irq_eoi` | out | 1-cycle pulse on an interrupt-returning MRET (PIC pops its nesting stack) |
+| `cpu_in_trap` | out | high from trap entry until MRET (observability / SVA) |
 
 Parameters: `RESET_PC` (boot address), `HART_ID` (drives `mhartid`, D5), and
 `BP_ENTRIES` / `RAS_DEPTH`, forwarded to the branch predictor (D9/D24) so a
@@ -50,7 +51,7 @@ the first pipeline version; all later features (WFI, RAS, counters) internal,
 PIC/mtimer separate blocks.
 
 The repo also carries two blocks not part of the CPU but that the system needs
-and no block owns: the interrupt controller `pic.v` (section 7) and the machine
+and no block owns: the interrupt controller `pic.v` (section 5) and the machine
 timer `mtimer.v` (section 8).
 
 ## 2. Pipeline
@@ -191,12 +192,12 @@ the ISA requires.
 | CSR | Addr | Implemented fields |
 |---|---|---|
 | mstatus | 0x300 | MIE(3), MPIE(7); MPP fixed 2'b11 |
-| mie | 0x304 | bits 16..23 = the 8 PIC channels (D3) |
+| mie | 0x304 | bits 16..31 = the 16 PIC sources (D3) |
 | mtvec | 0x305 | BASE[31:2], MODE[1:0] direct/vectored (D16) |
 | mscratch | 0x340 | full 32 bits |
 | mepc | 0x341 | [1:0] forced to 0 |
 | mcause | 0x342 | bit31 = interrupt, code in the low bits |
-| mip | 0x344 | read-only, mirrors `cpu_irq` on 16..23 |
+| mip | 0x344 | read-only, one-hot of the PIC's offered source on 16..31 |
 | mcycle / minstret | 0xB00/0xB02 | read-only counters (D5) |
 | mhpmcounter3..7 | 0xB03..07 | read-only event counters (D25) |
 | mhartid | 0xF14 | read-only, `HART_ID` parameter (D5) |
@@ -285,59 +286,112 @@ read-only PIC register) and DECERR (from the interconnect, unmapped
 address) both become precise traps — cause 1 on fetch, cause 5/7 on data
 (D8, D18).
 
-## 5. Interrupts
+## 5. Interrupts — PIC with Advanced Scheduling
+
+The PIC implements the *Programmable Interrupt Controller with Advanced
+Scheduling* brief (`pic/*.jpeg`): 16 hardware sources + 16 software channels
+(32 logical sources) through one priority-resolution pipeline, with custom
+priority grouping, preemptive nesting, spurious detection, deadline escalation,
+and software triggers. The brief is a draft that delegates the "non-standard
+design challenges" to the intern; the choices below (tagged `D-*` to match
+`pic.v`) are that feature spec.
 
 ```
-DMA ch0..3 ──┐
-DP-SRAM ─────┤ irq_src[7:0]   ┌──────────────── pic.v ───────────────┐
-mtimer ──────┘ (level) ──────►│ pending = src & enable & ~in_service │
-                              │ cpu_irq    <= pending                │
-   AXI4-Lite slave ──────────►│ cpu_irq_id <= lowest pending channel │
-   (IRQ_ENABLE etc.)          └──────────────────┬───────────────────┘
+DMA/DP-SRAM ─┐ irq_src[15:0]  ┌─────────────── pic.v (advanced scheduling) ──┐
+mtimer ──────┤ (level/edge) ─►│ req  = (level?src : edge_latch | sw) & INT_ENABLE
+sw triggers ─┘ SRCx_SW_TRIG   │ key  = {band_urgency, intra_priority, ~index}  │
+                              │ offer = most-urgent req strictly above nest top│
+   AXI4-Lite slave ──────────►│ cpu_irq / cpu_irq_vec  registered (D-LAT)      │
+   (config + status)          └──────────────────┬─────────────────────────────┘
                                                  ▼
-                                    cpu_irq / cpu_irq_id  ──►  CPU
-                                    cpu_irq_ack / cpu_in_trap ◄──
+                          cpu_irq / cpu_irq_vec ───►  CPU
+                          cpu_irq_ack (claim) / cpu_irq_eoi (return) ◄──
 ```
 
 CPU side (REQ4): an interrupt is taken only under `mstatus.MIE`, only if the
-channel's `mie` bit is set, only at an instruction boundary — a pending
+source's `mie[16+vec]` bit is set, only at an instruction boundary — a pending
 interrupt during a multi-cycle AXI stall waits for the response beat. The victim
 instruction is squashed before doing anything, so it re-runs after MRET. mepc
 holds the resume PC (D4); the one exception is a WFI wake, where mepc = wfi+4
-per the privileged spec.
+per the privileged spec. The CPU pulses `cpu_irq_ack` when it enters the handler
+(the PIC's *claim*) and `cpu_irq_eoi` on an interrupt-returning MRET (the PIC's
+*end-of-interrupt*).
 
-PIC side (D19..D22):
-- Level-sensitive inputs, no latching (D19): a peripheral holds its line
-  until software clears its own status register. `cpu_irq` and
-  `cpu_irq_id` are registered from the same pending vector, so the pair
-  the CPU samples is always consistent.
-- Fixed priority, channel 0 highest (D20).
-- In-service suppression (D21): the acked channel is masked out of
-  `cpu_irq` until MRET, so a handler that re-enables MIE cannot be
-  re-entered by the interrupt it is serving.
-- Register map (D22), word registers from the base address:
+### Sources (D-SW)
+Each of the 16 slots has a hardware line `irq_src[i]` (level- or edge-triggered
+per `SRCx_CONFIG.TRIG`) and a software channel. A slot's request is
+`req = (level ? irq_src[i] : edge_latch[i] | sw_pend[i]) & INT_ENABLE[i]`, so a
+software-injected interrupt is indistinguishable from a hardware one once in the
+pipeline. Software sets a channel with a *keyed* `SRCx_SW_TRIG` write (bit0=1
+with `0xA5A5` in [31:16], so a stray single-bit write cannot trigger it) and
+clears it by writing bit0=0; a claim also auto-clears it, like an edge source.
 
-| Offset | Register | Access |
-|---|---|---|
-| 0x0 | IRQ_ENABLE | R/W |
-| 0x4 | IRQ_PENDING | RO (= cpu_irq) |
-| 0x8 | IRQ_RAW | RO (source lines) |
-| 0xC | IRQ_ACTIVE | RO (in-service mask) |
+### Priority grouping (D-BAND)
+Four priority **bands**. `BAND_CONFIG` assigns each band a 2-bit urgency
+(default band 0 highest … band 3 lowest), so software can reorder bands without
+touching per-source config. Each source carries a 2-bit band and a 4-bit
+intra-band priority. The resolver compares an effective key
+`{band_urgency, intra_priority, ~index}`: band dominates, then intra-priority,
+then the lowest index wins the final tie (deterministic, no starvation within a
+fully-specified config). Reconfiguring a source's band while it is in service
+cannot corrupt nesting — the key is snapshotted onto the stack at claim time.
 
-Anything else, and any write to a read-only register, answers SLVERR.
+### Preemption + nesting (D-NEST)
+A hardware **nesting stack** (depth 0..`NEST_MAX`, `NEST_MAX` in [1,16], default
+8) holds the key+id of every in-service source. Only a source *strictly more
+urgent* than the top of the stack is offered, so a higher source preempts a
+lower one. `cpu_irq_ack` pushes (claim, depth++), `cpu_irq_eoi` pops (return,
+depth--). At `depth == NEST_MAX` offers are masked so the CPU can never claim
+past the limit; a preemption blocked that way sets `INT_STATUS.OVF` /
+`NEST_STATUS.OVF` (visible, non-destructive).
 
-Two masks stack on purpose: PIC IRQ_ENABLE = "this source may reach the CPU",
-`mie` = "current software cares". A consequence of the fixed priority, found
-while testing: a source PIC-enabled but mie-masked pins `cpu_irq_id` on itself
-and starves all lower-priority channels. Integration rule: route a source into
-the PIC only if some handler will clear it.
+### Spurious detection (D-SPUR)
+A source may deassert between being offered and the CPU's claim. Detected at the
+claim: if the offered source's `req` is gone when `cpu_irq_ack` lands, the claim
+is *spurious* — `SRCx_STATUS.SPUR` + sticky `SPURIOUS_LOG[x]` + `INT_STATUS.SPUR`
+are set, and the claim is still accounted on the stack so the ack/eoi handshake
+stays balanced (a vectored CPU has already committed to the handler; it reads the
+flag and early-outs). A source still asserted at the claim, and only cleared
+later in the handler, is legitimate — not spurious.
+
+### Deadline escalation (D-DDL)
+Each source has a 16-bit deadline (cycles, 0 = disabled). A per-source counter
+runs while the slot is a pending request awaiting service; on reaching the
+deadline the source's effective band is escalated per `ESCALATION_CFG` (jump to a
+target band, or bump one band more urgent; `MULTI` re-arms for repeated
+escalation) and `SRCx_STATUS.ESC` / `INT_STATUS.ESC` are set. On claim / return
+to idle the band and counter reset to the configured values.
+
+### Register map (D-AXI)
+Word registers from the base address; unmapped words and read-only writes answer
+SLVERR, byte strobes are honoured on writes.
+
+| Offset | Register | Access | Fields |
+|---|---|---|---|
+| 0x00–0x3C | `SRCx_CONFIG` (x=0..15) | R/W | `TRIG`[0], `BAND`[2:1], `INTRA`[7:4], `DEADLINE`[31:16] |
+| 0x40–0x7C | `SRCx_SW_TRIG` | R/W | software request bit0 (set needs key `0xA5A5` in [31:16]) |
+| 0x80–0xBC | `SRCx_STATUS` | RO | `PEND`[0], `ACTIVE`[1], `ESC`[2], `SPUR`[3], `EFF_BAND`[5:4], `DDL_TIMER`[31:16] |
+| 0xC0 | `BAND_CONFIG` | R/W | 2-bit urgency per band {b3,b2,b1,b0}; default `0x1B` |
+| 0xC4 | `NEST_STATUS` | RO | `DEPTH`[4:0], `TOP_ID`[11:8], `OVF`[16] |
+| 0xC8 | `NEST_MAX` | R/W | max nesting depth, clamped [1,16]; default 8 |
+| 0xCC | `ACTIVE_VEC` | RO | `ID`[3:0], `VALID`[8] |
+| 0xD0 | `SPURIOUS_LOG` | R/W1C | per-source sticky spurious flags |
+| 0xD4 | `ESCALATION_CFG` | R/W | `TARGET`[1:0], `MODE`[4] (0 jump / 1 bump), `MULTI`[8] |
+| 0xD8 | `INT_ENABLE` | R/W | per-source master enable mask |
+| 0xDC | `INT_STATUS` | R/W1C | global sticky {`SPUR`[0], `ESC`[1], `OVF`[2]} |
+
+Two masks stack on purpose: `INT_ENABLE` = "this source may reach the CPU",
+`mie` = "current software cares". A consequence found while testing: a source
+PIC-enabled but mie-masked sits as the PIC's offer forever (the CPU never claims
+it) and starves the rest. Integration rule: route a source into the PIC only if
+some handler will service it.
 
 ## 6. WFI + mtimer
 
 WFI (D23) is decoded in `control` and implemented as a third stall source:
 S2 freezes on the WFI, S1 parks its fetch, and the instruction bus goes
 idle (measured: at most the one already-issued fetch completes per sleep).
-Wake condition is `|(cpu_irq & mie)` — `mstatus.MIE` is intentionally not
+Wake condition is `cpu_irq && mie[16+cpu_irq_vec]` — `mstatus.MIE` is intentionally not
 part of it, per privileged spec 3.3.3:
 
 - MIE = 1: the wake becomes a normal interrupt, with mepc = wfi+4 so MRET
@@ -346,8 +400,8 @@ part of it, per privileged spec 3.3.3:
 
 mtimer (D26, D27) is the standard RISC-V machine timer as a memory-mapped
 peripheral: 64-bit free-running `mtime`, 64-bit `mtimecmp`, level
-interrupt `irq = (mtime >= mtimecmp)` wired to PIC channel 7 (lowest
-priority: a tick should not outrank DMA/DP-SRAM service).
+interrupt `irq = (mtime >= mtimecmp)` wired to PIC source 7 (kept in a low
+band by config so a tick does not outrank DMA/DP-SRAM service).
 
 | Offset | Register | Access |
 |---|---|---|

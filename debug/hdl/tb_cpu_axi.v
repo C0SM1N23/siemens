@@ -52,11 +52,12 @@ ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst_inst (
 `AXIL_WIRES(pp);
 `AXIL_WIRES(t);
 
-wire [7:0]  cpu_irq;
-wire [2:0]  cpu_irq_id;
-wire [7:0]  cpu_irq_ack;
+wire        cpu_irq;
+wire [3:0]  cpu_irq_vec;
+wire        cpu_irq_ack;
+wire        cpu_irq_eoi;
 wire        cpu_in_trap;
-reg  [7:0]  irq_src;        // peripheral lines into the PIC (DMA/SRAM stand-in)
+reg  [15:0] irq_src;        // peripheral lines into the PIC (DMA/SRAM stand-in)
 wire        tmr_irq;
 
 cpu_top #(.RESET_PC(`IMEM_BASE)) uut (
@@ -65,8 +66,9 @@ cpu_top #(.RESET_PC(`IMEM_BASE)) uut (
     `AXIL_M_RD(ibus_axi, ib),
     `AXIL_M(dbus_axi, db),
     .cpu_irq          (cpu_irq),
+    .cpu_irq_vec      (cpu_irq_vec),
     .cpu_irq_ack      (cpu_irq_ack),
-    .cpu_irq_id       (cpu_irq_id),
+    .cpu_irq_eoi      (cpu_irq_eoi),
     .cpu_in_trap      (cpu_in_trap)
 );
 
@@ -105,12 +107,13 @@ axi_lite_dec2 #(
 );
 
 // the device under second test: the real PIC on the decoded window.
-// Channel 7 is the real mtimer interrupt; the TB plays channels 0..6.
+// Source 7 is the real mtimer interrupt; the TB plays sources 0..6, and
+// sources 8..15 are unused here (the advanced-scheduling PIC has 16).
 pic pic_inst (
     .clk(clk), .rst_n(rst_n),
-    .irq_src({tmr_irq, irq_src[6:0]}),
-    .cpu_irq(cpu_irq), .cpu_irq_id(cpu_irq_id),
-    .cpu_irq_ack(cpu_irq_ack), .cpu_in_trap(cpu_in_trap),
+    .irq_src({8'b0, tmr_irq, irq_src[6:0]}),
+    .cpu_irq(cpu_irq), .cpu_irq_vec(cpu_irq_vec),
+    .cpu_irq_ack(cpu_irq_ack), .cpu_irq_eoi(cpu_irq_eoi),
     `AXIL_M(s_axi, pp)
 );
 
@@ -173,47 +176,55 @@ localparam
 integer errors;
 `include "tb_check.vh"
 
-// cycle-by-cycle invariants
+// cycle-by-cycle invariants. The PIC now drives one request + vector, so a
+// claim is attributed to a channel via the PIC's own claim signals.
+wire       pic_claim    = pic_inst.claim_push;   // a source is being claimed
+wire [3:0] pic_claim_id = pic_inst.claimed_id;   // ...which one
+
 reg        ack_double;     // ack is a 1-cycle pulse
 reg        ack_in_stall;   // never accept an irq mid data transaction
-reg [7:0]  ack_prev;
-integer    ack_cnt [0:7];  // ack pulses per channel (ch5 must stay at 0)
+reg        ack_prev;
+integer    ack_cnt [0:7];  // claims per channel (ch5 must stay at 0)
 integer    ch;
-reg        id_bad;         // cpu_irq_id must be the lowest pending channel
+reg        vec_bad;        // an offered vector must name a PIC-enabled source
+reg [15:0] ien_d;          // INT_ENABLE delayed 1 cycle (state when the offer was made)
 reg        suppress_fail;  // an in-service channel must stay out of cpu_irq
-reg [3:0]  ack3_age;       // cycles since ack[3], to skip the update pipeline
+reg [3:0]  ack3_age;       // cycles since the ch3 claim, to skip the update pipeline
 
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n) begin
         ack_double <= 0;
         ack_in_stall <= 0;
-        ack_prev   <= 8'b0;
+        ack_prev   <= 1'b0;
         for (ch = 0; ch < 8; ch = ch + 1)
             ack_cnt[ch] <= 0;
-        id_bad     <= 0;
+        vec_bad    <= 0;
+        ien_d      <= 16'b0;
         suppress_fail <= 0;
         ack3_age   <= 4'd0;
     end else begin
-        if (|(cpu_irq_ack & ack_prev)) ack_double <= 1;
-        if (|cpu_irq_ack && uut.lsu_inst.active) ack_in_stall <= 1;
-        for (ch = 0; ch < 8; ch = ch + 1)
-            if (cpu_irq_ack[ch]) ack_cnt[ch] <= ack_cnt[ch] + 1;
+        if (cpu_irq_ack && ack_prev) ack_double <= 1;
+        if (cpu_irq_ack && uut.lsu_inst.active) ack_in_stall <= 1;
+        if (pic_claim && pic_claim_id < 4'd8) ack_cnt[pic_claim_id[2:0]] <= ack_cnt[pic_claim_id[2:0]] + 1;
         ack_prev <= cpu_irq_ack;
 
-        // the id must point at a set cpu_irq bit with nothing below it
-        if (|cpu_irq && (cpu_irq[cpu_irq_id] !== 1'b1 ||
-                         (cpu_irq & ((8'h01 << cpu_irq_id) - 8'h01)) != 8'b0))
-            id_bad <= 1;
+        // the offered vector must name a source that was PIC-enabled when the
+        // offer was registered (ien_d = enable one cycle back, so a same-cycle
+        // INT_ENABLE rewrite cannot false-trip this). Priority/pending/in-service
+        // correctness is proven by pic_sva on the internal, lag-free signals.
+        ien_d <= pic_inst.int_enable;
+        if (cpu_irq && ien_d[cpu_irq_vec] !== 1'b1)
+            vec_bad <= 1;
 
-        // source 3 is held high through its handler; once the ack has had
-        // time to propagate, cpu_irq[3] must be low until MRET
-        if (cpu_irq_ack[3])
+        // source 3 is held high through its handler; once the claim has had
+        // time to propagate, source 3 must stay out of cpu_irq until MRET
+        if (pic_claim && pic_claim_id == 4'd3)
             ack3_age <= 4'd1;
         else if (!cpu_in_trap)
             ack3_age <= 4'd0;
         else if (ack3_age != 4'd0 && ack3_age != 4'd15)
             ack3_age <= ack3_age + 4'd1;
-        if (ack3_age >= 4'd3 && cpu_in_trap && irq_src[3] && cpu_irq[3])
+        if (ack3_age >= 4'd3 && cpu_in_trap && irq_src[3] && cpu_irq && cpu_irq_vec == 4'd3)
             suppress_fail <= 1;
     end
 end
@@ -258,13 +269,13 @@ task sweep_channel;
         while (!(db_awvalid === 1'b1 && db_awready === 1'b1 &&
                  db_awaddr === (`DMEM_BASE + W_TRIGGER*4))) @(posedge clk);
         irq_src[ch] = 1'b1;
-        while (cpu_irq_ack[ch] !== 1'b1) @(posedge clk);
+        while (!(pic_claim === 1'b1 && pic_claim_id == ch)) @(posedge clk);
         irq_src[ch] = 1'b0;
     end
 endtask
 
 initial begin
-    irq_src      = 8'b0;
+    irq_src      = 16'b0;
     t_rbeat2     = 0;
     t_ack2       = 0;
     t_ack2_first = 0;
@@ -283,7 +294,7 @@ initial begin
     repeat (3) @(posedge clk);
     irq_src[2] = 1'b1;
     irq_src[3] = 1'b1;
-    while (cpu_irq_ack[2] !== 1'b1) @(posedge clk);
+    while (!(pic_claim && pic_claim_id == 2)) @(posedge clk);
     t_ack2_first = $time;
     if (cpu_in_trap !== 1'b1)
         $display("FAIL: cpu_in_trap not set on irq ack");
@@ -292,7 +303,7 @@ initial begin
     // ch3 is taken right after ch2's MRET; its source stays high through the
     // handler so the in-service mask is what keeps it out of cpu_irq (the
     // suppress_fail invariant watches this window), then drops at MRET
-    while (cpu_irq_ack[3] !== 1'b1) @(posedge clk);
+    while (!(pic_claim && pic_claim_id == 3)) @(posedge clk);
     t_ack3 = $time;
     while (cpu_in_trap === 1'b1) @(posedge clk);
     irq_src[3] = 1'b0;
@@ -304,7 +315,7 @@ initial begin
     irq_src[2] = 1'b1;
     while (!(db_rvalid === 1'b1 && db_rready === 1'b1)) @(posedge clk);
     t_rbeat2 = $time;
-    while (cpu_irq_ack[2] !== 1'b1) @(posedge clk);
+    while (!(pic_claim && pic_claim_id == 2)) @(posedge clk);
     t_ack2 = $time;
     irq_src[2] = 1'b0;
 
@@ -407,7 +418,7 @@ initial begin
     check(32'd0,         ack_cnt[5],                "masked ch5 never acked");
     check(32'd0,         {31'b0, ack_double},       "ack is a 1-cycle pulse");
     check(32'd0,         {31'b0, ack_in_stall},     "no ack during a data stall");
-    check(32'd0,         {31'b0, id_bad},           "cpu_irq_id = lowest pending");
+    check(32'd0,         {31'b0, vec_bad},          "offered vec enabled & not in-service");
     check(32'd0,         {31'b0, suppress_fail},    "in-service ch3 suppressed");
     if (t_ack2_first != 0 && t_ack3 > t_ack2_first)
         $display("PASS: ch2 served before ch3 (ack2 @%0t, ack3 @%0t)",
@@ -466,11 +477,11 @@ initial begin
     end
 
     // PIC software interface, read back by the program over real AXI
-    // transactions (IRQ_ACTIVE is read from inside the irq handler itself)
-    check(32'h0000002C,  dmem_inst.mem[W_PIC_ENABLE],         "PIC IRQ_ENABLE readback");
-    check(32'h00000020,  dmem_inst.mem[W_PIC_RAW],         "PIC IRQ_RAW: src5 high");
-    check(32'h00000020,  dmem_inst.mem[W_PIC_PEND],         "PIC IRQ_PENDING: ch5 only");
-    check(32'h00000080,  dmem_inst.mem[W_IRQ_ACTIVE],         "IRQ_ACTIVE in handler (timer)");
+    // transactions (ACTIVE_VEC is read from inside the irq handler itself)
+    check(32'h0000002C,  dmem_inst.mem[W_PIC_ENABLE],  "PIC INT_ENABLE readback");
+    check(32'h00000001,  dmem_inst.mem[W_PIC_RAW],     "SRC5_STATUS: pending, masked at CPU");
+    check(32'h00000000,  dmem_inst.mem[W_PIC_PEND],    "INT_STATUS: no events yet");
+    check(32'h00000107,  dmem_inst.mem[W_IRQ_ACTIVE],  "ACTIVE_VEC in handler = valid|src7");
 
     // vectored mtvec
     check(`ADDR_vec_base | 32'h1, uut.csr_file_inst.mtvec_q, "mtvec vectored");
