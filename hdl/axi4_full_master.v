@@ -43,7 +43,6 @@ module axi4_full_master (
     input       [31:0]  master_req_addr,
     input       [7:0]   master_req_len,
     input               master_req_is_write,
-    // FIX BUG 2: identitatea canalului caruia ii apartine cererea curenta
     input       [1:0]   master_req_ch_id,
     output reg          master_req_ready,
 
@@ -62,21 +61,12 @@ module axi4_full_master (
 
     reg [2:0] state;
     reg [7:0] burst_cnt;
-
-    // FIX BUG 2: data_fifo devine un buffer PER-CANAL (4 canale x 8 cuvinte)
-    // in loc de un singur buffer global partajat intre toate canalele.
-    // In varianta originala, un singur data_fifo[0:7] era folosit pentru
-    // orice transfer, indiferent de canal. Cum arbitrul (Round-Robin) poate
-    // intercala liber READ-ul unui canal cu READ-ul altui canal INAINTE ca
-    // primul canal sa apuce sa faca WRITE-ul corespunzator, al doilea READ
-    // suprascria datele primului canal in bufferul comun -> canalul 1 ajungea
-    // sa scrie datele canalului 2 la destinatia lui. Izolarea pe canal
-    // elimina complet aceasta coruptie, indiferent de ordinea de intercalare
-    // aleasa de arbitru.
+    // data_fifo per-canal (4 canale x 8 cuvinte), nu un singur buffer global.
+    // Un buffer global partajat intre canale corupe datele cand doua canale
+    // sunt intercalate de arbitru (ex: Round-Robin) - vezi active_ch_id mai jos.
     reg [31:0] data_fifo [0:3][0:7];
 
-    // Retine carui canal ii apartine tranzactia curenta, capturat exact cand
-    // cererea este acceptata din STATE_IDLE.
+    // Retine carui canal ii apartine tranzactia curenta
     reg [1:0] active_ch_id;
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
@@ -191,7 +181,7 @@ module axi4_full_master (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             m_axi_rready <= 1'b0;
-        else if (state == STATE_READ_DATA)
+        else if (state == STATE_READ_DATA && ~(m_axi_rvalid && m_axi_rready && m_axi_rlast))
             m_axi_rready <= 1'b1;
         else
             m_axi_rready <= 1'b0;
@@ -217,11 +207,7 @@ module axi4_full_master (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             data_fifo[active_ch_id][burst_cnt[2:0]] <= 32'h0;
-        // FIX BUG 1 (latura de citire): "&& m_axi_rready" adaugat astfel
-        // incat capturarea sa fie sincronizata exact cu avansul lui
-        // burst_cnt (care avanseaza doar pe rvalid && rready).
-        // FIX BUG 2: indexare pe active_ch_id, nu pe un buffer global.
-        else if (state == STATE_READ_DATA && m_axi_rvalid && m_axi_rready)
+        else if (state == STATE_READ_DATA && m_axi_rvalid)
             data_fifo[active_ch_id][burst_cnt[2:0]] <= m_axi_rdata;
     end
 
@@ -263,21 +249,21 @@ module axi4_full_master (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             m_axi_wvalid <= 1'b0;
-        else if (state == STATE_WRITE_DATA)
+        else if (state == STATE_WRITE_DATA && ~(m_axi_wvalid && m_axi_wready && m_axi_wlast))
             m_axi_wvalid <= 1'b1;
         else
             m_axi_wvalid <= 1'b0;
     end
 
-    // FIX BUG 1 (latura de scriere): m_axi_wdata este COMBINATIONAL, la fel
-    // ca m_axi_wlast (vezi "CORECTIE" mai jos), nu inregistrat. In varianta
-    // originala, un registru selecta data_fifo[burst_cnt] folosind valoarea
-    // PRE-CLOCK-EDGE a lui burst_cnt, in acelasi bloc always in care
+    // FIX: m_axi_wdata trebuie sa fie COMBINATIONAL, la fel ca m_axi_wlast
+    // (vezi "CORECTIE" mai jos), nu inregistrat. In varianta originala,
+    // m_axi_wdata era un registru care selecta data_fifo[burst_cnt] folosind
+    // valoarea PRE-CLOCK-EDGE a lui burst_cnt, in acelasi ciclu in care
     // burst_cnt se incrementa tot pe baza valorii pre-edge. Efectul: primul
-    // beat era prezentat corect, dar wdata ramanea "in urma" cu un ciclu fata
-    // de burst_cnt real, ducand la duplicarea primului cuvant si pierderea
-    // ultimului cuvant din fiecare burst de scriere.
-    // FIX BUG 2: indexare pe active_ch_id, nu pe un buffer global.
+    // cuvant era duplicat, iar ultimul cuvant din fiecare burst de scriere
+    // se pierdea (shift de o pozitie) - exact tiparul observat: 0x2000 si
+    // 0x2004 aveau aceeasi valoare, iar 0x201C avea valoarea care ar fi
+    // trebuit sa fie la 0x2018.
     always @(*) begin
         m_axi_wdata = data_fifo[active_ch_id][burst_cnt[2:0]];
     end
@@ -302,7 +288,7 @@ module axi4_full_master (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             m_axi_bready <= 1'b0;
-        else if (state == STATE_WRITE_RESP)
+        else if (state == STATE_WRITE_RESP && ~(m_axi_bvalid && m_axi_bready))
             m_axi_bready <= 1'b1;
         else
             m_axi_bready <= 1'b0;
