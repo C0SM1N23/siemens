@@ -177,7 +177,8 @@ tags as the README index and the code.
 | REQ10 | x0 hardwired, regfile reset | | `addi x0,x0,5` then read; regs[0] === 0 |
 | D23 | WFI: sleep until wake, ibus silent, mepc = wfi+4 on an interrupt wake, fall-through (no trap) when MIE=0 | the CPU must idle without burning interconnect bandwidth the DMA needs | timer irq wakes the first WFI (mepc readback = wfi+4); second WFI with MIE=0 falls through to a marker store with the handler-entry count unchanged; TB measures ≤1 ibus read per sleep window + SVA `wfi_ibus_quiet` |
 | D24 | RAS: returns from 3 different call sites + a nested call chain (h→g→g) predict correctly and stay correct | the BTB's last-target scheme is systematically wrong for returns; the RAS may only change *time*, never results | accumulated signature 0x243 checked; FCOV separates returns predicted correctly vs mispredicted (first encounters only) |
-| D25 | mhpmcounter3..7 count mispredicts / fetch-starved / dbus-stall / traps / WFI cycles; writes to them trap | the CPU-side observability numbers for tuning DMA throttling | end-of-run readbacks: traps exactly 26 (17 direct + 1 vectored + 8 irq), the latency-dependent ones nonzero; RO-write trap covered by the existing mcycle negative |
+| D25 | mhpmcounter3..7 count mispredicts / fetch-starved / dbus-stall / traps / WFI cycles | the CPU-side observability numbers for tuning DMA throttling | end-of-run readbacks: traps exactly 26 (17 direct + 1 vectored + 8 irq), the latency-dependent ones nonzero |
+| Priv | Counter compliance: every counter is 64-bit with an upper half at base+0x80, M-mode may write either half, and the counters the design does not provide are hardwired zero instead of unimplemented | strict Priv. spec 3.1.11 — a reviewer checking compliance looks here first, and a 32-bit-only `mcycle` wraps in seconds | `mcycleh`/`minstreth`/`mhpm3h`/`mhpm7h` all read 0 on a short run; `mhpmcounter3h` written and read back = 0xDEADBEEF; `mhpmcounter6` low half written and read back = 0x2C1 exactly; `mcycle` written then read back at the written base and strictly higher a few instructions later (bounded check, so it holds in every latency config, plus an exact check gated to the latency-1 config); `mhpmcounter8`, `mhpmcounter8h`, `mhpmevent3`, `mhpmevent31` all read 0 and swallow writes — and the exact sync-trap count staying at 17 is what proves none of these accesses trapped |
 | D26,D27 | mtimer end to end: disarmed at reset, armed CMP_LO-then-CMP_HI without false fires, level irq through PIC source 7, handler clears by moving mtimecmp, software register write, unmapped offset SLVERR | the timer is a real peripheral on a real bus — and the WFI wake source | timer irq taken exactly once (claim7 = 1, cause 23 vectored slot), mtime monotonic readback, MTIME_HI write/read-back = 0x2AB, bad-offset read+write both trap (cause 5/7, counted in the 17), mtimer port protocol monitor + SVA clean |
 | D20 | Channel sweep: ch0/1/4/6 each raised once and served; ch5 PIC-disabled first because a mie-masked source sits as the PIC's offer and starves the rest | the starvation discipline every peripheral hookup must respect | one claim per swept channel, handler-entry count exactly 8, claim5 still never seen |
 | D6 | Back-to-back fetch: 1 instr/cycle on a latency-1 memory | the throughput claim, measured not asserted | mcycle delta across 33 straight-line instrs = 33 (gated to the latency-1 config) |
@@ -298,6 +299,11 @@ it end to end.
   0 and released at 123 ns, deliberately between clock edges (posedges are at
   125/135/145 ns), so removal of the asynchronous reset happens off-edge rather
   than at a convenient one.
+- Counter compliance is now closed (64-bit halves, M-mode writes, tied-off
+  hpm registers). What is still open by choice: `mcountinhibit` is not
+  implemented — legal, since the spec makes it optional and defines the absent
+  case as "all counters run", but it means software cannot freeze a counter
+  around a measurement window.
 - **X hygiene on idle buses.** Several dbus payload signals (`db_awaddr`,
   `db_araddr`, `db_wdata`, `db_wstrb` and their decoded copies) read X from
   time 0 until the CPU's first load/store, and `RRESP[1]`/`BRESP[1]` on the

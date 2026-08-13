@@ -173,7 +173,9 @@ localparam
   W_FWD_BOTH    = 228/4, W_MTIME_DEL  = 232/4, W_HPM3        = 236/4,
   W_TRIGGER     = 248/4, W_HPM5       = 260/4, W_HPM6        = 264/4,
   W_HPM7        = 268/4, W_HPM4       = 272/4, W_MTIME_HI    = 276/4,
-  W_MTVAL       = 244/4, W_MISA       = 252/4, W_MID         = 280/4;
+  W_MTVAL       = 244/4, W_MISA       = 252/4, W_MID         = 280/4,
+  W_CNT_HI0     = 240/4, W_CNT_H3H    = 256/4, W_CNT_H6      = 284/4,
+  W_CNT_TIED    = 288/4, W_CNT_CYCW   = 292/4, W_CNT_CYCRUN  = 296/4;
 
 integer errors;
 `include "tb_check.vh"
@@ -518,6 +520,47 @@ initial begin
         $display("FAIL: a bus saw no traffic");
         errors = errors + 1;
     end
+
+    // counter compliance (RV32 64-bit halves + M-mode writes, Priv. 3.1.11).
+    // Nothing here traps: the exact sync-trap count checked above is what
+    // proves the tied-off hpm addresses are readable/writable, not illegal.
+    check(32'd0,         dmem_inst.mem[W_CNT_HI0],
+          "mcycleh/minstreth/mhpm3h/mhpm7h exist and read 0");
+    check(32'hDEADBEEF,  dmem_inst.mem[W_CNT_H3H],
+          "mhpmcounter3h writable from M-mode");
+    check(32'h000002C1,  dmem_inst.mem[W_CNT_H6],
+          "mhpmcounter6 low half writable from M-mode");
+    check(32'd0,         dmem_inst.mem[W_CNT_TIED],
+          "tied-off hpm: reads 0, writes ignored, no trap");
+
+    // mcycle write. Both slots hold (readback - written base), so the checks
+    // are latency-independent: if the write had been ignored the counter would
+    // still be at its natural value and the difference would wrap to a huge
+    // number, not land within a few hundred cycles of the written base.
+    if (dmem_inst.mem[W_CNT_CYCW] < 32'd256)
+        $display("PASS: mcycle write landed (readback = base + %0d)",
+                 dmem_inst.mem[W_CNT_CYCW]);
+    else begin
+        $display("FAIL: mcycle write ignored (readback = base + %0d)",
+                 dmem_inst.mem[W_CNT_CYCW]);
+        errors = errors + 1;
+    end
+
+    if (dmem_inst.mem[W_CNT_CYCRUN] > dmem_inst.mem[W_CNT_CYCW] &&
+        dmem_inst.mem[W_CNT_CYCRUN] < 32'd256)
+        $display("PASS: mcycle keeps counting after a write (+%0d -> +%0d)",
+                 dmem_inst.mem[W_CNT_CYCW], dmem_inst.mem[W_CNT_CYCRUN]);
+    else begin
+        $display("FAIL: mcycle after write (+%0d -> +%0d)",
+                 dmem_inst.mem[W_CNT_CYCW], dmem_inst.mem[W_CNT_CYCRUN]);
+        errors = errors + 1;
+    end
+
+    // with an un-stalled instruction bus the timing is exact: the very next
+    // instruction sees the written value untouched
+    if (imem_inst.READ_LAT == 0 && imem_inst.STALL_PROB == 0)
+        check(32'd0,     dmem_inst.mem[W_CNT_CYCW],
+              "mcycle write lands exactly (latency-1 imem)");
 
     // performance counters sane
     if (uut.csr_file_inst.minstret_q > 0 &&

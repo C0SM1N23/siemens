@@ -198,8 +198,12 @@ the ISA requires.
 | mepc | 0x341 | [1:0] forced to 0 |
 | mcause | 0x342 | bit31 = interrupt, code in the low bits |
 | mip | 0x344 | read-only, one-hot of the PIC's offered source on 16..31 |
-| mcycle / minstret | 0xB00/0xB02 | read-only counters (D5) |
-| mhpmcounter3..7 | 0xB03..07 | read-only event counters (D25) |
+| mcycle / minstret | 0xB00/0xB02 | 64-bit counters, low half (D5) |
+| mcycleh / minstreth | 0xB80/0xB82 | upper halves of the same counters |
+| mhpmcounter3..7 | 0xB03..07 | event counters, low half (D25) |
+| mhpmcounter3h..7h | 0xB83..87 | upper halves |
+| mhpmcounter8..31 (+h) | 0xB08..1F, 0xB88..9F | hardwired zero (WARL) |
+| mhpmevent3..31 | 0x323..33F | hardwired zero (WARL) — events are fixed |
 | mhartid | 0xF14 | read-only, `HART_ID` parameter (D5) |
 
 - Reads are combinational, software writes commit at the end of S2.
@@ -215,6 +219,15 @@ the ISA requires.
   5 = dbus stall cycles, 6 = trap entries, 7 = WFI sleep cycles. These
   pair with the DP-SRAM bandwidth registers and the DMA throttling knobs,
   so software can measure contention instead of guessing.
+- Counters follow Priv. spec 3.1.11: each is architecturally 64-bit, read on
+  RV32 through a base / base+0x80 pair, and writable from M-mode. A write
+  replaces the addressed half while the other half still takes the increment,
+  so the event landing in the same cycle as the write is not lost. The counters
+  the design does not provide (`mhpmcounter8..31`, their upper halves, and
+  `mhpmevent3..31`) are hardwired zero — they read 0 and ignore writes, rather
+  than trapping, because the spec permits tying off counters but not making
+  them disappear. `mcountinhibit` (0x320) is absent on purpose: it is optional,
+  and its not-implemented behaviour ("all counters run") is exactly this design.
 
 ### exception_unit.v (D3, D17, D18)
 

@@ -10,13 +10,22 @@
 //      16..31), i.e. the interrupt half of the supported-cause set. The PIC does
 //      the priority resolution and drives one request + a 4-bit vector; cpu_top
 //      turns that into a one-hot mip[16+vec] so software still masks per source.
-// D5:  read-only mhartid (0xF14) from HART_ID, plus read-only mcycle/minstret as
-//      verification aids.
-// D25: read-only mhpmcounter3..7 at the standard addresses, wired to the events
-//      software needs to tune the SoC (pairs with the DP-SRAM BANDWIDTH_A/B and
-//      DMA throttling): 3 mispredicts, 4 fetch-starved cycles, 5 dbus stall
-//      cycles, 6 traps taken, 7 WFI sleep cycles. Higher hpm addresses stay
-//      unimplemented and trap illegal (D15).
+// D5:  read-only mhartid (0xF14) from HART_ID, plus mcycle/minstret.
+// D25: mhpmcounter3..7 at the standard addresses, wired to the events software
+//      needs to tune the SoC (pairs with the DP-SRAM BANDWIDTH_A/B and DMA
+//      throttling): 3 mispredicts, 4 fetch-starved cycles, 5 dbus stall cycles,
+//      6 traps taken, 7 WFI sleep cycles. The events are fixed, so mhpmevent
+//      is tied off (see below).
+// Counters follow Priv. spec 3.1.11: each is architecturally 64-bit and on RV32
+// is read through a base / base+0x80 pair (mcycleh 0xB80, minstreth 0xB82,
+// mhpmcounter3h..7h 0xB83..0xB87), and M-mode may write either half. A write
+// replaces the addressed half while the other half still takes the increment,
+// so the event that lands in the same cycle as the write is not lost.
+// mhpmcounter8..31, their upper halves, and mhpmevent3..31 are provided as
+// hardwired zero: the spec lets an implementation tie off counters it does not
+// have, but they must read 0 and ignore writes (WARL) rather than trap.
+// mcountinhibit (0x320) is deliberately absent - the spec makes it optional and
+// defines the not-implemented behaviour as "all counters run", which is this.
 // D15: reading an unimplemented CSR, or writing a read-only one, raises illegal
 //      in S2 (illegal, not DECERR, since CSRs are internal). csr_wen already
 //      drops the "CSRRS/C with x0/uimm=0 = pure read" case, so those don't trap.
@@ -92,12 +101,30 @@ localparam MHPMC4   = 12'hB04;   // fetch-starved cycles
 localparam MHPMC5   = 12'hB05;   // dbus stall cycles
 localparam MHPMC6   = 12'hB06;   // traps taken
 localparam MHPMC7   = 12'hB07;   // WFI sleep cycles
+// upper halves: on RV32 every counter is architecturally 64-bit and is read
+// through a base/base+0x80 pair (Priv. spec 3.1.11)
+localparam MCYCLEH   = 12'hB80;
+localparam MINSTRETH = 12'hB82;
+localparam MHPMC3H   = 12'hB83;
+localparam MHPMC4H   = 12'hB84;
+localparam MHPMC5H   = 12'hB85;
+localparam MHPMC6H   = 12'hB86;
+localparam MHPMC7H   = 12'hB87;
 localparam MHARTID  = 12'hF14;
 
 reg        mstatus_mie_q, mstatus_mpie_q;
 reg [15:0] mie_q;
-reg [31:0] mtvec_q, mscratch_q, mepc_q, mcause_q, mtval_q, mcycle_q, minstret_q;
-reg [31:0] mhpm3_q, mhpm4_q, mhpm5_q, mhpm6_q, mhpm7_q;
+reg [31:0] mtvec_q, mscratch_q, mepc_q, mcause_q, mtval_q;
+reg [63:0] mcycle_q, minstret_q;
+reg [63:0] mhpm3_q, mhpm4_q, mhpm5_q, mhpm6_q, mhpm7_q;
+
+// mhpmcounter8..31 / their upper halves / mhpmevent3..31 exist but are
+// hardwired to zero: the spec allows an implementation to tie off counters it
+// does not provide, but they must still read as 0 instead of trapping, and a
+// write to them is ignored (WARL) rather than raising illegal.
+wire hpm_wired0 = ((csr_addr >= 12'hB08) && (csr_addr <= 12'hB1F))   // mhpmcounter8..31
+               || ((csr_addr >= 12'hB88) && (csr_addr <= 12'hB9F))   // mhpmcounter8..31h
+               || ((csr_addr >= 12'h323) && (csr_addr <= 12'h33F));  // mhpmevent3..31
 
 wire [31:0] mstatus_rd = {19'b0, 2'b11, 3'b0, mstatus_mpie_q, 3'b0, mstatus_mie_q, 3'b0};
 wire [31:0] misa_rd    = 32'h4000_0100;   // MXL=32, extension I (RV32I)
@@ -120,15 +147,25 @@ always @(*) begin
         MVENDID:  begin csr_rdata = 32'b0; addr_ro = 1; end
         MARCHID:  begin csr_rdata = 32'b0; addr_ro = 1; end
         MIMPID:   begin csr_rdata = 32'b0; addr_ro = 1; end
-        MCYCLE:   begin csr_rdata = mcycle_q;   addr_ro = 1; end
-        MINSTRET: begin csr_rdata = minstret_q; addr_ro = 1; end
-        MHPMC3:   begin csr_rdata = mhpm3_q;    addr_ro = 1; end
-        MHPMC4:   begin csr_rdata = mhpm4_q;    addr_ro = 1; end
-        MHPMC5:   begin csr_rdata = mhpm5_q;    addr_ro = 1; end
-        MHPMC6:   begin csr_rdata = mhpm6_q;    addr_ro = 1; end
-        MHPMC7:   begin csr_rdata = mhpm7_q;    addr_ro = 1; end
+        MCYCLE:    csr_rdata = mcycle_q[31:0];
+        MINSTRET:  csr_rdata = minstret_q[31:0];
+        MHPMC3:    csr_rdata = mhpm3_q[31:0];
+        MHPMC4:    csr_rdata = mhpm4_q[31:0];
+        MHPMC5:    csr_rdata = mhpm5_q[31:0];
+        MHPMC6:    csr_rdata = mhpm6_q[31:0];
+        MHPMC7:    csr_rdata = mhpm7_q[31:0];
+        MCYCLEH:   csr_rdata = mcycle_q[63:32];
+        MINSTRETH: csr_rdata = minstret_q[63:32];
+        MHPMC3H:   csr_rdata = mhpm3_q[63:32];
+        MHPMC4H:   csr_rdata = mhpm4_q[63:32];
+        MHPMC5H:   csr_rdata = mhpm5_q[63:32];
+        MHPMC6H:   csr_rdata = mhpm6_q[63:32];
+        MHPMC7H:   csr_rdata = mhpm7_q[63:32];
         MHARTID:  begin csr_rdata = HART_ID;    addr_ro = 1; end
-        default:  begin csr_rdata = 32'b0; addr_ok = 0; end
+        default: begin
+            csr_rdata = 32'b0;
+            addr_ok   = hpm_wired0;   // tied-off hpm reads 0; anything else is illegal
+        end
     endcase
 end
 
@@ -157,6 +194,28 @@ function [31:0] csr_new_val;
     endcase
 endfunction
 
+// One 64-bit counter step. The half being written takes the software value;
+// the other half still takes the increment, so the event that happened in the
+// same cycle as the write is never lost.
+function [63:0] cnt_next;
+    input [63:0] cur;
+    input        ev;
+    input        wr_lo;
+    input        wr_hi;
+    input [31:0] wdata;
+    input [1:0]  op;
+    reg   [63:0] inc;
+    begin
+        inc = cur + {63'b0, ev};
+        if (wr_lo)
+            cnt_next = { inc[63:32], csr_new_val(cur[31:0],  wdata, op) };
+        else if (wr_hi)
+            cnt_next = { csr_new_val(cur[63:32], wdata, op), inc[31:0] };
+        else
+            cnt_next = inc;
+    end
+endfunction
+
 wire [31:0] mstatus_nv = csr_new_val(mstatus_rd, csr_wdata, csr_op);
 wire [31:0] mie_nv     = csr_new_val({mie_q, 16'b0}, csr_wdata, csr_op);
 wire [31:0] mepc_nv    = csr_new_val(mepc_q, csr_wdata, csr_op);
@@ -174,6 +233,22 @@ wire wr_mscratch = csr_wr && (csr_addr == MSCRATCH);
 wire wr_mepc     = csr_wr && (csr_addr == MEPC);
 wire wr_mcause   = csr_wr && (csr_addr == MCAUSE);
 wire wr_mtval    = csr_wr && (csr_addr == MTVAL);
+
+// counter writes (M-mode may write every counter half; Priv. spec 3.1.11)
+wire wr_cyc_lo   = csr_wr && (csr_addr == MCYCLE);
+wire wr_cyc_hi   = csr_wr && (csr_addr == MCYCLEH);
+wire wr_ins_lo   = csr_wr && (csr_addr == MINSTRET);
+wire wr_ins_hi   = csr_wr && (csr_addr == MINSTRETH);
+wire wr_h3_lo    = csr_wr && (csr_addr == MHPMC3);
+wire wr_h3_hi    = csr_wr && (csr_addr == MHPMC3H);
+wire wr_h4_lo    = csr_wr && (csr_addr == MHPMC4);
+wire wr_h4_hi    = csr_wr && (csr_addr == MHPMC4H);
+wire wr_h5_lo    = csr_wr && (csr_addr == MHPMC5);
+wire wr_h5_hi    = csr_wr && (csr_addr == MHPMC5H);
+wire wr_h6_lo    = csr_wr && (csr_addr == MHPMC6);
+wire wr_h6_hi    = csr_wr && (csr_addr == MHPMC6H);
+wire wr_h7_lo    = csr_wr && (csr_addr == MHPMC7);
+wire wr_h7_hi    = csr_wr && (csr_addr == MHPMC7H);
 
 // mstatus.MIE/MPIE: the pair swaps on trap entry and swaps back on MRET
 always @(posedge clk or negedge rst_n) begin
@@ -244,57 +319,59 @@ always @(posedge clk or negedge rst_n) begin
         mscratch_q <= csr_new_val(mscratch_q, csr_wdata, csr_op);
 end
 
+// 64-bit counters. Every one has the same shape: increment on its event, or
+// take a software write on the addressed half (one always block per register).
+
 // free-running cycle counter
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        mcycle_q <= 32'b0;
+        mcycle_q <= 64'b0;
     else
-        mcycle_q <= mcycle_q + 1;
+        mcycle_q <= cnt_next(mcycle_q, 1'b1, wr_cyc_lo, wr_cyc_hi, csr_wdata, csr_op);
 end
 
 // retired-instruction counter
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        minstret_q <= 32'b0;
-    else if (retire)
-        minstret_q <= minstret_q + 1;
+        minstret_q <= 64'b0;
+    else
+        minstret_q <= cnt_next(minstret_q, retire, wr_ins_lo, wr_ins_hi, csr_wdata, csr_op);
 end
 
-// hardware performance counters (D25): one per event, same shape as
-// mcycle/minstret (free-running, read-only, reset to 0)
+// hardware performance counters (D25): one per event
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        mhpm3_q <= 32'b0;
-    else if (ev_mispredict)
-        mhpm3_q <= mhpm3_q + 1;
-end
-
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        mhpm4_q <= 32'b0;
-    else if (ev_ibus_wait)
-        mhpm4_q <= mhpm4_q + 1;
+        mhpm3_q <= 64'b0;
+    else
+        mhpm3_q <= cnt_next(mhpm3_q, ev_mispredict, wr_h3_lo, wr_h3_hi, csr_wdata, csr_op);
 end
 
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        mhpm5_q <= 32'b0;
-    else if (ev_dbus_stall)
-        mhpm5_q <= mhpm5_q + 1;
+        mhpm4_q <= 64'b0;
+    else
+        mhpm4_q <= cnt_next(mhpm4_q, ev_ibus_wait, wr_h4_lo, wr_h4_hi, csr_wdata, csr_op);
 end
 
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        mhpm6_q <= 32'b0;
-    else if (trap_set)
-        mhpm6_q <= mhpm6_q + 1;
+        mhpm5_q <= 64'b0;
+    else
+        mhpm5_q <= cnt_next(mhpm5_q, ev_dbus_stall, wr_h5_lo, wr_h5_hi, csr_wdata, csr_op);
 end
 
 always @(posedge clk or negedge rst_n) begin
     if (~rst_n)
-        mhpm7_q <= 32'b0;
-    else if (ev_wfi_sleep)
-        mhpm7_q <= mhpm7_q + 1;
+        mhpm6_q <= 64'b0;
+    else
+        mhpm6_q <= cnt_next(mhpm6_q, trap_set, wr_h6_lo, wr_h6_hi, csr_wdata, csr_op);
+end
+
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        mhpm7_q <= 64'b0;
+    else
+        mhpm7_q <= cnt_next(mhpm7_q, ev_wfi_sleep, wr_h7_lo, wr_h7_hi, csr_wdata, csr_op);
 end
 
 endmodule

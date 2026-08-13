@@ -556,6 +556,66 @@ wfi2_spot:
     csrrs x30, 0xB07, x0     # mhpmcounter7: WFI sleep cycles
     sw   x30, 268(x14)       # [268] > 0
 
+# ---- counter compliance: 64-bit halves + M-mode writes -------------------
+# On RV32 every counter is architecturally 64-bit, read through a base /
+# base+0x80 pair, and writable from M-mode (Priv. spec 3.1.11). Counters the
+# design does not provide are tied off, not left unimplemented.
+    # every upper half exists and still reads 0 (nothing wrapped in this run)
+    csrrs x30, 0xB80, x0     # mcycleh
+    csrrs x28, 0xB82, x0     # minstreth
+    or   x30, x30, x28
+    csrrs x28, 0xB83, x0     # mhpmcounter3h
+    or   x30, x30, x28
+    csrrs x28, 0xB87, x0     # mhpmcounter7h
+    or   x30, x30, x28
+    sw   x30, 240(x14)       # [240] = 0
+
+    # an upper half is writable and reads back exactly. mhpm3 is already
+    # harvested and its event (a mispredict) cannot fire in straight-line code,
+    # so neither half moves under us.
+    lui  x28, 0xDEADC
+    addi x28, x28, -273      # x28 = 0xDEADBEEF
+    csrrw x0, 0xB83, x28     # mhpmcounter3h = 0xDEADBEEF
+    csrrs x30, 0xB83, x0
+    sw   x30, 256(x14)       # [256] = 0xDEADBEEF
+
+    # mcycle itself is writable. Two separate properties: the write lands
+    # exactly (the next instruction reads back the written value), and the
+    # counter carries on counting from there (a later read is strictly greater).
+    lui  x28, 0x7FFF0        # x28 = 0x7FFF0000
+    csrrw x0, 0xB00, x28     # mcycle = 0x7FFF0000
+    csrrs x30, 0xB00, x0     # immediate readback
+    sub  x30, x30, x28
+    sw   x30, 292(x14)       # [292] = 0, the write landed exactly
+    addi x16, x0, 0
+    addi x16, x16, 1
+    addi x16, x16, 1
+    addi x16, x16, 1
+    csrrs x30, 0xB00, x0     # read again, a few instructions later
+    sub  x30, x30, x28
+    sw   x30, 296(x14)       # [296] > 0, it kept counting
+
+    # a low half is writable too. mhpm6 is already harvested above and its
+    # event (trap entry) cannot fire in this straight-line stretch, so the
+    # readback is exact rather than "roughly what was written".
+    addi x28, x0, 0x2C1
+    csrrw x0, 0xB06, x28     # mhpmcounter6 = 0x2C1
+    csrrs x30, 0xB06, x0
+    sw   x30, 284(x14)       # [284] = 0x2C1
+
+    # tied-off counters: reads give 0, writes are ignored, neither traps.
+    # "neither traps" is proved by the exact sync-trap count in [192] staying 17.
+    csrrw x0, 0xB08, x28     # mhpmcounter8  write -> ignored
+    csrrs x30, 0xB08, x0
+    csrrs x16, 0xB88, x0     # mhpmcounter8h
+    or   x30, x30, x16
+    csrrw x0, 0x323, x28     # mhpmevent3    write -> ignored
+    csrrs x16, 0x323, x0
+    or   x30, x30, x16
+    csrrs x16, 0x33F, x0     # mhpmevent31
+    or   x30, x30, x16
+    sw   x30, 288(x14)       # [288] = 0
+
     addi x23, x0, 0x123      # end marker for the TB
 end:
     jal  x0, end
