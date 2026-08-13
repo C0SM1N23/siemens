@@ -2,7 +2,7 @@
 # this just wires them up for one-command runs and for CI.
 #
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
-#   make modelsim   full 5-config ModelSim regression (needs vsim; local/Windows)
+#   make modelsim   full 6-run ModelSim regression (needs vsim; local/Windows)
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
 
@@ -26,7 +26,7 @@ verilator: asm
 test: verilator
 
 # full regression on ModelSim: default latencies, high latencies, two
-# random-backpressure seeds, dual-core
+# random-backpressure seeds, dual-core, standalone PIC feature bench
 modelsim: asm
 	cd $(SIM) && vsim -c -do "do regress.do; quit -f"
 

@@ -8,6 +8,8 @@
 // sees the checkers.
 
 // AXI4-Lite protocol on the instruction port (read-only, PC is word-aligned)
+`timescale 1ns/1ps
+
 bind cpu_top axi_lite_sva #(
     .NAME("ibus"), .HAS_WRITE(0), .CHECK_ALIGN(1)
 ) ibus_sva_i (

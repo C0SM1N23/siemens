@@ -4,9 +4,11 @@ DOCUMENTATIE.md
 DIAGRAME.md
 CHANGELOG.md
 Wavedrom.txt
+schimbari.txt
 debug/sim/CUM_RULEZ.md
 *.zip
 poze random/
+diagrams/
 
 # Siemens-internal spec material (marked Restricted) — never push
 *.pdf
@@ -27,6 +29,8 @@ cov_annotated/
 *.log
 
 # editor / OS noise
+.veritrace/
+.veritrace.toml
 *.bak
 *.swp
 Thumbs.db

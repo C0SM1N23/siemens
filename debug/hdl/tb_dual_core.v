@@ -15,6 +15,8 @@
 // no LR/SC is needed.
 
 // AXI4-Lite wiring macros, shared with tb_cpu_axi
+`timescale 1ns/1ps
+
 `include "axi_lite_macros.vh"
 
 module tb_dual_core;

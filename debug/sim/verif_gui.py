@@ -73,6 +73,7 @@ INFRA_TOKENS = (
     "vlog failed", "vsim failed", "Giving up waiting on lock",
     "Error loading design", "not recognized as an internal",
     "cannot open", "No such file or directory", "command not found",
+    "no installed distributions",
 )
 
 STATUS_COLOR = {"PASS": "#2e9e4f", "FAIL": "#d23131",
@@ -726,7 +727,7 @@ class App(tk.Tk):
         lines = []
 
         def emit(s):
-            s = ANSI_RE.sub("", s.rstrip("\n"))
+            s = ANSI_RE.sub("", s.rstrip("\n")).replace("\x00", "")
             lines.append(s)
             self.q.put(("line", s))
             pr = job.get("progress")

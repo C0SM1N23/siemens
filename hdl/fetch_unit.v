@@ -25,6 +25,8 @@
 // doesn't need it: we never trust it unless hold_valid_q is set, and that bit
 // is written the same cycle as the payload.
 
+`timescale 1ns/1ps
+
 module fetch_unit #(
     parameter RESET_PC = 32'h0000_0000  // reset vector, until the memory map is settled
 )(

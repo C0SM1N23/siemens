@@ -22,6 +22,8 @@
 // earlier, so nothing issues here). The command latch has no reset: it's read
 // only while a transaction is active, and each new one overwrites it first.
 
+`timescale 1ns/1ps
+
 module lsu (
     input             clk,
     input             rst_n,

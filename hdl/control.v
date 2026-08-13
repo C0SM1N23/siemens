@@ -13,6 +13,8 @@
 // illegal=1 and clears every other line, so an illegal op has no side effects
 // and just traps in S2.
 
+`timescale 1ns/1ps
+
 `include "defines.vh"
 
 module control (

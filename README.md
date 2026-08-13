@@ -106,7 +106,7 @@ The PIC implements the *Programmable Interrupt Controller with Advanced
 Scheduling* brief ([pic/](pic/)): 16 hardware sources + 16 software channels
 (32 logical sources), custom priority grouping, preemption with nesting,
 spurious detection, deadline-aware escalation, and software-triggered
-interrupts. Full design in [pic.v](hdl/pic.v) and [ARCHITECTURE.md](ARCHITECTURE.md) §7.
+interrupts. Full design in [pic.v](hdl/pic.v) and [ARCHITECTURE.md](ARCHITECTURE.md) §5.
 
 The CPU side: `cpu_irq` in (single level request), `cpu_irq_vec[3:0]` in (id of
 the offered source), `cpu_irq_ack` out (1-cycle claim pulse at handler entry),
@@ -125,7 +125,7 @@ one that is strictly above the top of the nesting stack, so a higher source
 **escalated** (`ESCALATION_CFG`). A source that deasserts before its claim is
 flagged **spurious** (`SPURIOUS_LOG`, `INT_STATUS.SPUR`) without corrupting the
 stack. Software injects an interrupt with a keyed `SRCx_SW_TRIG` write. Everything
-is programmed over an AXI4-Lite slave port (register map in ARCHITECTURE.md §7);
+is programmed over an AXI4-Lite slave port (register map in ARCHITECTURE.md §5);
 unmapped words and read-only writes answer SLVERR. The PIC's `INT_ENABLE` and the
 CPU's `mie` are two independent masks: a source PIC-enabled but `mie`-masked sits
 as the PIC's offer forever and starves the rest, so route a source into the PIC
@@ -187,27 +187,43 @@ debug/hdl/
   axi_lite_arb2.v      2:1 AXI4-Lite arbiter (TB stand-in for the interconnect)
   axi_lite_dec2.v      1-master/2-slave address decoder (TB interconnect for
                        the PIC window)
-  ck_rst_tb.v          clock/reset generator
+  ck_rst_tb.v          clock/reset generator (async reset, released at 123 ns)
+  tb_check.vh          shared self-check task (=== compare, PASS/FAIL per check)
+  axi_lite_macros.vh   bare AXI read/write helper macros shared by the benches
 debug/sim/
   program_axi.s        main test program   (py asm.py program_axi.s program_axi.hex)
   program_dual.s       dual-core handshake (py asm.py program_dual.s program_dual.hex)
   asm.py               tiny RV32I assembler (range-checked imms, %hi/%lo, .org)
-  sim.do               quick single run     regress.do  full 5-config regression
+  rtl.f  tb_cpu.f      shared filelists — one module list for both flows
+  compile.do           the single canonical vlog compile both .do scripts use
+  soc_map.vh           TB address map (PIC / mtimer / dmem bases) in one place
+  sim.do               quick single run     regress.do  full 6-run regression
+  wave.do              AXI-grouped waveform set for the ModelSim GUI
   run_verilator.sh     SVA + functional coverage run (Verilator, free)
   run_verilator.ps1    same, one command from Windows (via WSL)
+  verif_gui.py         tkinter front-end that launches the flows and shows
+                       PASS/FAIL per job (no ModelSim/Verilator CLI needed)
 ```
 
 ## Simulation
 
 ```
 cd debug/sim
-vsim -c -do "do regress.do; quit -f"      # full regression (5 configs)
+vsim -c -do "do regress.do; quit -f"      # full regression (6 runs: 4 single-core
+                                          # configs + dual-core + tb_pic)
 vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
 
 .\run_verilator.ps1                       # SVA + functional coverage —
                                           # ModelSim ASE has neither, so the
                                           # debug/sva layer runs on Verilator
+
+py verif_gui.py                           # same flows behind a small GUI
 ```
+
+Both flows are **lint- and warning-clean**: the ModelSim compile reports
+`Errors: 0, Warnings: 0` for RTL, TB and SVA, and Verilator's default warning
+set is empty (every file carries its own `` `timescale ``, so the result does not
+depend on filelist order, and every width is explicit).
 
 The SVA layer found a real bug on its first run: the fetch unit drove
 `ARVALID` during reset (the issue logic is combinational, requested `RESET_PC`

@@ -9,6 +9,8 @@
 // own contract (1 outstanding, never read+write at once), which the protocol
 // monitor checks separately.
 
+`timescale 1ns/1ps
+
 module axi_lite_arb2 (
     input             clk,
     input             rst_n,

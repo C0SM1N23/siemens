@@ -20,12 +20,12 @@ edition) — so the methodology leans on five pillars:
    VALID/payload stability under stalled READY, response ordering, the CPU's
    1-outstanding contract, X hygiene, no EXOKAY. Protocol legality is a
    checked property, not an assumption.
-4. **Configuration sweep** (`sim/regress.do`): the same suite runs under
-   default latencies, high fixed latencies, and seeded random READY
-   backpressure (reproducible by seed), plus the dual-core TB. Each run
-   echoes its parameters read back from the elaborated design, because we
-   learned the hard way that a silently-ignored override looks exactly like
-   a pass.
+4. **Configuration sweep** (`sim/regress.do`): six runs off one compile — the
+   same suite under default latencies, high fixed latencies, and two seeded
+   random-READY backpressure configs (reproducible by seed), plus the dual-core
+   TB and the standalone PIC feature bench. Each run echoes its parameters read
+   back from the elaborated design, because we learned the hard way that a
+   silently-ignored override looks exactly like a pass.
 5. **SVA assertions + functional coverage** (`sva/`, run by
    `sim/run_verilator.sh`): the same contracts written as concurrent SVA
    properties, plus a measured functional-coverage table — run through
@@ -52,13 +52,37 @@ py asm.py program_dual.s program_dual.hex
 
 ```
 vsim -c -do "do sim.do;     quit -f"     # quick single run (tb_cpu_axi)
-vsim -c -do "do regress.do; quit -f"     # full 5-config regression + dual-core
+vsim -c -do "do regress.do; quit -f"     # full regression, 6 runs off one compile
 ```
 
-`-c` is console mode. Each ends in `ALL TESTS PASSED` / `DUAL-CORE TEST PASSED`,
-zero `FAIL:`, monitor error counters 0. The regression echoes every config's
-parameters read back from the elaborated design, so a silently-ignored override
-can't hide behind a green run.
+The six regression runs:
+
+| # | Bench | Configuration |
+|---|---|---|
+| 1 | `tb_cpu_axi` | default latencies (the CPI check is active only here) |
+| 2 | `tb_cpu_axi` | high fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) |
+| 3 | `tb_cpu_axi` | random READY backpressure, seeds 101/202 |
+| 4 | `tb_cpu_axi` | random READY backpressure, seeds 777/888 |
+| 5 | `tb_dual_core` | 2 cores + shared memory behind a 2:1 arbiter |
+| 6 | `tb_pic` | standalone PIC feature bench (139 checks) |
+
+`-c` is console mode. Each ends in `ALL TESTS PASSED` / `DUAL-CORE TEST PASSED` /
+`PIC TESTBENCH: ALL TESTS PASSED`, zero `FAIL:`, monitor error counters 0. The
+regression echoes every config's parameters read back from the elaborated design,
+so a silently-ignored override can't hide behind a green run.
+
+To run just the PIC feature bench (compile once, then elaborate it alone):
+
+```
+vsim -c -do "do compile.do; vsim -onfinish stop work.tb_pic; run -all; quit -f"
+```
+
+**Compile hygiene.** Both flows are warning-free, and that is part of the pass
+criterion: ModelSim reports `Errors: 0, Warnings: 0` for RTL, TB and the
+dual-core/PIC benches, and Verilator's default warning set is empty. Two habits
+keep it that way — every source file carries its own `` `timescale `` (so the
+result never depends on filelist order), and every comparison/index/assignment is
+width-explicit rather than relying on implicit extension or truncation.
 
 ### B. Interactive GUI with the AXI waveform (what to type, and where)
 
@@ -107,6 +131,19 @@ bash run_verilator.sh          # from Linux/WSL
 ```
 
 Ends in `ALL TESTS PASSED`, a `[FCOV]` table, and `COVERAGE GATE PASSED`.
+
+### D. GUI launcher
+
+`debug/sim/verif_gui.py` (tkinter, no extra packages) wraps the same flows for
+anyone who does not want the ModelSim/Verilator command lines: it launches each
+job, streams its output, and shows PASS/FAIL per job. It recognises
+infrastructure failures (missing tool, stale `work/_lock`, WSL not provisioned)
+separately from real test failures, so "the flow could not run" never gets
+reported as "the design is broken".
+
+```
+py verif_gui.py                # from debug/sim
+```
 
 **Pass criterion (all flows):** every run ends green, zero `FAIL:` lines, zero
 assertion violations, monitor error counters 0.
@@ -256,4 +293,21 @@ it end to end.
 - The dbus decoder covers 2 slaves; richer fabrics (more slaves, DECERR from
   the fabric's own decoder) come with the real interconnect.
 - Reset assertion mid-transaction is not exercised (models and CPU reset
-  together); relevant once the SoC defines its reset controller.
+  together); relevant once the SoC defines its reset controller. What *is*
+  exercised since the reset generator was reworked: reset is asserted from time
+  0 and released at 123 ns, deliberately between clock edges (posedges are at
+  125/135/145 ns), so removal of the asynchronous reset happens off-edge rather
+  than at a convenient one.
+- **X hygiene on idle buses.** Several dbus payload signals (`db_awaddr`,
+  `db_araddr`, `db_wdata`, `db_wstrb` and their decoded copies) read X from
+  time 0 until the CPU's first load/store, and `RRESP[1]`/`BRESP[1]` on the
+  peripheral ports read X until the first transaction there. Both come from
+  registers deliberately left unreset — the LSU command latch (`lsu.v`, "no
+  reset, see header") and `rresp_err_q`/`bresp_err_q` in `axi_lite_slave.v`.
+  This is legal: AXI only requires the payload to be stable and meaningful
+  while the matching VALID is high, and VALID is low the whole time, which is
+  why the monitors and the SVA X-hygiene checks pass. It is still visual noise
+  in the waveform, so `s_axi_rdata` has been given a reset value of 0 and the
+  remaining latches are a candidate for the same treatment — the trade-off is
+  reset-tree size versus a clean-looking wave, and it is a documented design
+  decision (D1), not an oversight.

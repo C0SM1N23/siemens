@@ -14,6 +14,8 @@
 // Results: err_cnt must read 0 at the end; rd_cnt/wr_cnt let the TB prove
 // traffic actually flowed (a silent bus would otherwise look like a pass).
 
+`timescale 1ns/1ps
+
 module axi_lite_monitor #(
     parameter NAME      = "bus",
     parameter HAS_WRITE = 1          // 0 for the read-only ibus

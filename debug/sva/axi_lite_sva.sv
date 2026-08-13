@@ -17,6 +17,8 @@
 // checks); CHECK_ALIGN 1 = ARADDR must be word-aligned (instruction fetch, not
 // dbus where LB/LBU legally carry a byte address).
 
+`timescale 1ns/1ps
+
 module axi_lite_sva #(
     parameter NAME        = "axi",
     parameter HAS_WRITE   = 1,

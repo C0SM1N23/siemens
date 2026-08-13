@@ -11,7 +11,7 @@
 // Modificari  :
 // Oct. 1, 2019 (DN): Initial 
 //------------------------------------------------------------------------------
-
+`timescale 1ns/1ps
 module ck_rst_tb #(
 parameter CK_SEMIPERIOD = 'd10        // semi-perioada semnalului de ceas
 )(
@@ -26,13 +26,9 @@ begin
 end
 
 initial begin
-  rst_n <= 1'b1;    // initial inactiv
-  @(posedge clk);
-  rst_n <= 1'b0;    // activare sincrona
-  @(posedge clk);
-  @(posedge clk);
-  rst_n <= 1'b1;    // inactivare dupa doua perioade de ceas
-  @(posedge clk);   // ramane inactiv pentru totdeauna
+  rst_n = 1'b0;    // initial inactiv
+  #123;
+  rst_n = 1'b1;    // activare sincrona
 end
 
 endmodule // ck_rst_tb

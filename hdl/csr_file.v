@@ -28,6 +28,8 @@
 // wins over a same-cycle software write, so the trapping instruction never
 // commits its own write.
 
+`timescale 1ns/1ps
+
 `include "defines.vh"
 
 module csr_file #(

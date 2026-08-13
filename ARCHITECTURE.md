@@ -52,7 +52,7 @@ PIC/mtimer separate blocks.
 
 The repo also carries two blocks not part of the CPU but that the system needs
 and no block owns: the interrupt controller `pic.v` (section 5) and the machine
-timer `mtimer.v` (section 8).
+timer `mtimer.v` (section 6).
 
 ## 2. Pipeline
 
@@ -262,6 +262,28 @@ consumer sits in S2, so a single S3→S2 bypass covers it.
 Selects rd's value: ALU result, load data, PC+4 (JAL/JALR link) or CSR
 read value. The write enable is gated by the DX/WB valid bit.
 
+### axi_lite_slave.v — shared register interface (D-AXI)
+
+The slave-side AXI4-Lite handshake written once and instantiated by both `pic.v`
+and `mtimer.v` (and open to any register-mapped peripheral — the DP-SRAM ports or
+the DMA config port would use it unchanged). It owns AW/W collection, the B
+response and the AR/R response; the peripheral only describes its registers.
+
+- **Write**: AW and W are collected independently and may arrive in either
+  order; when both are in, one `wr_en` pulse hands the peripheral
+  `wr_addr`/`wr_data`/`wr_strb`. `wr_ok` is a combinational function of the
+  offset — a non-writable word answers SLVERR.
+- **Read**: `rd_addr` is valid while ARVALID; the peripheral drives `rd_data`
+  and `rd_ok` combinationally, and the slave registers them into RDATA/RRESP on
+  the AR handshake. RDATA resets to 0, so the port reads as zero rather than X
+  before the first transaction.
+- **Contract**: ≤1 transaction per direction, matching the CPU's 1-outstanding
+  master.
+- **Integration note**: the offset decode uses only `addr[7:2]`, so inside an
+  interconnect window larger than 256 B high addresses alias onto the first
+  registers instead of answering SLVERR. Open point until the memory map is
+  fixed (see README "Open points").
+
 ## 4. AXI4-Lite
 
 Both master ports follow the same rules (REQ2, REQ12):
@@ -366,19 +388,34 @@ to idle the band and counter reset to the configured values.
 Word registers from the base address; unmapped words and read-only writes answer
 SLVERR, byte strobes are honoured on writes.
 
-| Offset | Register | Access | Fields |
-|---|---|---|---|
-| 0x00–0x3C | `SRCx_CONFIG` (x=0..15) | R/W | `TRIG`[0], `BAND`[2:1], `INTRA`[7:4], `DEADLINE`[31:16] |
-| 0x40–0x7C | `SRCx_SW_TRIG` | R/W | software request bit0 (set needs key `0xA5A5` in [31:16]) |
-| 0x80–0xBC | `SRCx_STATUS` | RO | `PEND`[0], `ACTIVE`[1], `ESC`[2], `SPUR`[3], `EFF_BAND`[5:4], `DDL_TIMER`[31:16] |
-| 0xC0 | `BAND_CONFIG` | R/W | 2-bit urgency per band {b3,b2,b1,b0}; default `0x1B` |
-| 0xC4 | `NEST_STATUS` | RO | `DEPTH`[4:0], `TOP_ID`[11:8], `OVF`[16] |
-| 0xC8 | `NEST_MAX` | R/W | max nesting depth, clamped [1,16]; default 8 |
-| 0xCC | `ACTIVE_VEC` | RO | `ID`[3:0], `VALID`[8] |
-| 0xD0 | `SPURIOUS_LOG` | R/W1C | per-source sticky spurious flags |
-| 0xD4 | `ESCALATION_CFG` | R/W | `TARGET`[1:0], `MODE`[4] (0 jump / 1 bump), `MULTI`[8] |
-| 0xD8 | `INT_ENABLE` | R/W | per-source master enable mask |
-| 0xDC | `INT_STATUS` | R/W1C | global sticky {`SPUR`[0], `ESC`[1], `OVF`[2]} |
+| Offset | Register | Access | Reset | Fields |
+|---|---|---|---|---|
+| 0x00–0x3C | `SRCx_CONFIG` (x=0..15) | R/W | `0x0000_0000` | `TRIG`[0], `BAND`[2:1], `INTRA`[7:4], `DEADLINE`[31:16] |
+| 0x40–0x7C | `SRCx_SW_TRIG` | R/W | `0x0000_0000` | software request bit0 (set needs key `0xA5A5` in [31:16]) |
+| 0x80–0xBC | `SRCx_STATUS` | RO | `0x0000_0000` | `PEND`[0], `ACTIVE`[1], `ESC`[2], `SPUR`[3], `EFF_BAND`[5:4], `DDL_TIMER`[31:16] |
+| 0xC0 | `BAND_CONFIG` | R/W | `0x0000_001B` | 2-bit urgency per band {b3,b2,b1,b0} — band0=3 (most urgent) … band3=0 |
+| 0xC4 | `NEST_STATUS` | RO | `0x0000_0000` | `DEPTH`[4:0], `TOP_ID`[11:8], `OVF`[16] |
+| 0xC8 | `NEST_MAX` | R/W | `0x0000_0008` | max nesting depth, writes clamped to [1,16] |
+| 0xCC | `ACTIVE_VEC` | RO | `0x0000_0000` | `ID`[3:0], `VALID`[8] |
+| 0xD0 | `SPURIOUS_LOG` | R/W1C | `0x0000_0000` | per-source sticky spurious flags |
+| 0xD4 | `ESCALATION_CFG` | R/W | `0x0000_0000` | `TARGET`[1:0], `MODE`[4] (0 jump / 1 bump), `MULTI`[8] |
+| 0xD8 | `INT_ENABLE` | R/W | `0x0000_0000` | per-source master enable mask |
+| 0xDC | `INT_STATUS` | R/W1C | `0x0000_0000` | global sticky {`SPUR`[0], `ESC`[1], `OVF`[2]} |
+
+Every register resets to 0 except the two that would be dangerous as zero:
+`BAND_CONFIG` needs a sane default ordering, and `NEST_MAX` = 0 would mask every
+offer. So out of reset the PIC is fully disarmed (`INT_ENABLE` = 0, nothing can
+reach the CPU) with all 16 sources at band 0, intra-priority 0, level-triggered,
+deadlines disabled — i.e. plain lowest-index-first priority until software
+programs something else.
+
+`SRCx_CONFIG.TRIG` is one bit because the PIC only distinguishes **level** (0)
+from **rising edge** (1). Active-low or falling-edge sources are not a PIC mode:
+the SoC convention is active-high, and a source with the opposite polarity is
+inverted at the integration boundary rather than adding a second config bit per
+slot. Level means "the request follows the line, the handler clears the
+peripheral"; edge means "the rising transition is latched into `edge_pend` and
+consumed by the claim".
 
 Two masks stack on purpose: `INT_ENABLE` = "this source may reach the CPU",
 `mie` = "current software cares". A consequence found while testing: a source
@@ -431,10 +468,25 @@ cores against one shared memory behind a 2:1 arbiter and checks both results.
 
 ## 8. Verification
 
-The testbench (`debug/hdl/tb_cpu_axi.v`) builds a small SoC around the CPU:
-instruction memory, two address decoders (PIC at 0x3000_0000, mtimer at
-0x3001_0000, data memory as default), the real `pic.v` and `mtimer.v`, protocol
-monitors on all four AXI ports, a directed self-checking program. A separate
-SVA + functional-coverage layer (`debug/sva/`) binds the same contracts as
-assertions, runs under Verilator. Test plan, coverage results, and the bugs
-found along the way: `debug/VERIFICATION.md`.
+Two benches, on purpose:
+
+- `debug/hdl/tb_cpu_axi.v` — the **system** bench. Builds a small SoC around the
+  CPU: instruction memory, two address decoders (PIC at 0x3000_0000, mtimer at
+  0x3001_0000, data memory as default), the real `pic.v` and `mtimer.v`, protocol
+  monitors on all four AXI ports, a directed self-checking program. It runs the
+  PIC in its default configuration and proves the CPU↔PIC contract end to end.
+- `debug/hdl/tb_pic.v` — the **feature** bench for the PIC alone, so the
+  advanced-scheduling features are visible as their own named checks instead of
+  being buried in a full-system run: priority bands (inter/intra/tie),
+  preemptive nesting and `NEST_MAX` overflow, spurious detection and
+  `SPURIOUS_LOG` W1C, deadline escalation (jump / bump / multi), keyed software
+  triggers, edge latching, and the AXI error responses. 139 checks.
+
+A separate SVA + functional-coverage layer (`debug/sva/`) binds the same
+contracts as assertions and runs under Verilator. Test plan, coverage results,
+and the bugs found along the way: `debug/VERIFICATION.md`.
+
+Clock and reset in both benches come from `debug/hdl/ck_rst_tb.v`: 10 ns period
+(`CK_SEMIPERIOD` = 5), reset asserted from time 0 and released at 123 ns —
+deliberately *not* aligned to a clock edge, so the asynchronous reset's removal
+is exercised off-edge rather than in a convenient spot.

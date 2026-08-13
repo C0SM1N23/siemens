@@ -11,6 +11,8 @@
 //
 // Bound from bind_sva.sv — no RTL is touched.
 
+`timescale 1ns/1ps
+
 module pic_sva #(
     parameter MAXNEST = 16
 ) (

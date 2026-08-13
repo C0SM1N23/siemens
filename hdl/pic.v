@@ -76,6 +76,8 @@
 // is the register file. Unmapped words, and writes to read-only words, SLVERR.
 // Byte strobes are honoured on writes.
 
+`timescale 1ns/1ps
+
 module pic (
     input             clk,
     input             rst_n,
@@ -111,9 +113,7 @@ module pic (
     input             s_axi_rready
 );
 
-// ---------------------------------------------------------------------------
 // Parameters and register map (word offset = byte addr[7:2])
-// ---------------------------------------------------------------------------
 localparam NSRC     = 16;   // logical source slots
 localparam MAXNEST  = 16;   // physical nesting-stack depth
 
@@ -132,9 +132,7 @@ localparam W_LAST      = 6'd55;   // last mapped word
 
 localparam SW_KEY = 16'hA5A5;     // software-trigger arming key (D-SW)
 
-// ---------------------------------------------------------------------------
 // State
-// ---------------------------------------------------------------------------
 reg  [31:0] src_config [0:NSRC-1];  // {DEADLINE[31:16], INTRA[7:4], BAND[2:1], TRIG[0]}
 reg  [15:0] sw_pend;                // software-injected request per slot (D-SW)
 reg  [15:0] int_enable;             // INT_ENABLE: per-source master enable
@@ -189,9 +187,7 @@ function [1:0] band_urg;
     endcase
 endfunction
 
-// ---------------------------------------------------------------------------
 // Claim / end-of-interrupt (needs depth, nest_max, cpu handshake, req)
-// ---------------------------------------------------------------------------
 // cpu_irq_ack is registered one cycle after the CPU sampled cpu_irq_vec, so the
 // vector it acted on is the delayed copy; claiming that keeps the PIC's id in
 // step with the CPU's latched mcause even if a higher source arrived meanwhile.
@@ -200,9 +196,7 @@ wire       claim_push = cpu_irq_ack && (depth < nest_max);   // offers masked at
 wire       claim_spur = claim_push && !req[claimed_id];      // deasserted before ack
 wire       eoi_pop    = cpu_irq_eoi && has_active;
 
-// ---------------------------------------------------------------------------
 // Per-source request, key, deadline / escalation
-// ---------------------------------------------------------------------------
 genvar s;
 generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     assign cfg_trig[s]  = src_config[s][0];
@@ -228,23 +222,32 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     assign escalate_v[s] = ddl_hit && (!escalated[s] || esc_multi);
 
     always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)             edge_pend[s] <= 1'b0;
-        else if (claim_s)       edge_pend[s] <= 1'b0;                 // consumed
+        if (~rst_n)
+            edge_pend[s] <= 1'b0;
+        else if (claim_s)
+            edge_pend[s] <= 1'b0;                 // consumed
         else if (cfg_trig[s] && irq_src[s] && !irq_src_q[s])
-                                edge_pend[s] <= 1'b1;                 // rising edge
+            edge_pend[s] <= 1'b1;                 // rising edge
     end
 
     always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)             ddl_cnt[s] <= 16'd0;
-        else if (!counting)     ddl_cnt[s] <= 16'd0;                  // idle / no deadline
-        else if (escalate_v[s]) ddl_cnt[s] <= 16'd0;                  // re-arm window
-        else if (!ddl_hit)      ddl_cnt[s] <= ddl_cnt[s] + 16'd1;
+        if (~rst_n)
+            ddl_cnt[s] <= 16'd0;
+        else if (!counting)
+            ddl_cnt[s] <= 16'd0;                  // idle / no deadline
+        else if (escalate_v[s])
+            ddl_cnt[s] <= 16'd0;                  // re-arm window
+        else if (!ddl_hit)
+            ddl_cnt[s] <= ddl_cnt[s] + 16'd1;
     end
 
     always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)             escalated[s] <= 1'b0;
-        else if (!waiting)      escalated[s] <= 1'b0;
-        else if (escalate_v[s]) escalated[s] <= 1'b1;
+        if (~rst_n)
+            escalated[s] <= 1'b0;
+        else if (!waiting)
+            escalated[s] <= 1'b0;
+        else if (escalate_v[s])
+            escalated[s] <= 1'b1;
     end
 
     // effective band: reset to config when idle, jump/bump on a deadline miss,
@@ -252,23 +255,26 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     // ordered before the unescalated-track branch so it wins on the miss cycle
     // (escalated[s] only rises next cycle).
     always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)              eff_band[s] <= 2'd0;
-        else if (!waiting)       eff_band[s] <= cfg_band[s];   // idle: reset to config
+        if (~rst_n)
+            eff_band[s] <= 2'd0;
+        else if (!waiting)
+            eff_band[s] <= cfg_band[s];   // idle: reset to config
         else if (escalate_v[s])                                // deadline miss
             eff_band[s] <= esc_bump ? (eff_band[s] == 2'd0 ? 2'd0 : eff_band[s] - 2'd1)
                                     : esc_target;
-        else if (!escalated[s])  eff_band[s] <= cfg_band[s];   // pre-escalation: track config
+        else if (!escalated[s])
+            eff_band[s] <= cfg_band[s];   // pre-escalation: track config
     end
 end endgenerate
 
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) irq_src_q <= 16'd0;
-    else        irq_src_q <= irq_src;
+    if (~rst_n)
+        irq_src_q <= 16'd0;
+    else
+        irq_src_q <= irq_src;
 end
 
-// ---------------------------------------------------------------------------
 // Priority resolver: most-urgent eligible source (combinational)
-// ---------------------------------------------------------------------------
 // eligible: pending (requesting, not in service) and, when something is already
 // in service, strictly more urgent than the top of the nesting stack.
 integer i;
@@ -300,22 +306,26 @@ always @(posedge clk or negedge rst_n) begin
         cpu_irq_vec <= 4'd0;
     end else begin
         cpu_irq <= offer_val;
-        if (offer_val) cpu_irq_vec <= res_id;   // hold last presented id when idle
+        if (offer_val)
+            cpu_irq_vec <= res_id;   // hold last presented id when idle
     end
 end
 
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) cpu_irq_vec_d <= 4'd0;
-    else        cpu_irq_vec_d <= cpu_irq_vec;
+    if (~rst_n)
+        cpu_irq_vec_d <= 4'd0;
+    else
+        cpu_irq_vec_d <= cpu_irq_vec;
 end
 
-// ---------------------------------------------------------------------------
 // Nesting stack, active mask, spurious flags (D-NEST / D-SPUR)
-// ---------------------------------------------------------------------------
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)         depth <= 5'd0;
-    else if (claim_push) depth <= depth + 5'd1;
-    else if (eoi_pop)    depth <= depth - 5'd1;
+    if (~rst_n)
+        depth <= 5'd0;
+    else if (claim_push)
+        depth <= depth + 5'd1;
+    else if (eoi_pop)
+        depth <= depth - 5'd1;
 end
 
 always @(posedge clk) begin
@@ -326,24 +336,28 @@ always @(posedge clk) begin
 end
 
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) active <= 16'd0;
+    if (~rst_n)
+        active <= 16'd0;
     else begin
-        if (claim_push) active[claimed_id]        <= 1'b1;
-        if (eoi_pop)    active[stack_id[top_idx]] <= 1'b0;
+        if (claim_push)
+            active[claimed_id]        <= 1'b1;
+        if (eoi_pop)
+            active[stack_id[top_idx]] <= 1'b0;
     end
 end
 
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) spurious <= 16'd0;
+    if (~rst_n)
+        spurious <= 16'd0;
     else begin
-        if (claim_push && claim_spur) spurious[claimed_id]        <= 1'b1;
-        if (eoi_pop)                  spurious[stack_id[top_idx]] <= 1'b0;
+        if (claim_push && claim_spur)
+            spurious[claimed_id]        <= 1'b1;
+        if (eoi_pop)
+            spurious[stack_id[top_idx]] <= 1'b0;
     end
 end
 
-// ---------------------------------------------------------------------------
 // AXI4-Lite slave (D-AXI)
-// ---------------------------------------------------------------------------
 wire        reg_wr;
 wire [5:0]  reg_waddr, reg_raddr;
 wire [31:0] reg_wdata, reg_rdata;
@@ -408,17 +422,22 @@ wire swt_key_ok = (reg_wdata[31:16] == SW_KEY);
 wire swt_set    = wr_swt && reg_wstrb[0] &&  reg_wdata[0] && swt_key_ok;
 wire swt_clr    = wr_swt && reg_wstrb[0] && !reg_wdata[0];
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) sw_pend <= 16'd0;
+    if (~rst_n)
+        sw_pend <= 16'd0;
     else begin
-        if (claim_push) sw_pend[claimed_id] <= 1'b0;   // consumed on claim
-        if (swt_set)      sw_pend[swt_widx] <= 1'b1;
-        else if (swt_clr) sw_pend[swt_widx] <= 1'b0;
+        if (claim_push)
+            sw_pend[claimed_id] <= 1'b0;   // consumed on claim
+        if (swt_set)
+            sw_pend[swt_widx] <= 1'b1;
+        else if (swt_clr)
+            sw_pend[swt_widx] <= 1'b0;
     end
 end
 
 // BAND_CONFIG
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) band_cfg <= 8'h1B;         // band0=3 (most urgent) .. band3=0
+    if (~rst_n)
+        band_cfg <= 8'h1B;         // band0=3 (most urgent) .. band3=0
     else if (reg_wr && reg_waddr == W_BAND)
         band_cfg <= band_merge[7:0];
 end
@@ -426,24 +445,30 @@ end
 // NEST_MAX (clamp to [1, MAXNEST])
 wire [4:0] nest_max_wr = reg_wdata[4:0];
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) nest_max <= 5'd8;
+    if (~rst_n)
+        nest_max <= 5'd8;
     else if (reg_wr && reg_waddr == W_NEST_MAX && reg_wstrb[0]) begin
-        if (nest_max_wr == 5'd0)             nest_max <= 5'd1;
-        else if (nest_max_wr > MAXNEST[4:0]) nest_max <= MAXNEST[4:0];
-        else                                 nest_max <= nest_max_wr;
+        if (nest_max_wr == 5'd0)
+            nest_max <= 5'd1;
+        else if (nest_max_wr > MAXNEST[4:0])
+            nest_max <= MAXNEST[4:0];
+        else
+            nest_max <= nest_max_wr;
     end
 end
 
 // ESCALATION_CFG
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) esc_cfg <= 9'd0;           // jump to band 0, single escalation
+    if (~rst_n)
+        esc_cfg <= 9'd0;           // jump to band 0, single escalation
     else if (reg_wr && reg_waddr == W_ESC_CFG)
         esc_cfg <= esc_merge[8:0];
 end
 
 // INT_ENABLE
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) int_enable <= 16'd0;
+    if (~rst_n)
+        int_enable <= 16'd0;
     else if (reg_wr && reg_waddr == W_INT_EN)
         int_enable <= inten_merge[15:0];
 end
@@ -455,8 +480,10 @@ wire [15:0] spur_w1c = (reg_wr && reg_waddr == W_SPUR_LOG)
                            (reg_wstrb[0] ? reg_wdata[7:0]  : 8'b0) } : 16'b0;
 wire [15:0] spur_set = (claim_push && claim_spur) ? (16'b1 << claimed_id) : 16'b0;
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) spurious_log <= 16'd0;
-    else        spurious_log <= (spurious_log & ~spur_w1c) | spur_set;
+    if (~rst_n)
+        spurious_log <= 16'd0;
+    else
+        spurious_log <= (spurious_log & ~spur_w1c) | spur_set;
 end
 
 // INT_STATUS (R/W1C): sticky global event flags {OVF, ESC, SPUR}; a hardware set
@@ -465,13 +492,13 @@ wire      int_st_wr  = reg_wr && reg_waddr == W_INT_ST && reg_wstrb[0];
 wire [2:0] int_st_w1c = int_st_wr ? reg_wdata[2:0] : 3'b0;
 wire [2:0] int_st_set = { depth_block, (|escalate_v), (claim_push && claim_spur) };
 always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) int_status <= 3'd0;
-    else        int_status <= (int_status & ~int_st_w1c) | int_st_set;
+    if (~rst_n)
+        int_status <= 3'd0;
+    else
+        int_status <= (int_status & ~int_st_w1c) | int_st_set;
 end
 
-// ---------------------------------------------------------------------------
 // Read mux (combinational; the slave registers it on the AR handshake)
-// ---------------------------------------------------------------------------
 reg  [31:0] rmux;
 wire [3:0]  rd_idx = reg_raddr[3:0];
 always @(*) begin

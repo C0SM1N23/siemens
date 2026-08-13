@@ -15,6 +15,8 @@
 // Plain counters (portable to Verilator, Questa, even ModelSim ASE minus the
 // SVA files). Bound from bind_sva.sv — no RTL is touched.
 
+`timescale 1ns/1ps
+
 module cpu_func_cov (
     input        clk,
     input        rst_n,
@@ -117,6 +119,7 @@ integer db_rd_ok, db_rd_slverr, db_rd_decerr, db_rd_bp;
 integer db_wr_ok, db_wr_slverr, db_wr_decerr;
 
 integer i, j;
+integer cls_i;
 initial begin
     for (i = 0; i < 11; i = i + 1) cls_cnt[i] = 0;
     for (i = 0; i < 8;  i = i + 1) begin
@@ -139,8 +142,9 @@ end
 // committed instructions: class, size, branch outcome, CSR form, forwarding
 always @(posedge clk) begin
     if (rst_n && commit) begin
-        if (cls_idx(opcode) >= 0)
-            cls_cnt[cls_idx(opcode)] <= cls_cnt[cls_idx(opcode)] + 1;
+        cls_i = cls_idx(opcode);
+        if (cls_i >= 0)
+            cls_cnt[cls_i] <= cls_cnt[cls_i] + 1;
         if (opcode == 7'b0000011) ld_cnt[funct3] <= ld_cnt[funct3] + 1;
         if (opcode == 7'b0100011) st_cnt[funct3] <= st_cnt[funct3] + 1;
         if (opcode == 7'b1100011)
@@ -198,7 +202,7 @@ always @(posedge clk) begin
         // channel is read from cpu_irq_vec at the (single) claim pulse
         if (cpu_irq_ack) begin
             ev_irq_taken <= ev_irq_taken + 1;
-            if (cpu_irq_vec < 4'd8) ack_cnt[cpu_irq_vec] <= ack_cnt[cpu_irq_vec] + 1;
+            if (cpu_irq_vec < 4'd8) ack_cnt[cpu_irq_vec[2:0]] <= ack_cnt[cpu_irq_vec[2:0]] + 1;
         end
     end
 end

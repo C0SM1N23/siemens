@@ -12,6 +12,8 @@
 //
 // Bound from bind_sva.sv — no RTL is touched.
 
+`timescale 1ns/1ps
+
 module cpu_core_sva (
     input        clk,
     input        rst_n,

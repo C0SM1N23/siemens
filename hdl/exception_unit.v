@@ -20,6 +20,8 @@
 // Interrupts don't come through here: cpu_top evaluates them before execution
 // and delivers valid=0 for a preempted instruction.
 
+`timescale 1ns/1ps
+
 `include "defines.vh"
 
 module exception_unit (

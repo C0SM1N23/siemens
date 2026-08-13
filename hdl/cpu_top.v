@@ -36,6 +36,8 @@
 //     mie-enabled pending interrupt, ignoring mstatus.MIE, and a WFI-ending
 //     interrupt records mepc = wfi+4 so MRET resumes past it.
 
+`timescale 1ns/1ps
+
 `include "defines.vh"
 
 module cpu_top #(

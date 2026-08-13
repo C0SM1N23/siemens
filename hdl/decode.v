@@ -1,3 +1,5 @@
+`timescale 1ns/1ps
+
 module decode (
     input  [31:0] instr,
     output [6:0]  opcode,

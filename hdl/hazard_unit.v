@@ -15,6 +15,8 @@
 //      so the parked fetch stops ibus traffic. cpu_top drops wfi_wait on wake,
 //      so an interrupt wake is just a normal trap_take, a masked wake commits.
 
+`timescale 1ns/1ps
+
 module hazard_unit (
     // pipeline state
     input        fetch_valid,   // S1 offers an instruction this cycle

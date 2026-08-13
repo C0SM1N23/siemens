@@ -130,7 +130,7 @@ task wait_offer(input [3:0] ev);
     end
 endtask
 
-task no_offer_for(input [3:0] nev, input [255:0] msg);
+task no_offer_for(input [3:0] nev, input [511:0] msg);   // 64 chars, same as check
     begin  // cpu_irq must not currently present nev
         if (cpu_irq === 1'b1 && cpu_irq_vec === nev) begin
             $display("FAIL: %0s (src %0d unexpectedly offered)", msg, nev);
@@ -177,12 +177,12 @@ initial begin
     axi_read(NEST_MAX_R, RESP_OKAY);    check(32'd8,        rd, "NEST_MAX default");
     axi_read(INT_ENABLE, RESP_OKAY);    check(32'd0,        rd, "INT_ENABLE default");
     axi_read(INT_STATUS, RESP_OKAY);    check(32'd0,        rd, "INT_STATUS default");
-    check(1'b0, cpu_irq, "cpu_irq idle after reset");
+    check(32'd0, {31'b0, cpu_irq}, "cpu_irq idle after reset");
 
     axi_write(INT_ENABLE, 32'h0008, RESP_OKAY);     // enable src3
     irq_src[3] = 1'b1;
     wait_offer(4'd3);
-    check(1'b1, cpu_irq, "cpu_irq asserted for src3");
+    check(32'd1, {31'b0, cpu_irq}, "cpu_irq asserted for src3");
     check(32'd3, {28'b0, cpu_irq_vec}, "cpu_irq_vec = 3");
     axi_read(STA(3), RESP_OKAY);  check(32'h0000_0001, rd & 32'hF, "src3 status pending");
     claim(4'd3);
@@ -190,7 +190,7 @@ initial begin
     axi_read(NEST_STATUS, RESP_OKAY);  check(32'd1, rd & 32'h1F, "depth = 1 after claim");
     axi_read(ACTIVE_VEC, RESP_OKAY);   check(32'h0000_0103, rd, "ACTIVE_VEC = valid|id3");
     axi_read(STA(3), RESP_OKAY);       check(32'h2, rd & 32'h2, "src3 status active");
-    check(1'b0, cpu_irq, "cpu_irq clears once src3 in service");
+    check(32'd0, {31'b0, cpu_irq}, "cpu_irq clears once src3 in service");
     irq_src[3] = 1'b0;                 // handler cleared the source
     pulse_eoi;
     step(2);

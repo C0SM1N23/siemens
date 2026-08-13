@@ -16,6 +16,8 @@
 // unqualified compare would leak X into the READY muxes (found by the
 // random-backpressure runs).
 
+`timescale 1ns/1ps
+
 module axi_lite_dec2 #(
     parameter S1_BASE = 32'h3000_0000,
     parameter S1_MASK = 32'hF000_0000

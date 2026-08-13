@@ -24,6 +24,8 @@
 //      Anything else answers SLVERR. Writes honor WSTRB per lane; a write to an
 //      mtime half beats the increment on that half that cycle.
 
+`timescale 1ns/1ps
+
 module mtimer (
     input             clk,
     input             rst_n,

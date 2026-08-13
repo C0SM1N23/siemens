@@ -8,6 +8,8 @@
 // drop at the given rate, responses pick up 0..3 extra waits) to shake out
 // timing assumptions a fixed latency wouldn't hit; same SEED = same run.
 
+`timescale 1ns/1ps
+
 module axi_lite_mem_model #(
     parameter WORDS      = 1024,
     parameter BASE       = 32'h0000_0000,
@@ -47,9 +49,18 @@ initial begin
         $readmemh(INIT_FILE, mem);
 end
 
+// Tested as an unsigned offset from BASE rather than as a pair of compares:
+// with BASE = 0 the lower bound (addr >= BASE) is constant-true, and an address
+// below BASE simply wraps the subtraction to a huge value that fails the span.
+localparam [31:0] SPAN = WORDS*4;
+
 function in_range;
     input [31:0] addr;
-    in_range = (addr >= BASE) && (addr < BASE + WORDS*4);
+    reg [31:0] off;
+    begin
+        off      = addr - BASE;
+        in_range = (off < SPAN);
+    end
 endfunction
 
 // random backpressure (deterministic per SEED)

@@ -6,7 +6,7 @@
 task check;
     input [31:0] expected;
     input [31:0] got;
-    input [255:0] test_name;
+    input [511:0] test_name;   // 64 chars: the longest check labels need > 32
     begin
         if (expected === got)
             $display("PASS: %0s = 0x%08h", test_name, got);

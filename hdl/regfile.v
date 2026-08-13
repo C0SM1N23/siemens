@@ -1,5 +1,7 @@
 // Register file (REQ10, to spec): 32x32-bit GPRs, x0 hardwired to 0, one write
 // port (Stage 3 writeback) and two combinational read ports (Stage 2), reset 0.
+`timescale 1ns/1ps
+
 module regfile (
     input             clk,
     input             rst_n,            // reset asincron, activ 0

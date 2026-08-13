@@ -26,6 +26,8 @@
 // full payload write, so keeping reset off the big arrays keeps the reset tree
 // small.
 
+`timescale 1ns/1ps
+
 module branch_predictor #(
     parameter RAS_DEPTH = 8,    // return-address stack entries; 0 disables (D24)
     parameter ENTRIES   = 128   // BTB/BHT entries, power of 2 (index = PC[IDX_W+1:2])
@@ -111,8 +113,13 @@ generate if (RAS_DEPTH > 0) begin : g_ras
     wire pop_only  = update_ret  && !update_call && cnt_q != 0;
     wire replace   = update_call &&  update_ret  && cnt_q != 0;
 
-    wire [PW-1:0] sp_inc = (sp_q == RAS_DEPTH - 1) ? {PW{1'b0}} : sp_q + 1'b1;
-    wire [PW-1:0] sp_dec = (sp_q == {PW{1'b0}}) ? RAS_DEPTH - 1 : sp_q - 1'b1;
+    // top-of-stack index, sized to the pointer so the wrap compare/assign stay
+    // PW bits wide (RAS_DEPTH itself is a 32-bit parameter)
+    localparam [31:0]   SP_MAX_W = RAS_DEPTH - 1;
+    localparam [PW-1:0] SP_MAX   = SP_MAX_W[PW-1:0];
+
+    wire [PW-1:0] sp_inc = (sp_q == SP_MAX) ? {PW{1'b0}} : sp_q + 1'b1;
+    wire [PW-1:0] sp_dec = (sp_q == {PW{1'b0}}) ? SP_MAX : sp_q - 1'b1;
 
     assign ras_top = ras[sp_q];
     assign ras_ok  = (cnt_q != 0);

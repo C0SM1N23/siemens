@@ -13,6 +13,8 @@
 //   peripheral drives rd_data and rd_ok combinationally from it, and the slave
 //   registers them into RDATA/RRESP on the AR handshake.
 
+`timescale 1ns/1ps
+
 module axi_lite_slave (
     input             clk,
     input             rst_n,
@@ -115,7 +117,9 @@ always @(posedge clk)
     if (ar_hs) rresp_err_q <= !rd_ok;
 assign s_axi_rresp = rresp_err_q ? RESP_SLVERR : RESP_OKAY;
 
-always @(posedge clk)
-    if (ar_hs) s_axi_rdata <= rd_data;
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)    s_axi_rdata <= 32'd0;
+    else if (ar_hs) s_axi_rdata <= rd_data;
+end
 
 endmodule
