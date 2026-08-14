@@ -1,0 +1,149 @@
+m255
+K4
+z2
+!s11f vlog 2020.1 2020.02, Feb 28 2020
+13
+!s112 1.1
+!i10d 8192
+!i10e 25
+!i10f 100
+cModel Technology
+Z0 dC:/Siemens/debug/sim
+vaxi4lite_slave_fsm
+!s110 1786432280
+!i10b 1
+!s100 6WFO4N=M>aI5<6@YSFl]n0
+Z1 !s11b Dg1SIo80bB@j0V0VzS_@n1
+IcWFDc@050L[dUCB8klliA1
+Z2 VDg1SIo80bB@j0V0VzS_@n1
+R0
+w1785275896
+8../../hdl/axi4lite_slave_fsm.v
+F../../hdl/axi4lite_slave_fsm.v
+!i122 18
+L0 10 159
+Z3 OV;L;2020.1;71
+r1
+!s85 0
+31
+!s108 1786432280.000000
+!s107 ../../hdl/axi4lite_slave_fsm.v|
+!s90 -reportprogress|300|-work|work|../../hdl/axi4lite_slave_fsm.v|
+!i113 1
+Z4 o-work work
+Z5 tCvgOpt 0
+vcollision_det
+Z6 !s110 1786432281
+!i10b 1
+!s100 ABJBJD>F7XG5ZKi01E7e>3
+R1
+I:V>dS^0FJ8HI_M31Rzj^62
+R2
+R0
+w1785281186
+8../../hdl/collision_det.v
+F../../hdl/collision_det.v
+!i122 19
+L0 11 107
+R3
+r1
+!s85 0
+31
+Z7 !s108 1786432281.000000
+!s107 ../../hdl/collision_det.v|
+!s90 -reportprogress|300|-work|work|../../hdl/collision_det.v|
+!i113 1
+R4
+R5
+vdp_sram_top
+Z8 !s110 1786432282
+!i10b 1
+!s100 oL_[HIVo`KAa8h8oTmbm@0
+R1
+I2:cDI@FFG7N_AnP4_WS8D2
+R2
+R0
+w1785280472
+8../../hdl/dp_sram_top.v
+F../../hdl/dp_sram_top.v
+!i122 22
+L0 8 230
+R3
+r1
+!s85 0
+31
+Z9 !s108 1786432282.000000
+!s107 ../../hdl/dp_sram_top.v|
+!s90 -reportprogress|300|-work|work|../../hdl/dp_sram_top.v|
+!i113 1
+R4
+R5
+vmem_array
+R6
+!i10b 1
+!s100 h]BGBP4zEVDVZSH[B7eJY1
+R1
+IZBYgR@K@[T^nm;G@[a4Y;2
+R2
+R0
+w1785275930
+8../../hdl/mem_array.v
+F../../hdl/mem_array.v
+!i122 20
+L0 12 49
+R3
+r1
+!s85 0
+31
+R7
+!s107 ../../hdl/mem_array.v|
+!s90 -reportprogress|300|-work|work|../../hdl/mem_array.v|
+!i113 1
+R4
+R5
+vregfile
+R8
+!i10b 1
+!s100 aBm4SMXL2N392_jNCfekW0
+R1
+IGNcjMn009@8zVam[`oA3e1
+R2
+R0
+w1785275922
+8../../hdl/regfile.v
+F../../hdl/regfile.v
+!i122 21
+L0 11 200
+R3
+r1
+!s85 0
+31
+R7
+!s107 ../../hdl/regfile.v|
+!s90 -reportprogress|300|-work|work|../../hdl/regfile.v|
+!i113 1
+R4
+R5
+vtb_dp_sram_top
+R8
+!i10b 1
+!s100 PhE50gDn3;`U:=a<cmIe=2
+R1
+I;6eWM;R5Hi0NDanD[K5>D0
+R2
+R0
+w1786386975
+8../hdl/tb_dp_sram_top.v
+F../hdl/tb_dp_sram_top.v
+!i122 23
+L0 4 439
+R3
+r1
+!s85 0
+31
+R9
+!s107 ../hdl/tb_dp_sram_top.v|
+!s90 -reportprogress|300|-work|work|../hdl/tb_dp_sram_top.v|
+!i113 1
+R4
+R5

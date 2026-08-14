@@ -1,0 +1,81 @@
+REM =============================================================================
+REM dp_sram_top_test_vectors.txt
+REM
+REM Vectori de test pentru dp_sram_top.v, interpretati de tb_dp_sram_top.v.
+REM Spre deosebire de regfile_test_vectors.txt, aici comenzile vorbesc AXI4-Lite
+REM real (adrese de byte) si pot declansa coliziuni reale intre Port A si Port B.
+REM
+REM Format: fiecare linie are exact 5 campuri, separate prin spatiu:
+REM   COMANDA  ARG1  ARG2  ARG3  ARG4
+REM Campurile nefolosite se completeaza cu "-"
+REM Liniile de comentariu incep cu REM. Liniile goale sunt ignorate.
+REM
+REM Comenzi disponibile:
+REM   REM         -      -       -       -       comentariu, nicio actiune
+REM   RESET       -      -       -       -       aplica reset (3 cicluri) apoi il elibereaza
+REM   WRITE       <A|B>  <addr>  <data>  -        scrie <data> (hex) la <addr> (hex, byte); asteapta BRESP=OKAY
+REM   READ        <A|B>  <addr>  <data>  -        citeste <addr>; verifica <data> si RRESP=OKAY
+REM   WWCONFLICT  <addr> <dataA> <dataB> <winner> Port A si Port B scriu simultan <addr>; <winner>=A|B
+REM   RWCONFLICT  <addr> <writer><data>  -        <writer> (A|B) scrie <data>; celalalt citeste simultan <addr>
+REM   WAIT        <cicluri> -   -       -        avanseaza <cicluri> cicluri
+REM   CHECKIRQ    <0|1>  -      -       -        verifica iesirea irq
+REM
+REM Harta locala de adrese (byte): cuvant 0..7 = registre (0x00-0x1C), cuvant 8+ = memorie (0x20+)
+REM   0x00=STATUS 0x04=ENABLE 0x08=PRIORITY 0x0C=BWA(RO) 0x10=BWB(RO) 0x14=THRESH 0x18=COOLD 0x1C=nemapat
+REM =============================================================================
+
+REM ==================== Grup 1: reset + acces simplu la registre prin AXI real ====================
+RESET       -      -          -          -
+READ  A  000  00000000  -
+READ  A  004  00000000  -
+WRITE A  004  0000000F  -
+READ  A  004  0000000F  -
+READ  B  004  0000000F  -
+WRITE A  004  00000000  -
+
+REM ==================== Grup 2: acces simplu la memorie prin AXI real ====================
+WRITE A  020  DEADBEEF  -
+READ  A  020  DEADBEEF  -
+READ  B  020  DEADBEEF  -
+WRITE B  024  12345678  -
+READ  A  024  12345678  -
+READ  A  020  DEADBEEF  -
+
+REM ==================== Grup 3: granita regiunilor (cuvant 7 vs cuvant 8) ====================
+READ  A  01C  00000000  -
+WRITE A  008  FFFFFFFF  -
+READ  A  020  DEADBEEF  -
+WRITE A  008  00000000  -
+
+REM ==================== Grup 4: coliziune Read/Write -- scriitorul castiga mereu ====================
+RWCONFLICT  020  A  11111111  -
+READ  A  020  11111111  -
+RWCONFLICT  020  B  22222222  -
+READ  A  020  22222222  -
+
+REM ==================== Grup 5: coliziune Write/Write, prioritate implicita (Port A) ====================
+WWCONFLICT  020  AAAAAAAA  BBBBBBBB  A
+READ  A  020  AAAAAAAA  -
+
+REM ==================== Grup 6: FORCE_PRIORITY schimba castigatorul la Write/Write ====================
+WRITE A  008  00000001  -
+WWCONFLICT  020  11110000  22220000  B
+READ  A  020  22220000  -
+WRITE A  008  00000000  -
+
+REM ==================== Grup 7: irq de la coliziune reala pana la INT_STATUS ====================
+WRITE A  004  00000001  -
+RWCONFLICT  020  A  33330000  -
+CHECKIRQ  1  -  -  -
+WRITE A  000  00000001  -
+CHECKIRQ  0  -  -  -
+WRITE A  004  00000000  -
+
+REM ==================== Grup 8: COLLISION_THRESHOLD (implicit 4) -> COOLDOWN dupa a 4-a coliziune reala ====================
+RESET       -      -          -          -
+WWCONFLICT  020  00000001  00000002  A
+WWCONFLICT  020  00000003  00000004  A
+WWCONFLICT  020  00000005  00000006  A
+WWCONFLICT  020  00000007  00000008  A
+READ  A  000  00000003  -
+RESET       -      -          -          -
