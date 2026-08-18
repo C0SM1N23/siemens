@@ -1,0 +1,175 @@
+\chapter{Requirement and design-decision traceability}
+\label{ch:trace}
+
+The project distinguishes two kinds of item, and so does this matrix.
+\textbf{Requirements} (\texttt{REQ\#}) are behaviour the specifications fixed;
+there was no choice to make, only compliance to achieve. \textbf{Design
+decisions} (\texttt{D\#}, and the PIC's \texttt{D-*} tags) are points the
+specifications explicitly delegated. Both sets of tags exist as comments in the
+source, so any row can be located with a text search.
+
+Status values used below:
+
+\begin{itemize}[nosep]
+  \item \textbf{Implemented} --- as specified, with verification evidence.
+  \item \textbf{Implemented, deviation} --- built and working, but differing from
+        the specification or from a standard in a way stated in the row.
+  \item \textbf{Open} --- a system-level decision that is not the CPU's to make.
+\end{itemize}
+
+\begin{landscape}
+\section{Specification requirements}
+
+\begin{longtable}{@{}lL{58mm}lL{48mm}L{42mm}l@{}}
+\caption{Requirement traceability (CPU feature specification)}\label{tab:reqtrace}\\
+\toprule
+\textbf{Tag} & \textbf{Requirement} & \textbf{Subsystem} & \textbf{RTL} & \textbf{Verification} & \textbf{Status} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tag} & \textbf{Requirement} & \textbf{Subsystem} & \textbf{RTL} & \textbf{Verification} & \textbf{Status} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+REQ1 & Three-stage pipeline: fetch / decode+execute / writeback & CPU &
+  \file{cpu\_top.v} & All ISA checks; CPI window & Implemented \\
+
+REQ2 & Two AXI4-Lite master ports, ibus read-only, dbus read+write & CPU &
+  \file{cpu\_top.v}, \file{fetch\_unit.v}, \file{lsu.v} & Protocol monitors and SVA on both ports, every run & Implemented \\
+
+REQ3 & Top interface: one synchronous clock, asynchronous active-low reset, PIC lines & CPU &
+  \file{cpu\_top.v} & Reset released off-edge at 123\,ns in both benches & Implemented \\
+
+REQ4 & Interrupts sampled under \reg{mstatus.MIE} at instruction boundaries; one-cycle ack; \sig{cpu\_in\_trap} spans entry to \sig{MRET} & CPU &
+  \file{cpu\_top.v} & Pulse-width invariants; irq held through an AXI stall; per-source claim counts & Implemented \\
+
+REQ5 & Pipeline stalls until the AXI response is valid & CPU &
+  \file{fetch\_unit.v}, \file{lsu.v} & Load/store checks under three latency configurations & Implemented \\
+
+REQ6 & Dedicated centralised hazard / stall / flush unit & CPU &
+  \file{hazard\_unit.v} & Forwarding and flush checks & Implemented \\
+
+REQ7 & RV32I instruction set; \sig{FENCE} = NOP; \sig{ECALL}/\sig{EBREAK} trap-handled & CPU &
+  \file{control.v}, \file{decode.v}, \file{imm\_gen.v}, \file{alu.v} & Per-class register checks; instruction-class coverage bins & Implemented \\
+
+REQ8 & One-bit saturating branch predictor & CPU &
+  \file{branch\_predictor.v} & Loop learning, alias eviction, predictor outcome matrix & Implemented \\
+
+REQ9 & The seven M-mode CSRs at their addresses; \reg{mip} read-only, PIC-driven & CPU &
+  \file{csr\_file.v} & CSR round-trips and negative tests & Implemented \\
+
+REQ10 & Register file $32\times32$, \sig{x0} = 0, one write / two combinational reads, reset 0 & CPU &
+  \file{regfile.v} & \sig{x0} write test; SVA \sig{x0} invariant & Implemented \\
+
+REQ11 & \sig{WSTRB} byte-lane writes for \sig{SB}/\sig{SH}/\sig{SW} & CPU &
+  \file{lsu.v} & Lane checks in memory; SVA on legal strobe shapes & Implemented \\
+
+REQ12 & Handle all AXI response codes on both ports & CPU &
+  \file{fetch\_unit.v}, \file{lsu.v}, \file{exception\_unit.v} & SLVERR and DECERR on fetch, load and store; response-code coverage bins & Implemented \\
+\end{longtable}
+
+\section{Design decisions}
+
+\begin{longtable}{@{}lL{60mm}lL{44mm}L{40mm}l@{}}
+\caption{Design-decision traceability}\label{tab:dtrace}\\
+\toprule
+\textbf{Tag} & \textbf{Decision} & \textbf{Subsystem} & \textbf{RTL} & \textbf{Verification} & \textbf{Status} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tag} & \textbf{Decision} & \textbf{Subsystem} & \textbf{RTL} & \textbf{Verification} & \textbf{Status} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+
+D1 & Bubbles by valid bit, not by NOP encoding; payload unreset & CPU & \file{cpu\_top.v} & Flush and reset behaviour; X-hygiene assertions & Implemented \\
+D2 & S2 priority: interrupt $>$ exception $>$ MRET $>$ mispredict & CPU & \file{cpu\_top.v} & SVA: interrupts only at instruction boundaries & Implemented \\
+D3 & Cause set 0--7, 11, plus external interrupts 16--31 & CPU & \file{exception\_unit.v}, \file{csr\_file.v} & Exact synchronous trap count; cause bitmask & Implemented \\
+D4 & Return address per trap type; \sig{WFI} wake uses \sig{wfi+4} & CPU & \file{cpu\_top.v} & \reg{mepc} readback per cause; WFI wake test & Implemented \\
+D5 & \sig{RESET\_PC} / \sig{HART\_ID} parameters, \reg{mhartid} & CPU & \file{cpu\_top.v}, \file{csr\_file.v} & Dual-core bench splits \reg{mhartid} & Implemented \\
+D6 & ibus fully independent, $\le$1 outstanding, back-to-back issue & CPU & \file{fetch\_unit.v} & 33 cycles for 33 instructions, latency-1 config & Implemented \\
+D7 & Holding register plus discard on redirect & CPU & \file{fetch\_unit.v} & Mispredict recovery; skipped-word poison jumps & Implemented \\
+D8 & Fetch bus error becomes instruction access fault, not illegal & CPU & \file{fetch\_unit.v} & Jump into unmapped space traps cause 1 & Implemented \\
+D9 & BHT+BTB, direct-mapped, 128 entries, index \sig{PC[8:2]}, full tag & CPU & \file{branch\_predictor.v} & Three branches sharing an index with different tags & Implemented \\
+D10 & Miss predicts not-taken & CPU & \file{branch\_predictor.v} & Predictor outcome coverage & Implemented \\
+D11 & Learned at commit only; entries survive traps & CPU & \file{branch\_predictor.v} & Branch checks across handlers & Implemented \\
+D12 & One outstanding data transaction; address and data latched at start & CPU & \file{lsu.v} & SVA: never read and write at once on dbus & Implemented \\
+D13 & Load-use solved by S3$\to$S2 forwarding, zero stalls & CPU & \file{hazard\_unit.v} & Dependent chains; forwarding-path coverage & Implemented \\
+D14 & Flush beats stall; both rules from \sig{s2\_advance} & CPU & \file{hazard\_unit.v} & Trap during an outstanding transaction & Implemented \\
+D15 & Unimplemented or read-only CSR access raises illegal & CPU & \file{csr\_file.v} & Negative tests on \reg{mip}, \reg{mhartid}, \texttt{0x7C0} & Implemented \\
+D16 & Vectored \reg{mtvec}: interrupts to BASE+4$\cdot$cause & CPU & \file{csr\_file.v} & Vectored irq slot and vectored \sig{ECALL} & Implemented \\
+D17 & Misalignment checked before the access & CPU & \file{exception\_unit.v} & Monitors observe no transaction on a misaligned access & Implemented \\
+D18 & Data bus error becomes access fault 5 / 7 & CPU & \file{exception\_unit.v} & DECERR load and store & Implemented \\
+D19 & PIC: 16 hardware + 16 software sources, one prioritised offer, registered & PIC & \file{pic.v} & \file{tb\_pic.v}; SVA offer/registration check & Implemented \\
+D20 & Four reorderable bands + intra-band priority + index tie-break; deadline escalation & PIC & \file{pic.v} & Band, intra and tie tests; escalation tests & Implemented \\
+D21 & Preemption with a hardware nesting stack, \reg{NEST\_MAX} & PIC & \file{pic.v} & Nesting and overflow tests; SVA depth bounds & Implemented \\
+D22 & Full register map; SLVERR on unmapped or read-only writes & PIC & \file{pic.v}, \file{axi\_lite\_slave.v} & Register round-trips; SLVERR negatives & Implemented \\
+D23 & \sig{WFI} sleeps S2, parks S1, silences ibus & CPU & \file{control.v}, \file{cpu\_top.v}, \file{hazard\_unit.v} & Both wake paths; SVA ibus quiet during sleep & Implemented \\
+D24 & Return-address stack, 8 entries, parameterised & CPU & \file{branch\_predictor.v} & Three call sites plus a nested chain & Implemented \\
+D25 & \reg{mhpmcounter3..7} on fixed events & CPU & \file{csr\_file.v} & Exact trap count; other counters non-zero & Implemented \\
+D26 & Machine timer, 64-bit, born disarmed, level irq & Timer & \file{mtimer.v} & End-to-end timer test through PIC source 7 & Implemented \\
+D27 & Timer AXI port with the same discipline as the PIC's & Timer & \file{mtimer.v}, \file{axi\_lite\_slave.v} & Register write/readback; bad-offset SLVERR & Implemented \\
+D-LAT & \sig{cpu\_irq} / \sig{cpu\_irq\_vec} registered from one resolver output & PIC & \file{pic.v} & SVA against a same-edge shadow register & Implemented \\
+D-BAND & Priority key \{band urgency, intra, $15-$index\} & PIC & \file{pic.v} & Strict-priority SVA; band tests & Implemented \\
+D-NEST & \{key, id\} stack; strict-greater preemption; masking at the limit & PIC & \file{pic.v} & Depth bounds and overflow flag & Implemented \\
+D-SPUR & Spurious detected at claim; logged; claim still pushed & PIC & \file{pic.v} & Spurious detection and \reg{SPURIOUS\_LOG} W1C tests & Implemented \\
+D-DDL & Per-source deadline counter; jump / bump / multi escalation & PIC & \file{pic.v} & Escalation flips the offer and preempts an active source & Implemented \\
+D-SW & Keyed software triggers, \texttt{0xA5A5} & PIC & \file{pic.v} & Keyed trigger accepted, unkeyed write ignored & Implemented \\
+D-AXI & Shared slave; byte strobes; SLVERR elsewhere & PIC, Timer & \file{axi\_lite\_slave.v} & Monitors and SVA on both slave ports & Implemented \\
+\end{longtable}
+\end{landscape}
+
+\section{Items carried as deviations or open points}
+
+\begin{table}[H]
+\centering
+\caption{Where intent and implementation differ, or where the decision is not the CPU's}
+\label{tab:devs}
+\begin{tabular}{@{}L{34mm}L{44mm}L{44mm}l@{}}
+\toprule
+\textbf{Area} & \textbf{Intent} & \textbf{Implementation} & \textbf{Status} \\
+\midrule
+Stall sources (specification lists three) &
+  AXI fetch not ready, AXI data not complete, and load-use hazard &
+  Two stall terms. Fetch-not-ready produces a bubble; load-use is eliminated by
+  forwarding and never stalls. &
+  Implemented, deviation \\
+
+\reg{mtvec.MODE} WARL &
+  A reserved MODE write should read back as a legal value &
+  Stored verbatim and read back; trap behaviour is that of direct mode &
+  Implemented, deviation \\
+
+\reg{mcountinhibit} &
+  Optional in the privileged specification &
+  Not implemented. The absent case is defined as ``all counters run'', which is
+  this behaviour. Software cannot freeze a counter around a measurement window. &
+  Implemented, deviation \\
+
+Peripheral decode width &
+  Not specified &
+  Both slaves decode \sig{addr[7:2]} only, so addresses alias inside a window
+  larger than 256\,bytes &
+  Open \\
+
+System memory map &
+  Not fixed by any specification &
+  Reset vector is a parameter; peripheral bases are testbench decoder parameters &
+  Open \\
+
+Multi-core interrupt routing &
+  Not specified &
+  The PIC serves one CPU; source-to-core targeting is undefined &
+  Open \\
+
+Reset style across blocks &
+  Not harmonised &
+  CPU, PIC and timer use asynchronous reset. Reset release is not synchronised,
+  which real silicon would require. &
+  Open \\
+\bottomrule
+\end{tabular}
+\end{table}

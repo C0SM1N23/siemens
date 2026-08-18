@@ -1,0 +1,80 @@
+\chapter{Consolidated register map}
+\label{app:regmap}
+
+Offsets are byte offsets from each block's base address. Reset values are those
+read back from the elaborated design.
+
+\section{PIC}
+
+\begin{longtable}{@{}TlllL{0.30\linewidth}@{}}
+\caption{PIC registers}\label{tab:appic}\\
+\toprule
+\textnormal{\textbf{Offset}} & \textbf{Register} & \textbf{Access} & \textbf{Reset} & \textbf{Fields} \\
+\midrule
+\endfirsthead
+\toprule
+\textnormal{\textbf{Offset}} & \textbf{Register} & \textbf{Access} & \textbf{Reset} & \textbf{Fields} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+0x00--0x3C & SRC0..15\_CONFIG & RW & \texttt{0x0000\_0000} & TRIG[0], BAND[2:1], INTRA[7:4], DEADLINE[31:16] \\
+0x40--0x7C & SRC0..15\_SW\_TRIG & RW & \texttt{0x0000\_0000} & SWREQ[0], KEY[31:16] = \texttt{0xA5A5} \\
+0x80--0xBC & SRC0..15\_STATUS & RO & \texttt{0x0000\_0000} & PEND[0], ACTIVE[1], ESC[2], SPUR[3], EFF\_BAND[5:4], DDL\_TIMER[31:16] \\
+0xC0 & BAND\_CONFIG & RW & \texttt{0x0000\_001B} & BAND0\_URG[1:0] .. BAND3\_URG[7:6] \\
+0xC4 & NEST\_STATUS & RO & \texttt{0x0000\_0000} & DEPTH[4:0], TOP\_ID[11:8], OVF[16] \\
+0xC8 & NEST\_MAX & RW & \texttt{0x0000\_0008} & NEST\_MAX[4:0], clamped to [1,16] \\
+0xCC & ACTIVE\_VEC & RO & \texttt{0x0000\_0000} & ID[3:0], VALID[8] \\
+0xD0 & SPURIOUS\_LOG & R/W1C & \texttt{0x0000\_0000} & SPUR[15:0] \\
+0xD4 & ESCALATION\_CFG & RW & \texttt{0x0000\_0000} & TARGET[1:0], MODE[4], MULTI[8] \\
+0xD8 & INT\_ENABLE & RW & \texttt{0x0000\_0000} & EN[15:0] \\
+0xDC & INT\_STATUS & R/W1C & \texttt{0x0000\_0000} & SPUR[0], ESC[1], OVF[2] \\
+\end{longtable}
+
+Last mapped word is offset \texttt{0xDC}. Any other offset answers SLVERR.
+
+\section{Machine timer}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}Tlll@{}}
+\toprule
+\textnormal{\textbf{Offset}} & \textbf{Register} & \textbf{Access} & \textbf{Reset} \\
+\midrule
+0x0 & MTIME\_LO    & RW & \texttt{0x0000\_0000} \\
+0x4 & MTIME\_HI    & RW & \texttt{0x0000\_0000} \\
+0x8 & MTIMECMP\_LO & RW & \texttt{0xFFFF\_FFFF} \\
+0xC & MTIMECMP\_HI & RW & \texttt{0xFFFF\_FFFF} \\
+\bottomrule
+\end{tabular}
+\caption{Machine timer registers}
+\label{tab:aptmr}
+\end{table}
+
+\section{CPU CSRs}
+
+See Table~\ref{tab:csrmap} for the full list with access rules. Summary of the
+address blocks:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}TlL{0.46\linewidth}@{}}
+\toprule
+\textnormal{\textbf{Range}} & \textbf{Contents} & \textbf{Notes} \\
+\midrule
+0x300--0x305 & mstatus, misa, mie, mtvec & mie has bits [31:16] only \\
+0x323--0x33F & mhpmevent3..31 & Hardwired zero (WARL) \\
+0x340--0x344 & mscratch, mepc, mcause, mtval, mip & mip is read-only \\
+0xB00--0xB07 & mcycle, minstret, mhpmcounter3..7 & Lower halves \\
+0xB08--0xB1F & mhpmcounter8..31 & Hardwired zero (WARL) \\
+0xB80--0xB87 & mcycleh, minstreth, mhpmcounter3h..7h & Upper halves \\
+0xB88--0xB9F & mhpmcounter8h..31h & Hardwired zero (WARL) \\
+0xF11--0xF14 & mvendorid, marchid, mimpid, mhartid & All read-only \\
+\bottomrule
+\end{tabular}
+\caption{CSR address blocks}
+\label{tab:apcsr}
+\end{table}
+
+Addresses outside these blocks are unimplemented and raise an illegal
+instruction on any access.

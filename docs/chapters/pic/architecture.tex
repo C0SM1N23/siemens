@@ -1,0 +1,254 @@
+\chapter{PIC architecture}
+\label{ch:picarch}
+
+\section{Block boundary}
+
+\file{hdl/pic.v} is a self-contained IP block. Its interface is 16 hardware
+interrupt lines, the four-signal CPU handshake, and one AXI4-Lite slave port for
+configuration and status. It holds no CPU state and makes no assumption about the
+CPU beyond the claim/end-of-interrupt protocol.
+
+The feature specification for this block was explicitly a draft that delegated
+the ``non-standard design challenges'' to the implementer. The choices recorded
+in Chapter~\ref{ch:picbehav} therefore \emph{are} the feature specification for
+those areas.
+
+\begin{table}[H]
+\centering
+\caption{PIC top-level interface (\file{hdl/pic.v})}
+\label{tab:picif}
+\begin{tabular}{@{}llL{0.48\linewidth}@{}}
+\toprule
+\textbf{Signal} & \textbf{Width} & \textbf{Function} \\
+\midrule
+\sig{irq\_src}      & 16 & Hardware interrupt lines, level- or edge-triggered per source. \\
+\sig{cpu\_irq}      & 1  & Registered level request to the CPU. \\
+\sig{cpu\_irq\_vec} & 4  & Identifier of the source being offered. \\
+\sig{cpu\_irq\_ack} & 1  & Claim pulse from the CPU. \\
+\sig{cpu\_irq\_eoi} & 1  & End-of-interrupt pulse from the CPU. \\
+\sig{s\_axi\_*}     & -- & AXI4-Lite slave, all five channels. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two internal sizes are fixed by localparam: \sig{NSRC} = 16 logical source slots,
+and \sig{MAXNEST} = 16, the physical depth of the nesting stack.
+
+\section{Source model}
+
+Each of the 16 slots carries a hardware line and a software channel, giving 32
+logical sources feeding one resolution pipeline. The slot request is
+(\file{hdl/pic.v}):
+
+\begin{center}
+\ttfamily\small
+hw\_req = cfg\_trig[s] ? edge\_pend[s] : irq\_src[s];\\
+req[s]  = (hw\_req | sw\_pend[s]) \& int\_enable[s];
+\end{center}
+
+A software request merges into the same slot, so once inside the pipeline it is
+indistinguishable from a hardware one --- same priority, same deadline, same
+nesting behaviour.
+
+\section{Resolution pipeline}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=6mm]
+  \node[blkf,minimum width=30mm,align=left] (slot)
+    {\textbf{per slot, $\times$16}\\[2pt]
+     \scriptsize level / edge detect\\
+     \scriptsize $\vert$ software channel\\
+     \scriptsize \& INT\_ENABLE\\[3pt]
+     \scriptsize deadline counter\\
+     \scriptsize $\to$ effective band};
+
+  \node[blk,right=16mm of slot,minimum width=34mm,align=left] (key)
+    {\textbf{priority key}\\[2pt]
+     \scriptsize \{band\_urgency[1:0],\\
+     \scriptsize \ \ INTRA[3:0], 15$-$index\}\\
+     \scriptsize 10 bits, higher = more urgent};
+
+  \node[blk,right=16mm of key,minimum width=32mm,align=left] (res)
+    {\textbf{resolver}\\[2pt]
+     \scriptsize eligible = req \& !active\\
+     \scriptsize \& key $>$ top\_key\\
+     \scriptsize masked if depth = NEST\_MAX};
+
+  \node[blk,below=13mm of res,minimum width=32mm,align=left] (reg)
+    {\textbf{output register}\\[2pt]
+     \scriptsize cpu\_irq $\leftarrow$ offer\_val\\
+     \scriptsize cpu\_irq\_vec $\leftarrow$ res\_id};
+
+  \node[blkf,below=13mm of key,minimum width=34mm,align=left] (stack)
+    {\textbf{nesting stack}\\[2pt]
+     \scriptsize \{key, id\} pairs, depth 0..NEST\_MAX\\
+     \scriptsize push on ack, pop on eoi};
+
+  \node[blkf,below=13mm of slot,minimum width=30mm,align=left] (axi)
+    {\textbf{axi\_lite\_slave}\\[2pt]
+     \scriptsize register file\\
+     \scriptsize 56 mapped words};
+
+  \draw[flow] (slot) -- (key);
+  \draw[flow] (key) -- (res);
+  \draw[flow] (res) -- (reg);
+  \draw[flow] (stack) -- node[lbl,right]{top\_key} (res);
+  \draw[flow] (axi) -- node[lbl,above]{config} (slot);
+  \draw[flow,<->] (axi) -- node[lbl,above]{status} (stack);
+  \draw[flow] (reg.east) -- ++(9mm,0) node[lbl,right,align=left]{\scriptsize to CPU};
+  \draw[flow] ($(stack.south)+(0,-1mm)$) ++(0,-4mm) -- (stack.south)
+        node[lbl,below=5mm,align=center]{\scriptsize ack / eoi};
+  \draw[flow] (slot.west) ++(-9mm,0) -- (slot.west) node[lbl,left=9mm]{\scriptsize irq\_src};
+\end{tikzpicture}
+\caption{PIC internal structure. The resolver is entirely combinational; the only
+registered stage on the request path is the output pair.}
+\label{fig:picblock}
+\end{figure}
+
+\subsection{Priority key}
+
+Every source is reduced to a single 10-bit unsigned number and the resolver picks
+the maximum:
+
+\begin{center}
+\ttfamily\small
+key[s] = \{ band\_urg(eff\_band[s], band\_cfg), cfg\_intra[s], 15 - s \};
+\end{center}
+
+Band urgency dominates, then intra-band priority, then the last field. Because
+that field is $15-\text{index}$, it is larger for smaller indices, so a tie is
+won by the lowest-numbered source. The ordering is total: there is never an
+ambiguous case and the winner is always unique.
+
+Note what is \emph{not} in the key: the band \emph{number} carries no ranking of
+its own. A band's urgency is looked up from \reg{BAND\_CONFIG}, which is what
+lets software reorder all four bands with one register write.
+
+\subsection{Eligibility and preemption}
+
+\begin{center}
+\ttfamily\small
+if (req[i] \&\& !active[i] \&\& (!has\_active || key[i] > top\_key))
+\end{center}
+
+A source is eligible if it has a request, is not already in service, and --- when
+anything is in service --- its key is \emph{strictly} greater than the key on top
+of the nesting stack.
+
+That single strict comparison does two jobs. It is the preemption rule: a more
+urgent source displaces a less urgent handler. And it is the re-entrancy
+guarantee: a source cannot re-offer itself, because its own key is not strictly
+greater than itself.
+
+\subsection{Output registration}
+
+\sig{cpu\_irq} and \sig{cpu\_irq\_vec} are registered from the same resolver
+output on the same clock edge, so the pair the CPU sees is always
+self-consistent. The cost is one cycle of latency; the benefit is that the PIC
+never sits on the combinational timing path of the source lines. \sig{cpu\_irq\_vec}
+holds its last presented value while idle.
+
+A second register, \sig{cpu\_irq\_vec\_d}, holds the vector as presented in the
+previous cycle. Claims are attributed to \emph{that} copy, because
+\sig{cpu\_irq\_ack} arrives one cycle after the CPU sampled the vector it acted
+on. This keeps the PIC's notion of the claimed source aligned with the CPU's
+latched \reg{mcause} even if a more urgent source appeared in the meantime.
+
+\section{Per-source lifecycle}
+
+The PIC has no state register per source. The lifecycle below is encoded in
+separate flag arrays --- \sig{edge\_pend}, \sig{sw\_pend}, \sig{active},
+\sig{escalated}, \sig{spurious} --- each with its own always block. The diagram
+describes the behaviour those flags produce.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stst,minimum size=15] (idle) at (0,22)   {\scriptsize IDLE};
+  \node[st,minimum size=18]   (pend) at (52,22)  {\scriptsize PENDING};
+  \node[st,minimum size=17]   (act)  at (108,22) {\scriptsize ACTIVE};
+  \node[st,minimum size=20]   (esc)  at (52,-18) {\scriptsize ESCALATED};
+
+  % idle -> pending
+  \draw[->,draw=accent] (idle) -- node[lbl,above,align=center]
+    {line asserted, edge latched or\\\scriptsize software trigger, \&\ enabled} (pend);
+
+  % pending -> active, two ways
+  \draw[->,draw=accent] (pend) to[bend left=16]
+    node[lbl,above,align=center,pos=0.5]{cpu\_irq\_ack\\\scriptsize (claim, push)} (act);
+  \draw[->,draw=accent] (pend) to[bend right=16]
+    node[lbl,below,align=center,pos=0.5]
+    {request gone before the claim\\\scriptsize $\to$ SPURIOUS, still pushed} (act);
+
+  % active -> idle, routed orthogonally above every other label
+  \draw[->,draw=accent] (act.north) -- (108,52) -- (0,52) -- (idle.north);
+  \node[lbl,above=0.5mm,align=center] at (54,52)
+    {cpu\_irq\_eoi (pop) --- effective band and deadline counter\\
+     \scriptsize reset to the configured values};
+
+  % pending <-> escalated
+  \draw[->,draw=accent] ($(pend.south)+(-5,0)$) -- ($(esc.north)+(-5,0)$)
+    node[lbl,midway,left=1mm,align=right]{ddl\_cnt reaches\\\scriptsize DEADLINE};
+  \draw[->,draw=accent] ($(esc.north)+(5,0)$) -- ($(pend.south)+(5,0)$)
+    node[lbl,midway,right=1mm,align=left]{still pending,\\\scriptsize higher effective band};
+
+  \draw[->,draw=accent] (esc) to[out=-130,in=-50,looseness=4.5]
+    node[lbl,below=1mm,align=center]{MULTI = 1: counter re-arms, escalate again} (esc);
+\end{tikzpicture}
+\caption{Per-source lifecycle. Flag-encoded, not a state register: a source can be
+pending and escalated simultaneously, and escalated condition only modifies the
+effective band used to build the priority key.}
+\label{fig:picsrcfsm}
+\end{figure}
+
+\section{Nesting stack}
+
+The stack holds the \{key, id\} pair of every source currently in service:
+
+\begin{center}
+\ttfamily\small
+reg [3:0] stack\_id  [0:MAXNEST-1];\\
+reg [9:0] stack\_key [0:MAXNEST-1];\\
+reg [4:0] depth;
+\end{center}
+
+\sig{depth} is the stack pointer and the only element that resets. The top is
+\sig{top\_idx} = \sig{depth} $-$ 1, valid whenever \sig{depth} is non-zero.
+
+Storing the key, not just the id, is what makes the preemption threshold stable:
+reconfiguring a source's band while it is in service cannot corrupt nesting,
+because the threshold in use is the snapshot taken at the claim. New pending
+evaluations of that source use the new band immediately.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[>={Stealth[length=2.4mm]},semithick,node distance=26mm]
+  \node[stst] (d0) {\scriptsize depth 0};
+  \node[st,right=28mm of d0] (d1) {\scriptsize depth 1};
+  \node[st,right=28mm of d1] (dn) {\scriptsize depth $n$};
+  \node[st,right=28mm of dn,minimum size=16mm] (dmax) {\scriptsize NEST\_MAX};
+
+  \draw[->,draw=accent] (d0) to[bend left=14] node[lbl,above]{ack: push} (d1);
+  \draw[->,draw=accent] (d1) to[bend left=14] node[lbl,below]{eoi: pop} (d0);
+  \draw[->,draw=accent,dashed] (d1) to[bend left=14] node[lbl,above]{ack} (dn);
+  \draw[->,draw=accent,dashed] (dn) to[bend left=14] node[lbl,below]{eoi} (d1);
+  \draw[->,draw=accent] (dn) to[bend left=14] node[lbl,above]{ack} (dmax);
+  \draw[->,draw=accent] (dmax) to[bend left=14] node[lbl,below]{eoi} (dn);
+  \draw[->,draw=accent,loop above] (dmax) to
+     node[lbl,above,align=center]{offers masked,\\\scriptsize INT\_STATUS.OVF set} (dmax);
+\end{tikzpicture}
+\caption{Nesting depth. The limit is enforced by masking offers, so a claim that
+would exceed it is never presented to the CPU in the first place.}
+\label{fig:picdepth}
+\end{figure}
+
+\section{Register interface}
+
+The AXI4-Lite handshake is not implemented in the PIC. It instantiates
+\file{hdl/axi\_lite\_slave.v}, the shared slave used by both the PIC and the
+machine timer (Section~\ref{sec:axislave}), and supplies only the register file:
+a combinational read multiplexer, a one-cycle write pulse, and two
+combinational qualifiers \sig{rd\_ok} / \sig{wr\_ok} that mark which offsets are
+readable and writable. Everything else --- unmapped offsets, writes to read-only
+registers --- becomes SLVERR through that module.

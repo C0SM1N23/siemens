@@ -1,0 +1,95 @@
+% ---------------------------------------------------------------------------
+% Shared preamble: packages, styling, macros.
+% ---------------------------------------------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[a4paper,top=28mm,bottom=26mm,left=25mm,right=25mm,headheight=15pt]{geometry}
+
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{pdflscape}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{tikz}
+\usepackage{tikz-timing}
+\usetikzlibrary{arrows.meta,positioning,automata,calc,fit,backgrounds,shapes.geometric,shapes.misc,decorations.pathreplacing}
+\usepackage[hidelinks,bookmarksnumbered]{hyperref}
+
+% --- palette -----------------------------------------------------------------
+\definecolor{accent}{RGB}{0,72,110}
+\definecolor{rulegrey}{RGB}{120,120,120}
+\definecolor{boxbg}{RGB}{244,246,248}
+\definecolor{rtlbg}{RGB}{238,242,236}
+\definecolor{warnbg}{RGB}{252,246,232}
+
+% --- headers -----------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\nouppercase{\leftmark}}
+\fancyhead[R]{\small\thepage}
+\fancyfoot[L]{\footnotesize RV32I SoC --- CPU, PIC and Machine Timer}
+\fancyfoot[R]{\footnotesize Rev.\ \docrevision}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyfoot[L]{\footnotesize RV32I SoC --- CPU, PIC and Machine Timer}%
+  \fancyfoot[R]{\footnotesize Rev.\ \docrevision}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0.4pt}%
+}
+
+\titleformat{\chapter}[display]
+  {\normalfont\Large\bfseries\color{accent}}
+  {\chaptertitlename\ \thechapter}{8pt}{\LARGE}
+\titlespacing*{\chapter}{0pt}{-10pt}{24pt}
+
+\captionsetup{font=small,labelfont={bf,color=accent},skip=6pt}
+
+% --- macros ------------------------------------------------------------------
+% Signal / identifier in running text. Underscores must be escaped by hand.
+\newcommand{\sig}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\reg}[1]{\texttt{#1}}
+
+% Reference to the RTL that backs a statement.
+\newcommand{\rtlref}[1]{\hfill{\footnotesize\itshape\color{rulegrey}[#1]}}
+
+% Small boxed note tied to the source of truth.
+\newenvironment{rtlnote}
+  {\par\vspace{4pt}\noindent\begin{tikzpicture}\node[draw=accent!40,fill=rtlbg,line width=0.4pt,
+    inner sep=7pt,text width=\dimexpr\linewidth-20pt\relax,align=justify,font=\small]\bgroup}
+  {\egroup;\end{tikzpicture}\par\vspace{4pt}}
+
+\newenvironment{deviation}
+  {\par\vspace{4pt}\noindent\begin{tikzpicture}\node[draw=orange!60,fill=warnbg,line width=0.4pt,
+    inner sep=7pt,text width=\dimexpr\linewidth-20pt\relax,align=justify,font=\small]\bgroup}
+  {\egroup;\end{tikzpicture}\par\vspace{4pt}}
+
+% Table column types
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{T}{>{\ttfamily\footnotesize}l}
+
+% TikZ styles reused across the diagrams
+\tikzset{
+  blk/.style={draw=accent,fill=white,rounded corners=1.5pt,align=center,
+              inner sep=5pt,font=\small,minimum height=9mm},
+  blkf/.style={blk,fill=boxbg},
+  regbox/.style={draw=rulegrey,fill=boxbg,align=center,inner sep=4pt,font=\footnotesize},
+  flow/.style={-{Stealth[length=2.4mm]},thick,draw=accent},
+  flowd/.style={flow,dashed},
+  lbl/.style={font=\scriptsize,inner sep=1.5pt,fill=white},
+  st/.style={draw=accent,circle,fill=white,minimum size=13mm,font=\small,inner sep=1pt,align=center},
+  stst/.style={st,double,double distance=0.6pt},
+}

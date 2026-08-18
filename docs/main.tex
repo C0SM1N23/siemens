@@ -1,0 +1,152 @@
+\documentclass[11pt,openany]{report}
+
+\newcommand{\docrevision}{1.0}
+\newcommand{\docdate}{17 August 2026}
+\newcommand{\docbaseline}{\texttt{95d1e29} (branch \texttt{RISCV})}
+
+\input{preamble}
+
+\begin{document}
+
+% ===========================================================================
+\begin{titlepage}
+\centering
+\vspace*{22mm}
+
+{\color{accent}\rule{\linewidth}{1.2pt}}\\[6mm]
+{\Huge\bfseries RV32I System-on-Chip}\\[4mm]
+{\LARGE CPU, Programmable Interrupt Controller\\[2mm] and Machine Timer}\\[6mm]
+{\Large\itshape RTL Implementation Documentation}\\[4mm]
+{\color{accent}\rule{\linewidth}{1.2pt}}
+
+\vfill
+
+\begin{tabular}{@{}ll@{}}
+\toprule
+Document        & RV32I SoC --- RTL Implementation Documentation \\
+Revision        & \docrevision \\
+Date            & \docdate \\
+Source baseline & \docbaseline \\
+Target          & Behavioural RTL simulation (no vendor IP) \\
+Language        & Verilog--2005 (IEEE 1364--2005) \\
+Deliverables    & \file{hdl/}, \file{debug/} (testbenches, SVA, coverage) \\
+\bottomrule
+\end{tabular}
+
+\vspace{12mm}
+
+\begin{minipage}{0.86\linewidth}
+\small
+This document describes the RTL as implemented on the source baseline named above.
+Every register address, bit field, reset value and state transition in it was read
+back from the source files or from the elaborated design; where the feature
+specifications and the delivered RTL differ, the difference is stated rather than
+smoothed over.
+\end{minipage}
+
+\vspace{18mm}
+\end{titlepage}
+
+% ===========================================================================
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\chapter*{Revision history}
+\addcontentsline{toc}{chapter}{Revision history}
+\markboth{Revision history}{}
+
+\begin{tabular}{@{}llL{0.55\linewidth}@{}}
+\toprule
+\textbf{Rev.} & \textbf{Date} & \textbf{Change} \\
+\midrule
+1.0 & \docdate & First issue. Covers the CPU, PIC and machine timer as delivered on
+baseline \docbaseline, including the requirement and design-decision traceability
+matrix and the verification evidence available at that baseline. \\
+\bottomrule
+\end{tabular}
+
+\chapter*{Scope and reading guide}
+\addcontentsline{toc}{chapter}{Scope and reading guide}
+\markboth{Scope and reading guide}{}
+
+Three blocks are documented here: the RV32I CPU, the programmable interrupt
+controller, and the machine timer. They are delivered together because the
+interrupt path only makes sense as a whole, but the PIC is a self-contained IP
+block with its own register interface and is documented as one
+(Part~\ref{part:pic}).
+
+Three other blocks appear in the surrounding system --- a multi-channel DMA
+engine, a dual-port SRAM, and the interconnect --- and are \emph{not} part of this
+delivery. They are described only where the CPU or PIC has to interoperate with
+them, and nothing in this document should be read as documenting them.
+
+\paragraph{How statements are backed.} Requirements and design intent come from
+the two feature specifications and the project's own requirement tags
+(\texttt{REQ1}--\texttt{REQ12}, \texttt{D1}--\texttt{D27}, and the PIC's
+\texttt{D-*} tags), all of which also appear as comments in the source. Behaviour
+comes from the RTL. Where a section states what the hardware does, the file it was
+read from is named in the margin or in the text. Verification results come from
+the two simulation flows and are quoted only where a run produced them.
+
+\paragraph{Assumed background.} The reader is expected to know RV32I and normal
+RTL practice; the base instruction set is not re-explained here. AXI4-Lite
+\emph{is} explained, in Section~\ref{sec:axiprimer}, because the bus is where the
+integration surface of these blocks lies and because the rest of the document
+refers constantly to its handshake rules. That section covers the protocol only
+as far as is needed to follow what this implementation does with it.
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\cleardoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% ===========================================================================
+\part{System overview}\label{part:system}
+\input{chapters/system/soc_overview}
+
+\part{RISC-V CPU subsystem}\label{part:cpu}
+\input{chapters/cpu/architecture}
+\input{chapters/cpu/pipeline_control}
+\input{chapters/cpu/fetch_bp}
+\input{chapters/cpu/lsu_axi}
+\input{chapters/cpu/csr_traps}
+
+\part{Programmable interrupt controller}\label{part:pic}
+\input{chapters/pic/architecture}
+\input{chapters/pic/registers}
+\input{chapters/pic/behaviour}
+
+\part{SoC integration}\label{part:integration}
+\input{chapters/integration/integration}
+\input{chapters/integration/mtimer}
+
+\part{Engineering reference}\label{part:reference}
+\input{chapters/reference/fsm_summary}
+\input{chapters/reference/traceability}
+\input{chapters/reference/verification}
+\input{chapters/reference/limitations}
+
+\appendix
+\input{appendices/regmap}
+\input{appendices/modules}
+\input{appendices/acronyms}
+
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+\bibitem{riscv-unpriv}
+RISC-V Foundation, \emph{The RISC-V Instruction Set Manual, Volume I:
+Unprivileged ISA}, version 20191213.
+
+\bibitem{riscv-priv}
+RISC-V Foundation, \emph{The RISC-V Instruction Set Manual, Volume II:
+Privileged Architecture}, version 20211203.
+
+\bibitem{axi}
+ARM Limited, \emph{AMBA AXI and ACE Protocol Specification}, IHI 0022E.
+\end{thebibliography}
+\addcontentsline{toc}{chapter}{Bibliography}
+
+\end{document}

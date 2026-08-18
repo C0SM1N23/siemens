@@ -1,0 +1,96 @@
+\chapter{Machine timer}
+\label{ch:mtimer}
+
+\section{Purpose}
+
+\file{hdl/mtimer.v} is a CLINT-style machine timer. No feature specification
+covered it; it was added because the system otherwise has no way to bound a
+stalled DMA transfer and no wake source for \sig{WFI}.
+
+Its interrupt is a normal PIC source --- source 7 in the verification environment
+--- so it carries no privileged path of its own.
+
+\section{Registers}
+
+\begin{table}[H]
+\centering
+\caption{Machine timer register map (\file{hdl/mtimer.v})}
+\label{tab:tmrmap}
+\begin{tabular}{@{}TlllL{0.36\linewidth}@{}}
+\toprule
+\textnormal{\textbf{Offset}} & \textbf{Register} & \textbf{Access} & \textbf{Reset} & \textbf{Description} \\
+\midrule
+0x0 & \reg{MTIME\_LO}    & RW & \texttt{0x0000\_0000} & Lower half of the free-running counter. \\
+0x4 & \reg{MTIME\_HI}    & RW & \texttt{0x0000\_0000} & Upper half. \\
+0x8 & \reg{MTIMECMP\_LO} & RW & \texttt{0xFFFF\_FFFF} & Lower half of the compare value. \\
+0xC & \reg{MTIMECMP\_HI} & RW & \texttt{0xFFFF\_FFFF} & Upper half. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Any other offset answers SLVERR through the shared slave. Byte strobes are
+honoured per lane on all four registers.
+
+\section{Behaviour}
+
+The interrupt is a registered level: \sig{irq $\leftarrow$ (mtime\_q >=
+mtimecmp\_q)}. There is no interrupt-status register, and that is deliberate ---
+the comparison \emph{is} the status, and the handler clears the line by moving
+\reg{mtimecmp} forward. That keeps the timer consistent with the level-sensitive
+contract the PIC expects from every peripheral.
+
+\reg{mtimecmp} resets to all ones, so the timer is born disarmed and cannot fire
+before software has programmed a deadline.
+
+\subsection{Counter writes}
+
+\sig{mtime} increments every cycle. A software write does not stop it: the
+written byte lanes take the software value while the unwritten lanes still take
+the increment, so the counter never loses a tick.
+
+\begin{center}
+\ttfamily\small
+mtime\_q[31:0] <= wr\_time\_lo ? lane\_merge(mtime\_inc[31:0], wdata, wstrb)\\
+\hspace*{6.2em}: mtime\_inc[31:0];
+\end{center}
+
+The upper half is written the same way, so the two halves always advance as a
+pair.
+
+\subsection{Arming without a false trigger}
+
+The safe order is \reg{MTIMECMP\_LO} first, then \reg{MTIMECMP\_HI}. While the
+upper half is still all ones the comparison cannot pass, so there is no window
+between the two 32-bit writes in which a stale low half could fire the interrupt.
+Writing the halves in the opposite order does open that window; the software
+convention is part of the block's contract.
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=2pt,xscale=1.0]
+  clk           & 14{C} \\
+  MTIMECMP\_LO  & 4D{FFFFFFFF} 10D{target\_lo} \\
+  MTIMECMP\_HI  & 8D{FFFFFFFF} 6D{target\_hi} \\
+  mtime $\ge$ cmp & 12L 2H \\
+  irq           & 14{L} \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{4,8,12}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{Arming sequence. The compare cannot pass while the upper half is all
+ones, so writing the low half first is safe. \sig{irq} follows the comparison one
+cycle later, since it is registered.}
+\label{fig:tmrarm}
+\end{figure}
+
+\section{Use with \sig{WFI}}
+
+Together with \sig{WFI} the timer gives the system an idle mode: program the DMA,
+arm the timer as a deadline, execute \sig{WFI}. The CPU stops fetching entirely,
+so it generates no interconnect traffic while the DMA works. Either the DMA's
+completion interrupt or the timer wakes it. If the timer is what wakes it, the
+transfer overran its deadline and the handler can abort the channel.
+
+That sequence is the reason all three delivered blocks exist in one delivery, and
+it is exercised end to end in the system testbench.

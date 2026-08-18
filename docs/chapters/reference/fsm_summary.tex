@@ -1,0 +1,106 @@
+\chapter{Sequential control inventory}
+\label{ch:fsms}
+
+This chapter lists every piece of sequential control in the delivery and states
+plainly which are coded state machines and which are flag-encoded behaviour. The
+distinction matters when reading the source: only one module has a state
+register.
+
+\begin{table}[H]
+\centering
+\caption{Sequential control across the delivery}
+\label{tab:fsminv}
+\begin{tabular}{@{}llL{0.40\linewidth}l@{}}
+\toprule
+\textbf{Module} & \textbf{Kind} & \textbf{State elements} & \textbf{Figure} \\
+\midrule
+\file{lsu.v} & Coded FSM & \sig{state\_q[1:0]}: \sig{S\_IDLE}, \sig{S\_RD}, \sig{S\_WR},
+  plus three handshake trackers & \ref{fig:lsufsm} \\
+\file{fetch\_unit.v} & Flag-encoded & \sig{ar\_pending\_q}, \sig{inflight\_q},
+  \sig{discard\_q}, \sig{hold\_valid\_q} & \ref{fig:fetchfsm} \\
+\file{axi\_lite\_slave.v} & Flag-encoded & \sig{aw\_got\_q}, \sig{w\_got\_q},
+  \sig{bvalid}, \sig{rvalid} & \ref{fig:slavewr} \\
+\file{pic.v} (per source) & Flag-encoded & \sig{edge\_pend}, \sig{sw\_pend},
+  \sig{active}, \sig{escalated}, \sig{spurious} & \ref{fig:picsrcfsm} \\
+\file{pic.v} (nesting) & Counter + stack & \sig{depth[4:0]}, \sig{stack\_id},
+  \sig{stack\_key} & \ref{fig:picdepth} \\
+\file{cpu\_top.v} & Flag-encoded & \sig{in\_irq}, \sig{cpu\_in\_trap} & \ref{fig:trapfsm} \\
+\file{branch\_predictor.v} & Table + pointer & BTB/BHT array, RAS pointer
+  \sig{sp\_q} and count \sig{cnt\_q} & --- \\
+\file{mtimer.v} & Counters only & \sig{mtime\_q}, \sig{mtimecmp\_q}, \sig{irq} & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The remaining modules --- \file{decode.v}, \file{imm\_gen.v}, \file{control.v},
+\file{alu.v}, \file{alu\_top.v}, \file{branch\_unit.v},
+\file{writeback\_mux.v}, \file{exception\_unit.v}, \file{hazard\_unit.v} --- are
+purely combinational and contain no state at all. In particular the hazard unit,
+which in many designs is a state machine, is five combinational equations here.
+
+\section{CPU trap state}
+
+Two flags in \file{cpu\_top.v} track where the core is with respect to a trap.
+They are separate because they answer different questions.
+
+\begin{table}[H]
+\centering
+\caption{Trap-tracking flags}
+\label{tab:trapflags}
+\begin{tabular}{@{}lL{0.66\linewidth}@{}}
+\toprule
+\textbf{Flag} & \textbf{Purpose} \\
+\midrule
+\sig{in\_irq}      & Set when an \emph{interrupt} is taken, cleared on \sig{MRET}. Gates
+  \sig{cpu\_irq\_eoi}, so an \sig{MRET} closing a synchronous trap does not pop a PIC
+  nesting level. \\
+\sig{cpu\_in\_trap} & Set on \emph{any} trap entry, cleared on \sig{MRET}. A nested
+  synchronous trap inside a handler keeps it high. Exported for observability and
+  assertions only; the PIC does not consume it. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[>={Stealth[length=2.4mm]},semithick]
+  \node[stst] (run) {\scriptsize RUNNING};
+  \node[st,right=40mm of run] (exc) {\scriptsize IN\_TRAP};
+  \node[st,below=24mm of exc] (irq) {\scriptsize IN\_TRAP\\[-2pt]\scriptsize + IN\_IRQ};
+
+  \draw[->,draw=accent] (run) to[bend left=12]
+    node[lbl,above,align=center]{synchronous exception\\\scriptsize trap\_take \& !irq\_take} (exc);
+  \draw[->,draw=accent] (run) to[bend right=22]
+    node[lbl,left,align=center,pos=0.45]{interrupt taken\\\scriptsize irq\_take \& s2\_advance} (irq);
+  \draw[->,draw=accent] (exc) to[bend left=12]
+    node[lbl,below,align=center]{MRET\\\scriptsize no eoi pulse} (run);
+  \draw[->,draw=accent] (irq) to[bend right=22]
+    node[lbl,right,align=center,pos=0.55]{MRET\\\scriptsize emits cpu\_irq\_eoi} (run);
+  \draw[->,draw=accent,loop right] (exc) to
+    node[lbl,right,align=center]{nested synchronous\\\scriptsize trap: stays high} (exc);
+\end{tikzpicture}
+\caption{CPU trap tracking. The distinction exists so that exactly one
+end-of-interrupt pulse is emitted per interrupt and none for exceptions.}
+\label{fig:trapfsm}
+\end{figure}
+
+\section{Why so little sequential control}
+
+The design pushes work into combinational logic qualified by a valid bit rather
+than into state machines. Three consequences follow, and they are visible
+throughout the earlier chapters:
+
+\begin{itemize}[nosep]
+  \item The hazard unit needs no states because every decision is a function of
+        the current cycle, gated by \sig{s2\_advance}.
+  \item The PIC resolver needs no states because priority resolution is a pure
+        function of the request vector, the configuration and the stack top.
+  \item The AXI slave needs no explicit state because ``what has arrived so far''
+        is exactly two flags.
+\end{itemize}
+
+The one place a real state machine earns its keep is the LSU, where a write has
+three independent channels and the response must not be accepted before the
+address phase completes. Even there the state register only distinguishes read
+from write; per-channel progress is tracked separately, which is what keeps a
+future AXI4-Full extension additive.

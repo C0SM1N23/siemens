@@ -1,0 +1,96 @@
+\chapter{RTL module inventory}
+\label{app:modules}
+
+\section{Delivered RTL}
+
+\begin{longtable}{@{}L{34mm}L{0.30\linewidth}L{0.28\linewidth}@{}}
+\caption{Modules in \file{hdl/}}\label{tab:apmods}\\
+\toprule
+\textbf{File} & \textbf{Function} & \textbf{Tags} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File} & \textbf{Function} & \textbf{Tags} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\file{cpu\_top.v} & Top level: pipeline registers, stage wiring, AXI ports, trap and interrupt sequencing & REQ1--4; D1, D2, D4, D5 \\
+\file{fetch\_unit.v} & S1: PC, ibus master, holding register, redirect and discard & REQ5, REQ12; D6--D8 \\
+\file{branch\_predictor.v} & BHT + BTB with optional return-address stack & REQ8; D9--D11, D24 \\
+\file{decode.v} & Instruction field extraction & REQ7 \\
+\file{imm\_gen.v} & Immediate reconstruction for the five formats & REQ7 \\
+\file{control.v} & Opcode to control lines; SYSTEM decoding & REQ7; D23 \\
+\file{regfile.v} & $32\times32$ register file & REQ10 \\
+\file{alu\_top.v} & Operand selection and ALU operation derivation & --- \\
+\file{alu.v} & Arithmetic and logic & --- \\
+\file{branch\_unit.v} & Real branch direction and target & --- \\
+\file{lsu.v} & S2 data AXI master; the only coded FSM & REQ5, REQ11, REQ12; D12 \\
+\file{hazard\_unit.v} & Centralised stall, flush and forwarding & REQ6; D13, D14, D23 \\
+\file{exception\_unit.v} & Synchronous cause priority chain and \reg{mtval} selection & D3, D17, D18 \\
+\file{csr\_file.v} & M-mode CSRs, trap and MRET sequencing, counters & REQ9; D3, D5, D15, D16, D25 \\
+\file{writeback\_mux.v} & S3 writeback source selection & --- \\
+\file{pic.v} & Interrupt controller & D19--D22, D-LAT, D-BAND, D-NEST, D-SPUR, D-DDL, D-SW \\
+\file{mtimer.v} & Machine timer & D26, D27 \\
+\file{axi\_lite\_slave.v} & Shared AXI4-Lite slave register interface & D-AXI \\
+\file{defines.vh} & Shared encodings and cause constants & --- \\
+\end{longtable}
+
+\section{Verification collateral}
+
+\begin{longtable}{@{}L{40mm}L{0.52\linewidth}@{}}
+\caption{Files in \file{debug/}}\label{tab:apdebug}\\
+\toprule
+\textbf{File} & \textbf{Role} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File} & \textbf{Role} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\file{hdl/tb\_cpu\_axi.v} & System testbench \\
+\file{hdl/tb\_pic.v} & PIC feature testbench \\
+\file{hdl/tb\_dual\_core.v} & Dual-core testbench \\
+\file{hdl/axi\_lite\_monitor.v} & Passive AXI4-Lite protocol checker \\
+\file{hdl/axi\_lite\_mem\_model.v} & Behavioural slave with latency and backpressure controls \\
+\file{hdl/axi\_lite\_dec2.v} & 1-to-2 address decoder \\
+\file{hdl/axi\_lite\_arb2.v} & 2-to-1 arbiter, dual-core bench only \\
+\file{hdl/ck\_rst\_tb.v} & Clock and reset generator \\
+\file{hdl/tb\_check.vh} & Shared self-check task \\
+\file{hdl/axi\_lite\_macros.vh} & Bare AXI read/write helper macros \\
+\file{sva/axi\_lite\_sva.sv} & AXI4-Lite contract as concurrent properties, one instance per port \\
+\file{sva/cpu\_core\_sva.sv} & Pipeline invariants \\
+\file{sva/pic\_sva.sv} & PIC contract: offer registration, strict preemption, depth bounds \\
+\file{sva/cpu\_func\_cov.sv} & Functional coverage counters and the end-of-run report \\
+\file{sva/bind\_sva.sv} & All \sig{bind} statements \\
+\file{sim/program\_axi.s} & Directed self-checking test program \\
+\file{sim/program\_dual.s} & Dual-core handshake program \\
+\file{sim/asm.py} & RV32I assembler \\
+\file{sim/rtl.f}, \file{sim/tb\_cpu.f} & Shared file lists used by both flows \\
+\file{sim/compile.do} & Single canonical compile \\
+\file{sim/sim.do}, \file{sim/regress.do} & Single run and six-run regression \\
+\file{sim/run\_verilator.sh}, \file{sim/run\_verilator.ps1} & Assertion and coverage flow \\
+\file{sim/soc\_map.vh} & Testbench address map \\
+\file{sim/wave.do} & AXI-grouped waveform set \\
+\file{sim/verif\_gui.py} & Graphical launcher for both flows \\
+\end{longtable}
+
+\section{Build and run}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}L{0.46\linewidth}L{0.44\linewidth}@{}}
+\toprule
+\textbf{Command} & \textbf{Effect} \\
+\midrule
+\texttt{vsim -c -do "do regress.do; quit -f"} & Full six-run regression \\
+\texttt{vsim -c -do "do sim.do; quit -f"} & Single system run \\
+\texttt{bash run\_verilator.sh} & Assertions plus functional coverage \\
+\texttt{py asm.py program\_axi.s program\_axi.hex} & Reassemble after editing the test program \\
+\bottomrule
+\end{tabular}
+\caption{Entry points, run from \file{debug/sim}}
+\label{tab:apbuild}
+\end{table}

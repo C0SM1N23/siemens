@@ -1,0 +1,218 @@
+\chapter{Verification}
+\label{ch:verif}
+
+\section{Environment}
+
+The target is behavioural RTL simulation with no vendor IP. The reference flow is
+ModelSim; a second flow runs the same system testbench under Verilator to obtain
+assertions and functional coverage, neither of which the free ModelSim edition
+supports.
+
+\begin{table}[H]
+\centering
+\caption{Verification collateral}
+\label{tab:collateral}
+\begin{tabular}{@{}lL{0.62\linewidth}@{}}
+\toprule
+\textbf{File} & \textbf{Role} \\
+\midrule
+\file{debug/hdl/tb\_cpu\_axi.v} & System bench: CPU, instruction and data memory models, two
+  address decoders, the real PIC and machine timer, four protocol monitors. The bench plays the
+  peripherals on \sig{irq\_src}. \\
+\file{debug/hdl/tb\_pic.v} & Feature bench for the PIC alone, so each mechanism is a named check
+  rather than something buried in a system run. \\
+\file{debug/hdl/tb\_dual\_core.v} & Two cores sharing one memory behind a 2:1 arbiter. \\
+\file{debug/hdl/axi\_lite\_monitor.v} & Passive protocol checker, instantiated on all four AXI links. \\
+\file{debug/hdl/axi\_lite\_mem\_model.v} & Behavioural slave with configurable latency and seeded
+  random \sig{READY} backpressure. \\
+\file{debug/hdl/ck\_rst\_tb.v} & Clock and reset generator: 10\,ns period, reset asserted from time
+  zero and released at 123\,ns, deliberately between clock edges. \\
+\file{debug/sva/} & Assertion and coverage layer, attached with \sig{bind} so neither the RTL nor
+  the testbench is modified. \\
+\file{debug/sim/asm.py} & Two-pass RV32I assembler with range-checked immediates and a symbol
+  table the bench includes, so checks do not break when a label moves. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Method}
+
+Five properties of the method matter more than the individual tests.
+
+\paragraph{The program uses the features rather than poking signals.} Traps are
+verified by taking them: handlers dispatch on \reg{mcause}, repair \reg{mepc} and
+return, and execution continues.
+
+\paragraph{Counts are exact, not approximate.} The direct-mode synchronous
+handler counts every entry and must reach exactly 17; a register accumulates one
+bit per cause and must equal \texttt{0x1FF}; and \reg{mhpmcounter6} independently
+counts every trap entry of any kind and must equal exactly 26 (17 direct, 1
+vectored, 8 interrupts). A missing, doubled or spurious trap cannot cancel out
+against another.
+
+\paragraph{Protocol legality is checked, not assumed.} The monitors run on every
+link on every run, and the assertion layer re-states the same contract as
+concurrent properties.
+
+\paragraph{Configurations are swept.} The same suite runs under different bus
+timing, so a result that depends on latency is exposed rather than hidden. Each
+run echoes its parameters read back from the elaborated design, because a
+silently ignored override looks exactly like a pass.
+
+\paragraph{Coverage is measured and gated.} Required bins must be hit or the run
+fails.
+
+\section{Regression results}
+
+The following are the results of the regression as run on the documented
+baseline.
+
+\begin{table}[H]
+\centering
+\caption{ModelSim regression, six runs from one compile}
+\label{tab:regress}
+\begin{tabular}{@{}clL{0.40\linewidth}l@{}}
+\toprule
+\textbf{Run} & \textbf{Bench} & \textbf{Configuration} & \textbf{Result} \\
+\midrule
+1 & \file{tb\_cpu\_axi}   & Default latencies; the CPI check is active only here & Passed \\
+2 & \file{tb\_cpu\_axi}   & High fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) & Passed \\
+3 & \file{tb\_cpu\_axi}   & Random \sig{READY} backpressure, seeds 101 / 202 & Passed \\
+4 & \file{tb\_cpu\_axi}   & Random \sig{READY} backpressure, seeds 777 / 888 & Passed \\
+5 & \file{tb\_dual\_core} & Two cores, shared memory, 2:1 arbiter & Passed \\
+6 & \file{tb\_pic}        & PIC feature bench, 139 checks & Passed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All six runs report \texttt{Errors: 0, Warnings: 0} at compile and elaboration.
+The Verilator flow reports \texttt{ALL TESTS PASSED}, no assertion violations,
+and no warnings on its default warning set.
+
+\begin{table}[H]
+\centering
+\caption{Measured results}
+\label{tab:measured}
+\begin{tabular}{@{}lL{0.52\linewidth}@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+System bench checks    & 90, all passing \\
+PIC feature bench      & 139 checks, all passing \\
+Assertion violations   & 0 \\
+Functional coverage    & 88 of 92 bins (95\,\%), gate passed \\
+Synchronous trap count & Exactly 17 direct, 26 total \\
+CPI, straight-line code, latency-1 memory & 1.00 (33 cycles for 33 instructions) \\
+Misprediction cost     & 1 cycle \\
+\sig{WFI} bus activity & At most one instruction fetch per sleep window \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The four uncovered bins are deliberate. Two are negative tests --- a channel that
+is PIC-enabled but \reg{mie}-masked must \emph{never} be taken or acknowledged,
+so its ``taken'' and ``acked'' bins must stay at zero. The other two are
+AR-backpressure bins that the randomised regression configurations exercise
+instead of the default run.
+
+\begin{deviation}
+\textbf{Not measured.} No synthesis was run, so there are no area, frequency or
+power figures anywhere in this document. No riscv-arch-test suite or randomised
+instruction stream has been run; the directed program is broad but hand-written.
+Any statement about those would be unsupported and is therefore absent.
+\end{deviation}
+
+\section{Coverage of the PIC feature set}
+
+The system bench runs the PIC in its default configuration and proves the
+CPU--PIC contract. The feature bench covers the mechanisms individually.
+
+\begin{table}[H]
+\centering
+\caption{PIC feature bench areas (\file{debug/hdl/tb\_pic.v})}
+\label{tab:picverif}
+\begin{tabular}{@{}L{40mm}L{0.52\linewidth}@{}}
+\toprule
+\textbf{Area} & \textbf{What is exercised} \\
+\midrule
+Reset defaults      & Every register read back against its documented reset value. \\
+Priority bands      & Inter-band, intra-band and index tie-break resolution. \\
+Preemptive nesting  & A more urgent source preempting an active handler; depth tracking; \reg{NEST\_MAX} overflow raising \reg{OVF} without loss. \\
+Band reconfiguration & A source re-banded while active keeps its claimed priority. \\
+Spurious detection  & A source deasserting between offer and claim; \reg{SPURIOUS\_LOG} write-1-to-clear. \\
+Deadline escalation & Escalation flipping the offer and preempting an active lower source; bump and multi modes. \\
+Software triggers   & Keyed trigger accepted; unkeyed write ignored. \\
+Edge sources        & Edge latched and consumed on claim; no re-fire. \\
+AXI responses       & OKAY on mapped registers, SLVERR on unmapped offsets and read-only writes. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{CPU verification areas}
+
+\begin{table}[H]
+\centering
+\caption{Principal CPU verification areas and their evidence}
+\label{tab:cpuverif}
+\begin{tabular}{@{}L{30mm}L{0.40\linewidth}L{0.30\linewidth}@{}}
+\toprule
+\textbf{Area} & \textbf{Objective} & \textbf{Evidence} \\
+\midrule
+ISA coverage & Every instruction class executes correctly & Per-register result checks; instruction-class coverage bins \\
+Forwarding   & S3$\to$S2 bypass into every consumer, zero stall cycles & Dependent chains; both-operand forwarding bin \\
+Byte lanes   & \sig{WSTRB} and load extraction for all widths & Memory word checks plus sign/zero-extension register checks \\
+Predictor    & Learning, not-taken default, alias correctness & Loop sum; three branches sharing an index with different tags \\
+Traps        & Every synchronous cause, correct \reg{mepc} per cause & Cause bitmask \texttt{0x1FF}; exact count 17 \\
+No side effects & An illegal store must not reach the bus & A word targeted by an illegal store stays zero \\
+Alignment    & A misaligned access issues no transaction & Monitors observe no extra transaction \\
+Bus errors   & SLVERR and DECERR on fetch, load and store & Accesses into unmapped space trap with causes 1, 5, 7 \\
+CSR rules    & All six access forms plus negatives & Round-trips; illegal-access negatives; pure-read exception \\
+Interrupts   & Sampled under MIE, at boundaries, held through stalls & Ack timestamp after the response beat; \reg{mepc} at a boundary \\
+Counters     & 64-bit halves, M-mode writes, tied-off registers & Upper halves read 0; write/readback exact; tied-off registers read 0 and swallow writes without trapping \\
+\sig{WFI}    & Sleep, silence, both wake paths & \reg{mepc} = \sig{wfi+4} on wake; fall-through with MIE = 0; bus quiet \\
+RAS          & Returns from several call sites and a nested chain & Accumulated signature; return-prediction coverage bins \\
+Multi-core   & Two cores, shared memory, flag handshake & Dual-core bench passes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Defects found by this environment}
+
+Recording what the method caught is part of the evidence that it works.
+
+\begin{table}[H]
+\centering
+\caption{Defects found, and by which pillar}
+\label{tab:bugs}
+\begin{tabular}{@{}L{22mm}L{0.56\linewidth}L{25mm}@{}}
+\toprule
+\textbf{Kind} & \textbf{Defect} & \textbf{Found by} \\
+\midrule
+RTL & \sig{ARVALID} asserted during reset. The issue logic is combinational and requested
+  \sig{RESET\_PC} while \sig{rst\_n} was still low. AXI forbids this, and a slave holding
+  \sig{READY} high in reset would have accepted a phantom address. Fixed by gating with
+  \sig{rst\_n}. & Assertion layer, first run \\
+RTL & Illegal load/store encodings issued their AXI transaction before trapping, so an illegal
+  store could write memory. Fixed by gating the LSU request with the decoder's \sig{illegal}. &
+  Scoreboard check \\
+Testware & The assembler silently truncated an out-of-range label immediate. Now range-checked. &
+  Directed test failure \\
+Testware & The memory model could not perform latency-1 reads, so the CPI check was measuring the
+  model rather than the CPU. & CPI check review \\
+Testware & An X leaked through the testbench address decoder. & Random-backpressure runs \\
+Infrastructure & \texttt{-g} parameter overrides were silently swallowed by \texttt{vopt}, so one
+  regression configuration ran at defaults while reporting green. Switched to \texttt{-G} plus a
+  per-run parameter echo. & Configuration sweep \\
+Test plan & The first coverage measurement (59 of 85 bins) exposed real holes: \sig{AUIPC} never
+  committed, four branch forms never executed, \sig{CSRRCI} never executed, both-operand forwarding
+  never hit, and five PIC channels never taken. All closed. & Functional coverage \\
+Integration & A source enabled in the PIC but masked in \reg{mie} starves every less urgent source.
+  Not an RTL defect; documented as an integration rule and respected by the test program. &
+  Channel sweep \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A note on the first row, because it is the clearest argument for the assertion
+layer existing at all: the procedural monitor could not have found it. Monitors
+arm after reset, and the violation occurs during reset.

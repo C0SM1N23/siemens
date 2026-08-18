@@ -1,0 +1,205 @@
+\chapter{PIC register interface}
+\label{ch:picregs}
+
+All registers are 32-bit words addressed as byte offsets from the block base.
+Byte strobes are honoured on writes, so a byte or halfword store updates only the
+addressed lanes. Any unmapped offset, and any write to a read-only register,
+answers SLVERR, which the CPU turns into a precise access-fault trap rather than
+silently discarding the access.
+
+\section{Map}
+
+\begin{table}[H]
+\centering
+\caption{PIC register map (\file{hdl/pic.v})}
+\label{tab:picmap}
+\begin{tabular}{@{}TlllL{0.30\linewidth}@{}}
+\toprule
+\textnormal{\textbf{Offset}} & \textbf{Register} & \textbf{Access} & \textbf{Reset} & \textbf{Role} \\
+\midrule
+0x00--0x3C & \reg{SRC0..15\_CONFIG}  & RW    & \texttt{0x0000\_0000} & Trigger type, band, intra-band priority, deadline. \\
+0x40--0x7C & \reg{SRC0..15\_SW\_TRIG} & RW    & \texttt{0x0000\_0000} & Software request, key protected. \\
+0x80--0xBC & \reg{SRC0..15\_STATUS}   & RO    & \texttt{0x0000\_0000} & Live per-source state. \\
+0xC0       & \reg{BAND\_CONFIG}       & RW    & \texttt{0x0000\_001B} & Urgency of each band. \\
+0xC4       & \reg{NEST\_STATUS}       & RO    & \texttt{0x0000\_0000} & Depth, top source, overflow. \\
+0xC8       & \reg{NEST\_MAX}          & RW    & \texttt{0x0000\_0008} & Maximum nesting depth. \\
+0xCC       & \reg{ACTIVE\_VEC}        & RO    & \texttt{0x0000\_0000} & Innermost in-service source. \\
+0xD0       & \reg{SPURIOUS\_LOG}      & R/W1C & \texttt{0x0000\_0000} & Sticky per-source spurious log. \\
+0xD4       & \reg{ESCALATION\_CFG}    & RW    & \texttt{0x0000\_0000} & Deadline escalation policy. \\
+0xD8       & \reg{INT\_ENABLE}        & RW    & \texttt{0x0000\_0000} & Master enable per source. \\
+0xDC       & \reg{INT\_STATUS}        & R/W1C & \texttt{0x0000\_0000} & Sticky global event flags. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Reset state.} The block comes out of reset fully disarmed:
+\reg{INT\_ENABLE} = 0, so nothing can reach the CPU until software opts a source
+in. All sources are level-triggered, band 0, intra-band priority 0, deadlines
+disabled. Only two registers do not reset to zero, and both are cases where zero
+would be wrong: \reg{BAND\_CONFIG} needs a sensible default ordering, and
+\reg{NEST\_MAX} = 0 would mask every offer permanently. The effective policy
+immediately after reset is therefore plain lowest-index-first priority.
+
+\section{SRCx\_CONFIG (0x00 + 4$\cdot$x)}
+
+\begin{table}[H]
+\centering
+\caption{\reg{SRCx\_CONFIG} fields}
+\label{tab:srccfg}
+\begin{tabular}{@{}llllL{0.40\linewidth}@{}}
+\toprule
+\textbf{Bits} & \textbf{Field} & \textbf{Access} & \textbf{Reset} & \textbf{Encoding} \\
+\midrule
+{[0]}      & \sig{TRIG}     & RW & 0 & 0 = level, 1 = rising edge. See below. \\
+{[2:1]}  & \sig{BAND}     & RW & 00 & Band 0--3. Urgency comes from \reg{BAND\_CONFIG}, not from this number. \\
+{[3]}    & ---            & RO & 0 & Reserved. \\
+{[7:4]}  & \sig{INTRA}    & RW & 0 & Priority within the band, 0--15, higher is more urgent. Compared only between bands of equal urgency. \\
+{[15:8]} & ---            & RO & 0 & Reserved. \\
+{[31:16]}& \sig{DEADLINE} & RW & 0 & Cycles the source may wait, pending and unserviced, before escalation. 0 disables. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=3.1mm,y=6mm]
+  \draw[fill=boxbg,draw=rulegrey] (0,0) rectangle (16,1);
+  \draw[fill=white,draw=rulegrey]  (16,0) rectangle (24,1);
+  \draw[fill=boxbg,draw=rulegrey]  (24,0) rectangle (28,1);
+  \draw[fill=white,draw=rulegrey]  (28,0) rectangle (29,1);
+  \draw[fill=boxbg,draw=rulegrey]  (29,0) rectangle (31,1);
+  \draw[fill=boxbg!40,draw=rulegrey](31,0) rectangle (32,1);
+  \node[font=\scriptsize] at (8,0.5)   {DEADLINE};
+  \node[font=\scriptsize] at (20,0.5)  {reserved};
+  \node[font=\scriptsize] at (26,0.5)  {INTRA};
+  \node[font=\scriptsize,rotate=90] at (28.5,0.5) {rsv};
+  \node[font=\scriptsize] at (30,0.5)  {BAND};
+  \node[font=\scriptsize,rotate=90] at (31.5,0.5) {TRIG};
+  \foreach \x/\l in {0/31,16/15,24/7,28/3,29/2,31/0}
+    \node[font=\tiny,above] at (\x+0.5,1) {\l};
+\end{tikzpicture}
+\caption{\reg{SRCx\_CONFIG} bit layout, bit 31 on the left.}
+\label{fig:srccfgbits}
+\end{figure}
+
+\paragraph{Why \sig{TRIG} is one bit.} Four trigger types are conceivable ---
+level-high, level-low, rising edge, falling edge --- which would need two bits.
+Only the two active-high variants are implemented. The SoC convention is that
+interrupt lines are active-high, and a peripheral with the opposite polarity is
+inverted once at the integration boundary rather than paying for a polarity bit
+on all 16 slots plus a per-slot misconfiguration mode. The bit therefore means
+\emph{hold} versus \emph{pulse}, not high versus low. Bit [3] is reserved and
+available if this is ever revisited.
+
+In level mode the request follows the line and clears when the handler clears the
+peripheral. In edge mode the 0$\to$1 transition is latched into \sig{edge\_pend}
+and stays pending even if the line drops; the latch is consumed at the claim.
+
+\section{SRCx\_SW\_TRIG (0x40 + 4$\cdot$x)}
+
+\begin{table}[H]
+\centering
+\caption{\reg{SRCx\_SW\_TRIG} fields}
+\label{tab:swtrig}
+\begin{tabular}{@{}llllL{0.42\linewidth}@{}}
+\toprule
+\textbf{Bits} & \textbf{Field} & \textbf{Access} & \textbf{Reset} & \textbf{Encoding} \\
+\midrule
+{[0]}       & \sig{SWREQ} & RW & 0 & Writing 1 together with a valid key raises the request; writing 0 clears it, no key needed. Also self-clears at the claim. \\
+{[31:16]} & \sig{KEY}   & W  & -- & Must be \texttt{0xA5A5} for a set to take effect. Reads return 0. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A write of \texttt{0x0000\_0001} does nothing at all. The key guards against
+creating an interrupt by accident, not against removing one, which is why clearing
+needs no key.
+
+\section{SRCx\_STATUS (0x80 + 4$\cdot$x), read-only}
+
+\begin{table}[H]
+\centering
+\caption{\reg{SRCx\_STATUS} fields}
+\label{tab:srcstat}
+\begin{tabular}{@{}llL{0.60\linewidth}@{}}
+\toprule
+\textbf{Bits} & \textbf{Field} & \textbf{Meaning} \\
+\midrule
+{[0]}       & \sig{PEND}      & The source has an enabled request. Does not imply it is the one being offered. \\
+{[1]}     & \sig{ACTIVE}    & In service, on the nesting stack. Cannot be offered again until its end-of-interrupt. \\
+{[2]}     & \sig{ESC}       & Missed its deadline and was escalated. Clears when the source returns to idle. \\
+{[3]}     & \sig{SPUR}      & The current claim was spurious. \\
+{[5:4]}   & \sig{EFF\_BAND} & The band actually in use now; differs from \sig{BAND} after an escalation. \\
+{[31:16]} & \sig{DDL\_TIMER}& Cycles elapsed on the deadline counter. Runs while pending and unserviced. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\sig{DDL\_TIMER} is readable whether or not a deadline is configured, which makes
+it a live per-source latency measurement in its own right.
+
+\section{BAND\_CONFIG (0xC0)}
+
+\begin{table}[H]
+\centering
+\caption{\reg{BAND\_CONFIG} fields. Higher urgency wins; two bands may share a value.}
+\label{tab:bandcfg}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Bits} & \textbf{Field} & \textbf{Reset} & \textbf{Meaning} \\
+\midrule
+{[1:0]}   & \sig{BAND0\_URG} & \texttt{11} (3) & Urgency of band 0 --- most urgent by default. \\
+{[3:2]} & \sig{BAND1\_URG} & \texttt{10} (2) & Urgency of band 1. \\
+{[5:4]} & \sig{BAND2\_URG} & \texttt{01} (1) & Urgency of band 2. \\
+{[7:6]} & \sig{BAND3\_URG} & \texttt{00} (0) & Urgency of band 3 --- least urgent by default. \\
+{[31:8]}& ---              & 0 & Reserved. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The reset value \texttt{0x1B} is exactly the natural order 3, 2, 1, 0. Writing
+\texttt{0x0000\_0027} swaps bands 1 and 2 across the whole system in one store,
+without touching any of the 16 source configurations --- which is the point of
+the indirection.
+
+\section{Nesting, escalation, enable and status}
+
+\begin{table}[H]
+\centering
+\caption{Remaining PIC registers, field by field}
+\label{tab:picrest}
+\begin{tabular}{@{}lllL{0.44\linewidth}@{}}
+\toprule
+\textbf{Register} & \textbf{Bits} & \textbf{Field} & \textbf{Meaning} \\
+\midrule
+\multirow{3}{*}{\reg{NEST\_STATUS}}
+  & [4:0]   & \sig{DEPTH}  & Interrupts currently in service. +1 per claim, $-$1 per end-of-interrupt. \\
+  & [11:8]  & \sig{TOP\_ID}& Source on top of the stack. Reads 0 when depth is 0. \\
+  & [16]    & \sig{OVF}    & A preemption was refused by the depth limit. Same flag as \reg{INT\_STATUS.OVF}, cleared there. \\
+\midrule
+\reg{NEST\_MAX} & [4:0] & \sig{NEST\_MAX} & Writes clamped to [1,\,16]: 0 stores 1, more than 16 stores 16. A value of 1 disables preemption. \\
+\midrule
+\multirow{2}{*}{\reg{ACTIVE\_VEC}}
+  & [3:0] & \sig{ID}    & Source the current handler belongs to. \\
+  & [8]   & \sig{VALID} & Set when something is in service. \\
+\midrule
+\reg{SPURIOUS\_LOG} & [15:0] & \sig{SPUR} & Sticky, one bit per source. Write 1 to clear. A hardware set in the same cycle as a software clear wins. \\
+\midrule
+\multirow{3}{*}{\reg{ESCALATION\_CFG}}
+  & [1:0] & \sig{TARGET} & Band to jump to on a missed deadline; jump mode only. \\
+  & [4]   & \sig{MODE}   & 0 = jump to \sig{TARGET}; 1 = bump one band more urgent, stopping at band 0. \\
+  & [8]   & \sig{MULTI}  & 0 = escalate once per waiting episode; 1 = counter re-arms and the source can escalate repeatedly. \\
+\midrule
+\reg{INT\_ENABLE} & [15:0] & \sig{EN} & Master enable. 0 means the source can never reach the CPU, whatever its line does. \\
+\midrule
+\multirow{3}{*}{\reg{INT\_STATUS}}
+  & [0] & \sig{SPUR} & At least one spurious claim occurred. \\
+  & [1] & \sig{ESC}  & At least one deadline escalation occurred. \\
+  & [2] & \sig{OVF}  & At least one preemption was blocked by the depth limit. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both write-1-to-clear registers resolve a same-cycle collision the same way: the
+hardware set wins over the software clear, so an event can never be lost to a
+race between the handler and the hardware.
