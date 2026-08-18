@@ -167,12 +167,24 @@ always @(posedge clk or negedge rst_n) begin
         ifdx_valid_q <= ~if_dx_bubble;
 end
 
-// IF/DX payload: only loaded on a real instruction, so bubbles and stalls leave
-// the S2 datapath quiet. No reset needed, valid gates it.
+// IF/DX instruction word: the one payload bit that does need a reset. control.v
+// decodes it combinationally, so an X here makes MemRead/MemWrite/illegal X from
+// time 0. Those are masked by dec_live while valid=0, but on the first cycle
+// valid rises the AND resolves to X for one delta before the decoder re-runs,
+// and that X reaches ibus_arvalid / dbus_awvalid / dbus_wvalid / dbus_arvalid.
+// Resetting to the canonical NOP keeps the decoder outputs defined at all times.
+always @(posedge clk or negedge rst_n) begin
+    if (~rst_n)
+        ifdx_instr_q <= 32'h0000_0013;              // addi x0, x0, 0
+    else if (if_dx_we && !if_dx_bubble)
+        ifdx_instr_q <= f_instr;
+end
+
+// Remaining IF/DX payload: only loaded on a real instruction, so bubbles and
+// stalls leave the S2 datapath quiet. No reset needed, valid gates it.
 always @(posedge clk) begin
     if (if_dx_we && !if_dx_bubble) begin
         ifdx_pc_q    <= f_pc;
-        ifdx_instr_q <= f_instr;
         ifdx_ptk_q   <= f_ptk;
         ifdx_ptg_q   <= f_ptg;
         ifdx_fault_q <= f_fault;
