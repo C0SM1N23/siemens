@@ -53,10 +53,22 @@ time a status register grows a field.
 the branch predictor's payload arrays and the return-address stack move onto the
 reset tree, roughly 7.2\,kbit at the default configuration of 128 entries and a
 depth-8 stack. No synthesis was run for this delivery, so no area or timing
-figure is quoted. If a future target cannot afford it, the two payload
+figure is quoted. If a future target cannot afford it, the payload
 \texttt{always} blocks in \file{branch\_predictor.v} are the only places to
 change, and the design remains functionally identical --- the predictor is never
 believed before its valid bit is set.
+
+\paragraph{Packed, not arrays.} The branch predictor's five state elements are
+declared as packed vectors rather than unpacked arrays, and are addressed with
+an indexed part-select. That is the same hardware, but it lets each one reset in
+a \emph{single} assignment instead of a loop over 128 entries. The distinction
+is not cosmetic: a non-blocking assignment to an unpacked array inside a
+\texttt{for} loop is only accepted by a tool that can unroll that loop, and the
+unroll budget is a version-dependent default --- 128 entries is past the value
+older Verilator releases use. Writing the reset without a loop removes the
+dependency altogether. The local Verilator flow additionally pins
+\texttt{-{}-unroll-count 64} so that a future loop which would exceed the
+budget fails on the developer's machine rather than in CI.
 
 \section{One block, one owner}
 
@@ -132,13 +144,13 @@ a neutral one; the reason is given in each case.
 \midrule
 \multicolumn{4}{@{}l@{}}{\emph{Branch predictor} (\sig{ENTRIES}~=~128,
   \sig{RAS\_DEPTH}~=~8)} \\
-\sig{valid}   & 128 & 0 & \\
-\sig{isret}   & 128 & 0 & \\
-\sig{tag[]}   & 128\,$\times$\,23 & 0 & payload, reset for X-freedom \\
-\sig{state[]} & 128\,$\times$\,1  & 0 & payload \\
-\sig{target[]}& 128\,$\times$\,32 & 0 & payload; read combinationally on every
+\sig{valid}  & 128 & 0 & one bit per entry \\
+\sig{isret}  & 128 & 0 & one bit per entry \\
+\sig{state}  & 128 & 0 & the 1-bit saturating direction, one bit per entry \\
+\sig{tag}    & 128\,$\times$\,23 & 0 & payload, reset for X-freedom \\
+\sig{target} & 128\,$\times$\,32 & 0 & payload; read combinationally on every
   lookup, hit or miss \\
-\sig{ras[]}   & 8\,$\times$\,32   & 0 & payload \\
+\sig{ras[]}  & 8\,$\times$\,32   & 0 & payload \\
 \sig{sp\_q}   & 3 & 0 & \\
 \sig{cnt\_q}  & 4 & 0 & stack empty \\
 \midrule
