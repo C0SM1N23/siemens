@@ -21,7 +21,15 @@ SVA="../sva"
 
 # RTL + tb collateral come from the shared filelists (same rtl.f / tb_cpu.f the
 # ModelSim flow uses); only the Verilator-only SVA layer is listed here.
+#
+# --unroll-count 64 is pinned deliberately. Verilator rejects a non-blocking
+# assignment to an unpacked array inside a loop it cannot unroll (BLKLOOPINIT),
+# and the limit is a version-dependent default. Pinning it to 64 -- the value
+# the oldest Verilator the CI may install uses -- means a loop that would break
+# the CI build breaks the local build first, instead of passing here on a newer
+# Verilator with a larger budget and failing after the push.
 verilator --cc --exe --build --timing --assert --coverage -Wno-fatal \
+  --unroll-count 64 \
   --top-module tb_cpu_axi -o Vtb_cpu_axi +incdir+. \
   sim_main.cpp \
   -f rtl.f -f tb_cpu.f \
