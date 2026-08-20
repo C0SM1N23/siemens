@@ -56,60 +56,35 @@ wire [31:0] rdata;
 integer errors = 0;
 reg [31:0] rd;                 // scratch for reads
 `include "tb_check.vh"
+`include "tb_axil_master.vh"
 
 pic dut (
-    .clk(clk), .rst_n(rst_n),
-    .irq_src(irq_src),
-    .cpu_irq(cpu_irq), .cpu_irq_vec(cpu_irq_vec),
-    .cpu_irq_ack(cpu_irq_ack), .cpu_irq_eoi(cpu_irq_eoi),
-    .s_axi_awaddr(awaddr), .s_axi_awprot(3'b0), .s_axi_awvalid(awvalid), .s_axi_awready(awready),
-    .s_axi_wdata(wdata), .s_axi_wstrb(wstrb), .s_axi_wvalid(wvalid), .s_axi_wready(wready),
-    .s_axi_bresp(bresp), .s_axi_bvalid(bvalid), .s_axi_bready(bready),
-    .s_axi_araddr(araddr), .s_axi_arprot(3'b0), .s_axi_arvalid(arvalid), .s_axi_arready(arready),
-    .s_axi_rdata(rdata), .s_axi_rresp(rresp), .s_axi_rvalid(rvalid), .s_axi_rready(rready)
+    .clk_i(clk), .rst_n_i(rst_n),
+    .irq_src_i(irq_src),
+    .cpu_irq_o(cpu_irq), .cpu_irq_vec_o(cpu_irq_vec),
+    .cpu_irq_ack_i(cpu_irq_ack), .cpu_irq_eoi_i(cpu_irq_eoi),
+    .s_axi_awaddr_i(awaddr), .s_axi_awprot_i(3'b0), .s_axi_awvalid_i(awvalid), .s_axi_awready_o(awready),
+    .s_axi_wdata_i(wdata), .s_axi_wstrb_i(wstrb), .s_axi_wvalid_i(wvalid), .s_axi_wready_o(wready),
+    .s_axi_bresp_o(bresp), .s_axi_bvalid_o(bvalid), .s_axi_bready_i(bready),
+    .s_axi_araddr_i(araddr), .s_axi_arprot_i(3'b0), .s_axi_arvalid_i(arvalid), .s_axi_arready_o(arready),
+    .s_axi_rdata_o(rdata), .s_axi_rresp_o(rresp), .s_axi_rvalid_o(rvalid), .s_axi_rready_i(rready)
 );
 
 // ---------------------------------------------------------------------------
-// AXI4-Lite master tasks (<=1 outstanding, matching the slave contract)
+// AXI4-Lite master access. The driver itself lives in tb_axil_master.vh, shared
+// with the block-level register benches, so all five benches drive the slave
+// exactly the same way and a change to the protocol handling happens once.
+// These two names are kept because the stimulus below reads better with them.
 // ---------------------------------------------------------------------------
 task axi_write(input [31:0] a, input [31:0] d, input [1:0] exp);
-    reg aw_ok, w_ok;
     begin
-        @(posedge clk) #1;
-        awaddr = a; awvalid = 1'b1; wdata = d; wstrb = 4'hF; wvalid = 1'b1; bready = 1'b1;
-        aw_ok = 1'b0; w_ok = 1'b0;
-        while (!aw_ok || !w_ok) begin
-            @(posedge clk);
-            if (awvalid && awready) aw_ok = 1'b1;
-            if (wvalid  && wready ) w_ok  = 1'b1;
-            #1;
-            if (aw_ok) awvalid = 1'b0;
-            if (w_ok ) wvalid  = 1'b0;
-        end
-        while (!bvalid) @(posedge clk);
-        #1;
-        check({30'b0, exp}, {30'b0, bresp}, "  write bresp");
-        bready = 1'b0;
+        axil_write(a, d, exp);
     end
 endtask
 
 task axi_read(input [31:0] a, input [1:0] exp);   // result in `rd`
-    reg ar_ok;
     begin
-        @(posedge clk) #1;
-        araddr = a; arvalid = 1'b1; rready = 1'b1;
-        ar_ok = 1'b0;
-        while (!ar_ok) begin
-            @(posedge clk);
-            if (arvalid && arready) ar_ok = 1'b1;
-            #1;
-            if (ar_ok) arvalid = 1'b0;
-        end
-        while (!rvalid) @(posedge clk);
-        #1;
-        rd = rdata;
-        check({30'b0, exp}, {30'b0, rresp}, "  read rresp");
-        rready = 1'b0;
+        axil_read(a, exp);
     end
 endtask
 

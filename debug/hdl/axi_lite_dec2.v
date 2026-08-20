@@ -23,134 +23,134 @@ module axi_lite_dec2 #(
     parameter S1_MASK = 32'hF000_0000
 )(
     // master side
-    input      [31:0] m_awaddr,
-    input      [2:0]  m_awprot,
-    input             m_awvalid,
-    output            m_awready,
-    input      [31:0] m_wdata,
-    input      [3:0]  m_wstrb,
-    input             m_wvalid,
-    output            m_wready,
-    output     [1:0]  m_bresp,
-    output            m_bvalid,
-    input             m_bready,
-    input      [31:0] m_araddr,
-    input      [2:0]  m_arprot,
-    input             m_arvalid,
-    output            m_arready,
-    output     [31:0] m_rdata,
-    output     [1:0]  m_rresp,
-    output            m_rvalid,
-    input             m_rready,
+    input      [31:0] m_awaddr_i,
+    input      [2:0]  m_awprot_i,
+    input             m_awvalid_i,
+    output            m_awready_o,
+    input      [31:0] m_wdata_i,
+    input      [3:0]  m_wstrb_i,
+    input             m_wvalid_i,
+    output            m_wready_o,
+    output     [1:0]  m_bresp_o,
+    output            m_bvalid_o,
+    input             m_bready_i,
+    input      [31:0] m_araddr_i,
+    input      [2:0]  m_arprot_i,
+    input             m_arvalid_i,
+    output            m_arready_o,
+    output     [31:0] m_rdata_o,
+    output     [1:0]  m_rresp_o,
+    output            m_rvalid_o,
+    input             m_rready_i,
 
     // slave 0 (default)
-    output     [31:0] s0_awaddr,
-    output     [2:0]  s0_awprot,
-    output            s0_awvalid,
-    input             s0_awready,
-    output     [31:0] s0_wdata,
-    output     [3:0]  s0_wstrb,
-    output            s0_wvalid,
-    input             s0_wready,
-    input      [1:0]  s0_bresp,
-    input             s0_bvalid,
-    output            s0_bready,
-    output     [31:0] s0_araddr,
-    output     [2:0]  s0_arprot,
-    output            s0_arvalid,
-    input             s0_arready,
-    input      [31:0] s0_rdata,
-    input      [1:0]  s0_rresp,
-    input             s0_rvalid,
-    output            s0_rready,
+    output     [31:0] s0_awaddr_o,
+    output     [2:0]  s0_awprot_o,
+    output            s0_awvalid_o,
+    input             s0_awready_i,
+    output     [31:0] s0_wdata_o,
+    output     [3:0]  s0_wstrb_o,
+    output            s0_wvalid_o,
+    input             s0_wready_i,
+    input      [1:0]  s0_bresp_i,
+    input             s0_bvalid_i,
+    output            s0_bready_o,
+    output     [31:0] s0_araddr_o,
+    output     [2:0]  s0_arprot_o,
+    output            s0_arvalid_o,
+    input             s0_arready_i,
+    input      [31:0] s0_rdata_i,
+    input      [1:0]  s0_rresp_i,
+    input             s0_rvalid_i,
+    output            s0_rready_o,
 
     // slave 1 (windowed)
-    output     [31:0] s1_awaddr,
-    output     [2:0]  s1_awprot,
-    output            s1_awvalid,
-    input             s1_awready,
-    output     [31:0] s1_wdata,
-    output     [3:0]  s1_wstrb,
-    output            s1_wvalid,
-    input             s1_wready,
-    input      [1:0]  s1_bresp,
-    input             s1_bvalid,
-    output            s1_bready,
-    output     [31:0] s1_araddr,
-    output     [2:0]  s1_arprot,
-    output            s1_arvalid,
-    input             s1_arready,
-    input      [31:0] s1_rdata,
-    input      [1:0]  s1_rresp,
-    input             s1_rvalid,
-    output            s1_rready,
+    output     [31:0] s1_awaddr_o,
+    output     [2:0]  s1_awprot_o,
+    output            s1_awvalid_o,
+    input             s1_awready_i,
+    output     [31:0] s1_wdata_o,
+    output     [3:0]  s1_wstrb_o,
+    output            s1_wvalid_o,
+    input             s1_wready_i,
+    input      [1:0]  s1_bresp_i,
+    input             s1_bvalid_i,
+    output            s1_bready_o,
+    output     [31:0] s1_araddr_o,
+    output     [2:0]  s1_arprot_o,
+    output            s1_arvalid_o,
+    input             s1_arready_i,
+    input      [31:0] s1_rdata_i,
+    input      [1:0]  s1_rresp_i,
+    input             s1_rvalid_i,
+    output            s1_rready_o,
 
-    input             clk,
-    input             rst_n
+    input             clk_i,
+    input             rst_n_i
 );
 
 // VALID-qualified on purpose, see the X note in the header
-wire aw_match = m_awvalid && ((m_awaddr & S1_MASK) == (S1_BASE & S1_MASK));
-wire ar_match = m_arvalid && ((m_araddr & S1_MASK) == (S1_BASE & S1_MASK));
+wire aw_match = m_awvalid_i && ((m_awaddr_i & S1_MASK) == (S1_BASE & S1_MASK));
+wire ar_match = m_arvalid_i && ((m_araddr_i & S1_MASK) == (S1_BASE & S1_MASK));
 
 reg wr_sel_q, rd_sel_q;
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         wr_sel_q <= 1'b0;
-    else if (m_awvalid && m_awready)
+    else if (m_awvalid_i && m_awready_o)
         wr_sel_q <= aw_match;
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         rd_sel_q <= 1'b0;
-    else if (m_arvalid && m_arready)
+    else if (m_arvalid_i && m_arready_o)
         rd_sel_q <= ar_match;
 end
 
 // live address while valid, latched select after the address handshake
-wire wr_sel = m_awvalid ? aw_match : wr_sel_q;
-wire rd_sel = m_arvalid ? ar_match : rd_sel_q;
+wire wr_sel = m_awvalid_i ? aw_match : wr_sel_q;
+wire rd_sel = m_arvalid_i ? ar_match : rd_sel_q;
 
 // AW: routed by the live address
-assign s0_awaddr  = m_awaddr;
-assign s1_awaddr  = m_awaddr;
-assign s0_awprot  = m_awprot;
-assign s1_awprot  = m_awprot;
-assign s0_awvalid = m_awvalid & ~aw_match;
-assign s1_awvalid = m_awvalid &  aw_match;
-assign m_awready  = aw_match ? s1_awready : s0_awready;
+assign s0_awaddr_o  = m_awaddr_i;
+assign s1_awaddr_o  = m_awaddr_i;
+assign s0_awprot_o  = m_awprot_i;
+assign s1_awprot_o  = m_awprot_i;
+assign s0_awvalid_o = m_awvalid_i & ~aw_match;
+assign s1_awvalid_o = m_awvalid_i &  aw_match;
+assign m_awready_o  = aw_match ? s1_awready_i : s0_awready_i;
 
 // W: no address, follows the write select
-assign s0_wdata  = m_wdata;
-assign s1_wdata  = m_wdata;
-assign s0_wstrb  = m_wstrb;
-assign s1_wstrb  = m_wstrb;
-assign s0_wvalid = m_wvalid & ~wr_sel;
-assign s1_wvalid = m_wvalid &  wr_sel;
-assign m_wready  = wr_sel ? s1_wready : s0_wready;
+assign s0_wdata_o  = m_wdata_i;
+assign s1_wdata_o  = m_wdata_i;
+assign s0_wstrb_o  = m_wstrb_i;
+assign s1_wstrb_o  = m_wstrb_i;
+assign s0_wvalid_o = m_wvalid_i & ~wr_sel;
+assign s1_wvalid_o = m_wvalid_i &  wr_sel;
+assign m_wready_o  = wr_sel ? s1_wready_i : s0_wready_i;
 
 // B: response of the selected write target
-assign m_bresp   = wr_sel ? s1_bresp  : s0_bresp;
-assign m_bvalid  = wr_sel ? s1_bvalid : s0_bvalid;
-assign s0_bready = m_bready & ~wr_sel;
-assign s1_bready = m_bready &  wr_sel;
+assign m_bresp_o   = wr_sel ? s1_bresp_i  : s0_bresp_i;
+assign m_bvalid_o  = wr_sel ? s1_bvalid_i : s0_bvalid_i;
+assign s0_bready_o = m_bready_i & ~wr_sel;
+assign s1_bready_o = m_bready_i &  wr_sel;
 
 // AR: routed by the live address
-assign s0_araddr  = m_araddr;
-assign s1_araddr  = m_araddr;
-assign s0_arprot  = m_arprot;
-assign s1_arprot  = m_arprot;
-assign s0_arvalid = m_arvalid & ~ar_match;
-assign s1_arvalid = m_arvalid &  ar_match;
-assign m_arready  = ar_match ? s1_arready : s0_arready;
+assign s0_araddr_o  = m_araddr_i;
+assign s1_araddr_o  = m_araddr_i;
+assign s0_arprot_o  = m_arprot_i;
+assign s1_arprot_o  = m_arprot_i;
+assign s0_arvalid_o = m_arvalid_i & ~ar_match;
+assign s1_arvalid_o = m_arvalid_i &  ar_match;
+assign m_arready_o  = ar_match ? s1_arready_i : s0_arready_i;
 
 // R: response of the selected read target
-assign m_rdata   = rd_sel ? s1_rdata  : s0_rdata;
-assign m_rresp   = rd_sel ? s1_rresp  : s0_rresp;
-assign m_rvalid  = rd_sel ? s1_rvalid : s0_rvalid;
-assign s0_rready = m_rready & ~rd_sel;
-assign s1_rready = m_rready &  rd_sel;
+assign m_rdata_o   = rd_sel ? s1_rdata_i  : s0_rdata_i;
+assign m_rresp_o   = rd_sel ? s1_rresp_i  : s0_rresp_i;
+assign m_rvalid_o  = rd_sel ? s1_rvalid_i : s0_rvalid_i;
+assign s0_rready_o = m_rready_i & ~rd_sel;
+assign s1_rready_o = m_rready_i &  rd_sel;
 
 endmodule

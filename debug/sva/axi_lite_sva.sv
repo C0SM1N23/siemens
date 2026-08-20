@@ -24,41 +24,41 @@ module axi_lite_sva #(
     parameter HAS_WRITE   = 1,
     parameter CHECK_ALIGN = 0
 )(
-    input        clk,
-    input        rst_n,
+    input        clk_i,
+    input        rst_n_i,
 
-    input [31:0] awaddr,
-    input        awvalid,
-    input        awready,
-    input [31:0] wdata,
-    input [3:0]  wstrb,
-    input        wvalid,
-    input        wready,
-    input [1:0]  bresp,
-    input        bvalid,
-    input        bready,
+    input [31:0] awaddr_i,
+    input        awvalid_i,
+    input        awready_i,
+    input [31:0] wdata_i,
+    input [3:0]  wstrb_i,
+    input        wvalid_i,
+    input        wready_i,
+    input [1:0]  bresp_i,
+    input        bvalid_i,
+    input        bready_i,
 
-    input [31:0] araddr,
-    input        arvalid,
-    input        arready,
-    input [31:0] rdata,
-    input [1:0]  rresp,
-    input        rvalid,
-    input        rready
+    input [31:0] araddr_i,
+    input        arvalid_i,
+    input        arready_i,
+    input [31:0] rdata_i,
+    input [1:0]  rresp_i,
+    input        rvalid_i,
+    input        rready_i
 );
 
-wire ar_hs = arvalid && arready;
-wire r_hs  = rvalid  && rready;
-wire aw_hs = awvalid && awready;
-wire w_hs  = wvalid  && wready;
-wire b_hs  = bvalid  && bready;
+wire ar_hs = arvalid_i && arready_i;
+wire r_hs  = rvalid_i  && rready_i;
+wire aw_hs = awvalid_i && awready_i;
+wire w_hs  = wvalid_i  && wready_i;
+wire b_hs  = bvalid_i  && bready_i;
 
 // read transaction in flight: set by the AR handshake, cleared by the R beat.
 // One bit is enough — issuing a second AR while set is exactly the violation
 // the rd_max_one assertion reports.
 reg rd_out_q;
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         rd_out_q <= 1'b0;
     else if (ar_hs && !r_hs)
         rd_out_q <= 1'b1;
@@ -68,54 +68,54 @@ end
 
 // --- read channel properties ---
 
-ar_valid_stable: assert property (@(posedge clk) disable iff (!rst_n)
-    arvalid && !arready |=> arvalid)
+ar_valid_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    arvalid_i && !arready_i |=> arvalid_i)
     else $error("[%0s] ARVALID dropped before ARREADY", NAME);
 
-ar_payload_stable: assert property (@(posedge clk) disable iff (!rst_n)
-    arvalid && !arready |=> $stable(araddr))
+ar_payload_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    arvalid_i && !arready_i |=> $stable(araddr_i))
     else $error("[%0s] ARADDR changed while ARVALID waiting", NAME);
 
-r_valid_stable: assert property (@(posedge clk) disable iff (!rst_n)
-    rvalid && !rready |=> rvalid)
+r_valid_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    rvalid_i && !rready_i |=> rvalid_i)
     else $error("[%0s] RVALID dropped before RREADY", NAME);
 
-r_payload_stable: assert property (@(posedge clk) disable iff (!rst_n)
-    rvalid && !rready |=> $stable(rdata) && $stable(rresp))
+r_payload_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    rvalid_i && !rready_i |=> $stable(rdata_i) && $stable(rresp_i))
     else $error("[%0s] R payload changed while RVALID waiting", NAME);
 
-r_needs_outstanding: assert property (@(posedge clk) disable iff (!rst_n)
-    rvalid |-> rd_out_q)
+r_needs_outstanding: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    rvalid_i |-> rd_out_q)
     else $error("[%0s] RVALID with no outstanding AR", NAME);
 
-rd_max_one: assert property (@(posedge clk) disable iff (!rst_n)
+rd_max_one: assert property (@(posedge clk_i) disable iff (!rst_n_i)
     ar_hs |-> !rd_out_q || r_hs)
     else $error("[%0s] second AR issued while one read in flight", NAME);
 
-r_resp_legal: assert property (@(posedge clk) disable iff (!rst_n)
-    r_hs |-> rresp != 2'b01)
+r_resp_legal: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    r_hs |-> rresp_i != 2'b01)
     else $error("[%0s] RRESP = EXOKAY is illegal on AXI4-Lite", NAME);
 
-ar_reset_quiet: assert property (@(posedge clk)
-    !rst_n |-> !arvalid)
+ar_reset_quiet: assert property (@(posedge clk_i)
+    !rst_n_i |-> !arvalid_i)
     else $error("[%0s] ARVALID asserted during reset", NAME);
 
 generate if (CHECK_ALIGN) begin : g_align
-    ar_addr_aligned: assert property (@(posedge clk) disable iff (!rst_n)
-        ar_hs |-> araddr[1:0] == 2'b00)
+    ar_addr_aligned: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        ar_hs |-> araddr_i[1:0] == 2'b00)
         else $error("[%0s] misaligned ARADDR", NAME);
 end endgenerate
 
 // --- read channel functional cover points ---
 
-cov_ar_backpressure: cover property (@(posedge clk) disable iff (!rst_n)
-    arvalid && !arready);
-cov_r_wait: cover property (@(posedge clk) disable iff (!rst_n)
-    rvalid && !rready);
-cov_r_slverr: cover property (@(posedge clk) disable iff (!rst_n)
-    r_hs && rresp == 2'b10);
-cov_r_decerr: cover property (@(posedge clk) disable iff (!rst_n)
-    r_hs && rresp == 2'b11);
+cov_ar_backpressure: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+    arvalid_i && !arready_i);
+cov_r_wait: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+    rvalid_i && !rready_i);
+cov_r_slverr: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+    r_hs && rresp_i == 2'b10);
+cov_r_decerr: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+    r_hs && rresp_i == 2'b11);
 
 // --- write channel properties (masters with a write path only) ---
 
@@ -124,8 +124,8 @@ generate if (HAS_WRITE) begin : g_write
     // write phases collected so far: AW and W each arm once, the B beat
     // closes the transaction and rearms both
     reg aw_done_q, w_done_q;
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             aw_done_q <= 1'b0;
         else if (aw_hs)
             aw_done_q <= 1'b1;
@@ -133,8 +133,8 @@ generate if (HAS_WRITE) begin : g_write
             aw_done_q <= 1'b0;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             w_done_q <= 1'b0;
         else if (w_hs)
             w_done_q <= 1'b1;
@@ -142,60 +142,60 @@ generate if (HAS_WRITE) begin : g_write
             w_done_q <= 1'b0;
     end
 
-    aw_valid_stable: assert property (@(posedge clk) disable iff (!rst_n)
-        awvalid && !awready |=> awvalid)
+    aw_valid_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        awvalid_i && !awready_i |=> awvalid_i)
         else $error("[%0s] AWVALID dropped before AWREADY", NAME);
 
-    aw_payload_stable: assert property (@(posedge clk) disable iff (!rst_n)
-        awvalid && !awready |=> $stable(awaddr))
+    aw_payload_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        awvalid_i && !awready_i |=> $stable(awaddr_i))
         else $error("[%0s] AWADDR changed while AWVALID waiting", NAME);
 
-    w_valid_stable: assert property (@(posedge clk) disable iff (!rst_n)
-        wvalid && !wready |=> wvalid)
+    w_valid_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        wvalid_i && !wready_i |=> wvalid_i)
         else $error("[%0s] WVALID dropped before WREADY", NAME);
 
-    w_payload_stable: assert property (@(posedge clk) disable iff (!rst_n)
-        wvalid && !wready |=> $stable(wdata) && $stable(wstrb))
+    w_payload_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        wvalid_i && !wready_i |=> $stable(wdata_i) && $stable(wstrb_i))
         else $error("[%0s] W payload changed while WVALID waiting", NAME);
 
-    b_valid_stable: assert property (@(posedge clk) disable iff (!rst_n)
-        bvalid && !bready |=> bvalid)
+    b_valid_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        bvalid_i && !bready_i |=> bvalid_i)
         else $error("[%0s] BVALID dropped before BREADY", NAME);
 
-    b_payload_stable: assert property (@(posedge clk) disable iff (!rst_n)
-        bvalid && !bready |=> $stable(bresp))
+    b_payload_stable: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        bvalid_i && !bready_i |=> $stable(bresp_i))
         else $error("[%0s] BRESP changed while BVALID waiting", NAME);
 
-    b_needs_both: assert property (@(posedge clk) disable iff (!rst_n)
-        bvalid |-> aw_done_q && w_done_q)
+    b_needs_both: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        bvalid_i |-> aw_done_q && w_done_q)
         else $error("[%0s] BVALID before AW+W handshakes completed", NAME);
 
-    aw_max_one: assert property (@(posedge clk) disable iff (!rst_n)
+    aw_max_one: assert property (@(posedge clk_i) disable iff (!rst_n_i)
         aw_hs |-> !aw_done_q || b_hs)
         else $error("[%0s] second AW issued while one write in flight", NAME);
 
-    w_max_one: assert property (@(posedge clk) disable iff (!rst_n)
+    w_max_one: assert property (@(posedge clk_i) disable iff (!rst_n_i)
         w_hs |-> !w_done_q || b_hs)
         else $error("[%0s] second W issued while one write in flight", NAME);
 
-    b_resp_legal: assert property (@(posedge clk) disable iff (!rst_n)
-        b_hs |-> bresp != 2'b01)
+    b_resp_legal: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+        b_hs |-> bresp_i != 2'b01)
         else $error("[%0s] BRESP = EXOKAY is illegal on AXI4-Lite", NAME);
 
-    awvalid_reset_quiet: assert property (@(posedge clk)
-        !rst_n |-> !awvalid && !wvalid)
+    awvalid_reset_quiet: assert property (@(posedge clk_i)
+        !rst_n_i |-> !awvalid_i && !wvalid_i)
         else $error("[%0s] AW/W VALID asserted during reset", NAME);
 
-    cov_aw_backpressure: cover property (@(posedge clk) disable iff (!rst_n)
-        awvalid && !awready);
-    cov_w_backpressure: cover property (@(posedge clk) disable iff (!rst_n)
-        wvalid && !wready);
-    cov_b_wait: cover property (@(posedge clk) disable iff (!rst_n)
-        bvalid && !bready);
-    cov_b_slverr: cover property (@(posedge clk) disable iff (!rst_n)
-        b_hs && bresp == 2'b10);
-    cov_b_decerr: cover property (@(posedge clk) disable iff (!rst_n)
-        b_hs && bresp == 2'b11);
+    cov_aw_backpressure: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+        awvalid_i && !awready_i);
+    cov_w_backpressure: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+        wvalid_i && !wready_i);
+    cov_b_wait: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+        bvalid_i && !bready_i);
+    cov_b_slverr: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+        b_hs && bresp_i == 2'b10);
+    cov_b_decerr: cover property (@(posedge clk_i) disable iff (!rst_n_i)
+        b_hs && bresp_i == 2'b11);
 
 end endgenerate
 

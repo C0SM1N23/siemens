@@ -40,8 +40,8 @@ module tb_cpu_axi;
 wire clk, rst_n;
 
 ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst_inst (
-    .clk   (clk),
-    .rst_n (rst_n)
+    .clk_o   (clk),
+    .rst_n_o (rst_n)
 );
 
 // DUT bus bundles: ib = ibus (read-only), db = dbus; after the dbus decoder
@@ -63,15 +63,15 @@ reg  [15:0] irq_src;        // peripheral lines into the PIC (DMA/SRAM stand-in)
 wire        tmr_irq;
 
 cpu_top #(.RESET_PC(`IMEM_BASE)) uut (
-    .clk              (clk),
-    .rst_n            (rst_n),
-    `AXIL_M_RD(ibus_axi, ib),
-    `AXIL_M(dbus_axi, db),
-    .cpu_irq          (cpu_irq),
-    .cpu_irq_vec      (cpu_irq_vec),
-    .cpu_irq_ack      (cpu_irq_ack),
-    .cpu_irq_eoi      (cpu_irq_eoi),
-    .cpu_in_trap      (cpu_in_trap)
+    .clk_i              (clk),
+    .rst_n_i            (rst_n),
+    `AXIL_MST_RD(ibus_axi, ib),
+    `AXIL_MST(dbus_axi, db),
+    .cpu_irq_i          (cpu_irq),
+    .cpu_irq_vec_i      (cpu_irq_vec),
+    .cpu_irq_ack_o      (cpu_irq_ack),
+    .cpu_irq_eoi_o      (cpu_irq_eoi),
+    .cpu_in_trap_o      (cpu_in_trap)
 );
 
 // instruction memory (ibus, read-only)
@@ -79,17 +79,17 @@ axi_lite_mem_model #(
     .WORDS(1024), .BASE(`IMEM_BASE), .INIT_FILE("program_axi.hex"),
     .READ_LAT(0), .SEED(11)
 ) imem_inst (
-    .clk(clk), .rst_n(rst_n),
+    .clk_i(clk), .rst_n_i(rst_n),
     `AXIL_BARE_WR_TIEOFF,
-    `AXIL_BARE_RD(ib)
+    `AXIL_BARE_RD_SLV(ib)
 );
 
 // dbus interconnect: peripheral window (PIC + mtimer), dmem is the default
 axi_lite_dec2 #(
     .S1_BASE(`PERIP_BASE), .S1_MASK(`PERIP_MASK)
 ) dbus_dec_inst (
-    .clk(clk), .rst_n(rst_n),
-    `AXIL_M(m, db), `AXIL_M(s0, d0), `AXIL_M(s1, p)
+    .clk_i(clk), .rst_n_i(rst_n),
+    `AXIL_SLV(m, db), `AXIL_MST(s0, d0), `AXIL_MST(s1, p)
 );
 
 // data memory (dbus default leg, with latency -> multi-cycle stalls)
@@ -97,33 +97,33 @@ axi_lite_mem_model #(
     .WORDS(1024), .BASE(`DMEM_BASE),
     .READ_LAT(1), .WRITE_LAT(1), .SEED(23)
 ) dmem_inst (
-    .clk(clk), .rst_n(rst_n), `AXIL_BARE(d0)
+    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_SLV(d0)
 );
 
 // peripheral window split: mtimer, the PIC is the default
 axi_lite_dec2 #(
     .S1_BASE(`TMR_BASE), .S1_MASK(`TMR_MASK)
 ) perip_dec_inst (
-    .clk(clk), .rst_n(rst_n),
-    `AXIL_M(m, p), `AXIL_M(s0, pp), `AXIL_M(s1, t)
+    .clk_i(clk), .rst_n_i(rst_n),
+    `AXIL_SLV(m, p), `AXIL_MST(s0, pp), `AXIL_MST(s1, t)
 );
 
 // the device under second test: the real PIC on the decoded window.
 // Source 7 is the real mtimer interrupt; the TB plays sources 0..6, and
 // sources 8..15 are unused here (the advanced-scheduling PIC has 16).
 pic pic_inst (
-    .clk(clk), .rst_n(rst_n),
-    .irq_src({8'b0, tmr_irq, irq_src[6:0]}),
-    .cpu_irq(cpu_irq), .cpu_irq_vec(cpu_irq_vec),
-    .cpu_irq_ack(cpu_irq_ack), .cpu_irq_eoi(cpu_irq_eoi),
-    `AXIL_M(s_axi, pp)
+    .clk_i(clk), .rst_n_i(rst_n),
+    .irq_src_i({8'b0, tmr_irq, irq_src[6:0]}),
+    .cpu_irq_o(cpu_irq), .cpu_irq_vec_o(cpu_irq_vec),
+    .cpu_irq_ack_i(cpu_irq_ack), .cpu_irq_eoi_i(cpu_irq_eoi),
+    `AXIL_SLV(s_axi, pp)
 );
 
 // the device under third test: the real mtimer (D26/D27)
 mtimer mtimer_inst (
-    .clk(clk), .rst_n(rst_n),
-    .irq(tmr_irq),
-    `AXIL_M(s_axi, t)
+    .clk_i(clk), .rst_n_i(rst_n),
+    .irq_o(tmr_irq),
+    `AXIL_SLV(s_axi, t)
 );
 
 // protocol monitors on both CPU buses and on the PIC / mtimer slave ports
@@ -133,28 +133,28 @@ wire [31:0] ib_mon_rd, db_mon_rd, db_mon_wr, p_mon_rd, p_mon_wr;
 wire [31:0] t_mon_rd, t_mon_wr;
 
 axi_lite_monitor #(.NAME("ibus"), .HAS_WRITE(0)) ibus_mon (
-    .clk(clk), .rst_n(rst_n),
-    .awaddr(32'b0), .awvalid(1'b0), .awready(1'b0),
-    .wdata(32'b0), .wstrb(4'b0), .wvalid(1'b0), .wready(1'b0),
-    .bresp(2'b0), .bvalid(1'b0), .bready(1'b0),
-    .araddr(ib_araddr), .arvalid(ib_arvalid), .arready(ib_arready),
-    .rdata(ib_rdata), .rresp(ib_rresp), .rvalid(ib_rvalid), .rready(ib_rready),
-    .err_cnt(ib_mon_err), .rd_cnt(ib_mon_rd), .wr_cnt()
+    .clk_i(clk), .rst_n_i(rst_n),
+    .awaddr_i(32'b0), .awvalid_i(1'b0), .awready_i(1'b0),
+    .wdata_i(32'b0), .wstrb_i(4'b0), .wvalid_i(1'b0), .wready_i(1'b0),
+    .bresp_i(2'b0), .bvalid_i(1'b0), .bready_i(1'b0),
+    .araddr_i(ib_araddr), .arvalid_i(ib_arvalid), .arready_i(ib_arready),
+    .rdata_i(ib_rdata), .rresp_i(ib_rresp), .rvalid_i(ib_rvalid), .rready_i(ib_rready),
+    .err_cnt_o(ib_mon_err), .rd_cnt_o(ib_mon_rd), .wr_cnt_o()
 );
 
 axi_lite_monitor #(.NAME("dbus"), .HAS_WRITE(1)) dbus_mon (
-    .clk(clk), .rst_n(rst_n), `AXIL_BARE(db),
-    .err_cnt(db_mon_err), .rd_cnt(db_mon_rd), .wr_cnt(db_mon_wr)
+    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_MON(db),
+    .err_cnt_o(db_mon_err), .rd_cnt_o(db_mon_rd), .wr_cnt_o(db_mon_wr)
 );
 
 axi_lite_monitor #(.NAME("pic"), .HAS_WRITE(1)) pic_mon (
-    .clk(clk), .rst_n(rst_n), `AXIL_BARE(pp),
-    .err_cnt(p_mon_err), .rd_cnt(p_mon_rd), .wr_cnt(p_mon_wr)
+    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_MON(pp),
+    .err_cnt_o(p_mon_err), .rd_cnt_o(p_mon_rd), .wr_cnt_o(p_mon_wr)
 );
 
 axi_lite_monitor #(.NAME("tmr"), .HAS_WRITE(1)) tmr_mon (
-    .clk(clk), .rst_n(rst_n), `AXIL_BARE(t),
-    .err_cnt(t_mon_err), .rd_cnt(t_mon_rd), .wr_cnt(t_mon_wr)
+    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_MON(t),
+    .err_cnt_o(t_mon_err), .rd_cnt_o(t_mon_rd), .wr_cnt_o(t_mon_wr)
 );
 
 // scoreboard slots: dmem word index = the program's byte offset / 4, named
@@ -208,7 +208,7 @@ always @(posedge clk or negedge rst_n) begin
         ack3_age   <= 4'd0;
     end else begin
         if (cpu_irq_ack && ack_prev) ack_double <= 1;
-        if (cpu_irq_ack && uut.lsu_inst.active) ack_in_stall <= 1;
+        if (cpu_irq_ack && uut.lsu_inst.active_o) ack_in_stall <= 1;
         if (pic_claim && pic_claim_id < 4'd8) ack_cnt[pic_claim_id[2:0]] <= ack_cnt[pic_claim_id[2:0]] + 1;
         ack_prev <= cpu_irq_ack;
 

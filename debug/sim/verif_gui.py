@@ -5,7 +5,7 @@
 # by hand (sim.do / regress.do / run_verilator.sh / asm.py). The GUI only adds
 # streaming output, a verdict, and progress — it never invents its own flow.
 #
-# Design points (the "chichite" list from the plan):
+# Design points:
 # - ModelSim's exit code lies (quit -f returns 0 on test failures), so verdicts
 #   are computed by PARSING: exact banner counts + zero "FAIL:" lines.
 # - Infra errors (vsim missing, vlog failed, stale lock) are a third state
@@ -82,160 +82,181 @@ STATUS_COLOR = {"PASS": "#2e9e4f", "FAIL": "#d23131",
 # ------------------------------------------------------------ info tab text
 INFO_PAGES = [
     ("ModelSim TB + waveforms", """\
-Ce face: deschide ModelSim (GUI), compileaza RTL + testbench, incarca
-tb_cpu_axi cu semnalele AXI in fereastra Wave (wave.do) si ruleaza programul
-de test pana la capat. Verdictul apare aici (transcriptul e urmarit live),
-iar tu ramai in ModelSim sa analizezi waveform-urile.
+What it does: opens ModelSim (GUI), compiles the RTL and the testbenches, loads
+tb_cpu_axi with the AXI signals already in the Wave window (wave.do) and runs
+the test program to completion. The verdict appears here, because the
+transcript is tailed live, while you stay in ModelSim to look at the waveforms.
 
-Ce verifica (90 de check-uri, program self-checking):
-  - toate clasele de instructiuni RV32I + forwarding S3->S2 (lanturi
-    dependente, CPI masurat: 33 cicluri / 33 instructiuni)
-  - load/store pe toate latimile: WSTRB pe byte-lane (SB/SH/SW), extractie
-    cu sign/zero-extend (LB/LBU/LH/LHU)
-  - TOATE cauzele de trap sincron (0..7, 11), cu numarare EXACTA:
-    17 intrari in handlerul direct, 26 in total (contorul hardware mhpm6)
-  - instructiune ilegala fara efecte secundare (store ilegal nu atinge
-    memoria), acces misaligned fara tranzactie AXI emisa
-  - erori de bus (SLVERR/DECERR) -> access fault precis, si de la
-    periferice reale (PIC/mtimer), nu doar de la modelul de memorie
-  - CSR-uri: forme immediate, negative (CSR inexistent, scriere in
-    read-only), mtval cu adresa fault-ului, misa/mvendorid/marchid/mimpid
-  - intreruperi prin PIC-ul real: prioritate, mascare independenta
-    (PIC enable vs mie), suppression in-service, irq in timpul unui
-    stall AXI (ack tinut pana la granita de instructiune)
-  - mtvec vectored (irq -> BASE+4*cauza, exceptii -> BASE)
-  - WFI: adoarme fetch-ul (ibus tace, masurat), mepc = wfi+4 la trezire,
-    fall-through cand MIE=0; mtimer cap-coada (armare fara false fire)
-  - predictor: bucle invatate, aliasing BTB (3 branch-uri pe acelasi
-    index), RAS cu 3 call-site-uri + lant imbricat
-  - monitoare de protocol AXI pe toate bus-urile, in fiecare ciclu
+What it checks (90 checks, self-checking program):
+  - every RV32I instruction class plus S3->S2 forwarding (dependent chains,
+    with the CPI measured: 33 cycles for 33 instructions)
+  - load/store at every width: per-byte-lane WSTRB (SB/SH/SW) and extraction
+    with sign/zero extension (LB/LBU/LH/LHU)
+  - EVERY synchronous trap cause (0..7, 11), counted EXACTLY:
+    17 entries into the direct handler, 26 in total (hardware counter mhpm6)
+  - an illegal instruction with no side effects (an illegal store never
+    reaches memory), a misaligned access with no AXI transaction issued
+  - bus errors (SLVERR/DECERR) turning into precise access faults, raised by
+    the real peripherals (PIC / mtimer) and not only by the memory model
+  - CSRs: the immediate forms, the negatives (a CSR that does not exist, a
+    write to a read-only one), mtval carrying the faulting address,
+    misa / mvendorid / marchid / mimpid
+  - interrupts through the real PIC: priority, the two independent masks
+    (PIC enable versus mie), in-service suppression, an interrupt raised
+    during an AXI stall (the claim is held to the instruction boundary)
+  - vectored mtvec (interrupt -> BASE + 4*cause, exception -> BASE)
+  - WFI: the fetch goes to sleep (the instruction bus is measured silent),
+    mepc = wfi+4 on wake, fall-through when MIE = 0; the mtimer end to end
+    (armed without a false fire)
+  - the predictor: learned loops, BTB aliasing (three branches on one index),
+    the return-address stack with three call sites and a nested chain
+  - AXI protocol monitors on every bus, on every cycle
 
-Waveform-urile arata AXI la ambele capete: IBUS (CPU<->imem), DBUS la
-masterul CPU, apoi ce vede fiecare slave (dmem / PIC / mtimer), plus
-liniile de intrerupere. Transferul = ciclul cu VALID si READY sus simultan."""),
+The waveforms show AXI at both ends: IBUS (CPU to imem), DBUS at the CPU
+master, then what each slave sees (dmem / PIC / mtimer), plus the interrupt
+lines. A transfer is the cycle where VALID and READY are high together."""),
 
-    ("Regression 5-cfg", """\
-Ce face: ruleaza IN CONSOLA (fara GUI) aceeasi suita de 90 de check-uri in
-5 configuratii diferite, apoi testul dual-core. Progresul apare ca
-"faza X/5" in bara de status.
+    ("Regression 12-run", """\
+What it does: runs the whole regression IN THE CONSOLE (no GUI): the same
+90-check suite under four bus-timing configurations, the dual-core test, the
+PIC feature bench, and the six block-level benches. Progress appears as
+"phase X/12" in the status bar.
 
-Cele 5 rulari:
-  1. latente default (aici e activ si check-ul de CPI: 33/33 cicluri)
-  2. latente AXI mari fixe (imem RL=2, dmem RL=3/WL=2) - stall-uri lungi
-  3. backpressure aleator pe READY, seed set A (imem 25%, dmem 35%)
-  4. backpressure aleator pe READY, seed set B (imem 40%, dmem 20%)
-  5. dual-core: 2 CPU-uri + memorie partajata prin arbitru
+The twelve runs:
+   1. default latencies (the CPI check, 33/33 cycles, is active only here)
+   2. high fixed AXI latencies (imem RL=2, dmem RL=3/WL=2) - long stalls
+   3. random READY backpressure, seed set A (imem 25%, dmem 35%)
+   4. random READY backpressure, seed set B (imem 40%, dmem 20%)
+   5. dual-core: two CPUs sharing one memory through an arbiter
+   6. PIC feature bench: bands, nesting, spurious, deadline, software triggers
+   7. PIC reset: every register read back against its documented reset value,
+      no flop leaving reset holding X, and an asynchronous reset taken from a
+      fully configured, nested state
+   8. PIC read-only: every read-only register and every reserved bit, checked
+      both for SLVERR and for the value being unchanged
+   9. PIC SRCx_STATUS: each of the six fields on its own, in both directions
+  10. machine-timer registers: reset values, round-trips, byte lanes,
+      unmapped offsets, and the interrupt arm/fire/clear sequence
+  11. CSR file: read-only versus WARL versus tied-off versus absent
+  12. one directed test per trap cause, each in isolation, with mcause, mepc,
+      mtval and the handler entry address checked individually
 
-De ce conteaza: aceleasi teste sub timing diferit exerseaza alte cai
-(holding register, discard pe redirect, colectare AW/W in orice ordine).
-Fiecare rulare isi afiseaza parametrii CITITI din designul elaborat, ca o
-suprascriere ignorata sa nu poata trece drept verde.
+Why it matters: the same tests under different timing exercise different paths
+(the holding register, the discard on a redirect, AW/W collected in either
+order), and the block-level benches cover what a system run cannot isolate.
+Each parameterised run prints the parameters READ BACK from the elaborated
+design, so an override that was silently ignored cannot pass for green.
 
-Verdict: 4x "ALL TESTS PASSED" + 1x "DUAL-CORE TEST PASSED" + zero FAIL."""),
+Verdict: 11 x "ALL TESTS PASSED" + 1 x "DUAL-CORE TEST PASSED" + zero FAIL."""),
 
     ("Dual-core", """\
-Ce face: ruleaza doar testul dual-core (tb_dual_core), in consola.
+What it does: runs only the dual-core test (tb_dual_core), in the console.
 
-Scenariul: doua instante cpu_top (HART_ID 0 si 1), fiecare cu memoria ei
-de instructiuni, partajand o memorie de date printr-un arbitru AXI
-round-robin. Cele doua nuclee isi fac handshake prin flag-uri in memoria
-partajata (fara LR/SC - merge pentru ca fiecare core e in-order cu
-tranzactii blocante, deci secvential consistent).
+The scenario: two cpu_top instances (HART_ID 0 and 1), each with its own
+instruction memory, sharing one data memory through a round-robin AXI arbiter.
+The two cores hand off to each other through flags in the shared memory (no
+LR/SC - which works because each core is in-order with blocking transactions,
+and is therefore sequentially consistent).
 
-Ce dovedeste: core-ul e instantiabil de N ori fara stare partajata,
-mhartid diferentiaza software-ul, si doua mastere AXI blocante
-progreseaza printr-un slave arbitrat fara deadlock si fara coruperi.
+What it proves: the core can be instantiated N times with no shared state,
+mhartid lets software tell the instances apart, and two blocking AXI masters
+make progress through an arbitrated slave without deadlock or corruption.
 
-Verdict: "DUAL-CORE TEST PASSED" + monitorul de bus partajat curat."""),
+Verdict: "DUAL-CORE TEST PASSED" plus a clean shared-bus monitor."""),
 
     ("Verilator SVA + coverage", """\
-Ce face: ruleaza acelasi tb_cpu_axi prin Verilator (in WSL), cu doua
-straturi pe care ModelSim ASE nu le poate compila:
+What it does: runs the same tb_cpu_axi through Verilator (under WSL), with two
+layers ModelSim ASE cannot compile:
 
-1. SVA (SystemVerilog Assertions) - contractele scrise ca proprietati
-   temporale, legate cu `bind` peste RTL (RTL-ul nu e modificat):
-   - protocol AXI pe toate 4 porturile: VALID/payload stabile sub READY
-     intarziat, raspuns doar dupa adresa, max 1 tranzactie outstanding,
-     fara EXOKAY, VALID interzis in reset
-   - promisiuni de pipeline: claim (ack) si eoi = puls de exact 1 ciclu,
-     intreruperi doar la granite de instructiune, instructiunea care da
-     trap nu comite, x0 citeste 0, WSTRB doar in forme legale SB/SH/SW
-   - contractul PIC: cpu_irq/cpu_irq_vec = oferta inregistrata a sursei
-     celei mai prioritare, preemptare stricta peste varful stivei de
-     nesting, adancime marginita de NEST_MAX
-   Diferenta fata de teste: testul verifica UN scenariu; asertiunea
-   verifica invariantul in TOATE scenariile, in fiecare ciclu.
+1. SVA (SystemVerilog Assertions) - the contracts written as temporal
+   properties and attached over the RTL with a bind, so the RTL is not
+   modified:
+   - AXI protocol on all four ports: VALID and payload stable under a delayed
+     READY, a response only after the address, at most one outstanding
+     transaction, no EXOKAY, VALID forbidden during reset
+   - pipeline promises: the claim (ack) and eoi are pulses exactly one cycle
+     long, interrupts are taken only at instruction boundaries, a trapping
+     instruction never commits, x0 reads 0, WSTRB only in the legal SB/SH/SW
+     shapes
+   - the PIC contract: cpu_irq / cpu_irq_vec are the registered offer of the
+     most urgent source, preemption is strictly above the top of the nesting
+     stack, and the depth is bounded by NEST_MAX
+   The difference from a test: a test checks ONE scenario; an assertion checks
+   the invariant in EVERY scenario, on every cycle.
 
-2. Functional coverage - masoara ce situatii chiar s-au intamplat:
-   92 de bins (fiecare cauza de trap, fiecare canal de irq, erori pe
-   fiecare canal AXI, forwarding, backpressure...). Tinta: 88/92 (95%);
-   cele 4 lipsa sunt deliberate (negativele ch5 + backpressure acoperit
-   de configuratiile din regresie). Regresia are gate: sub prag = FAIL.
+2. Functional coverage - measures which situations actually occurred: 92 bins
+   (every trap cause, every irq channel, errors on every AXI channel,
+   forwarding, backpressure and so on). Target: 88/92 (95%); the four misses
+   are deliberate (the ch5 negatives, and the backpressure bins the regression
+   configurations cover instead). The regression is gated: below the threshold
+   is a FAIL.
 
-Verdict: exit code 0 + "COVERAGE GATE PASSED" (aici exit code-ul e fiabil,
-scriptul are set -e). Daca simularea nici n-a pornit (build intrerupt cu
-Stop, WSL cazut, compilare g++ omorata), verdictul e MEDIU (portocaliu),
-nu FAIL — zero linii PASS:/FAIL: inseamna ca nu s-a testat nimic.
+Verdict: exit code 0 plus "COVERAGE GATE PASSED" (the exit code IS reliable
+here, the script uses set -e). If the simulation never started at all (a build
+interrupted with Stop, WSL down, the g++ compile killed), the verdict is
+ENVIRONMENT (orange) rather than FAIL - zero PASS:/FAIL: lines means nothing
+was tested.
 
-Nota: prima rulare dupa un Assemble care chiar schimba programul
-recompileaza tot modelul Verilator (cateva minute in WSL). asm.py nu mai
-atinge *_sym.vh cand continutul e neschimbat, deci un RUN ALL fara
-modificari de .s pastreaza build-ul incremental."""),
+Note: the first run after an Assemble that really changes the program rebuilds
+the whole Verilator model (a few minutes under WSL). asm.py no longer touches
+the *_sym.vh files when the content is unchanged, so a RUN ALL with no .s edits
+keeps the incremental build."""),
 
     ("Assemble", """\
-Ce face: asambleaza programele de test din sursa in imaginile pe care le
-incarca simularea:
+What it does: assembles the test programs from source into the images the
+simulation loads:
 
   program_axi.s  -> program_axi.hex  + program_axi_sym.vh
   program_dual.s -> program_dual.hex + program_dual_sym.vh
 
-Fisierul *_sym.vh contine adresele etichetelor din program - testbench-ul
-le foloseste in check-uri, deci o modificare de cod care muta o eticheta
-isi actualizeaza singura verificarile.
+The *_sym.vh file holds the label addresses from the program, and the
+testbench uses them in its checks, so a code change that moves a label updates
+the checks by itself.
 
-Cand trebuie rulat: DOAR dupa ce editezi un .s. Checkbox-ul
-"auto-assemble" face asta automat cand .s e mai nou decat .hex, deci in
-mod normal nu apesi butonul manual."""),
+When to run it: ONLY after editing a .s file. The "auto-assemble" checkbox
+does it automatically when the .s is newer than the .hex, so normally you never
+press the button by hand."""),
 
     ("RUN ALL", """\
-Ce face: lantul complet, secvential:
+What it does: the whole chain, in order:
 
-  1. Assemble (regenereaza hex + sym)
-  2. Regression 5-cfg (ModelSim: 5 configuratii + dual-core)
+  1. Assemble (regenerate the hex and the symbol files)
+  2. Regression 12-run (ModelSim: four configurations, dual-core, PIC feature
+     bench, and the six block-level benches)
   3. Verilator SVA + coverage (WSL)
 
-Asta e verificarea "totul deodata" - echivalentul lui make asm +
-make modelsim + make test, cu verdict per pas in tabelul de rezultate.
+This is the "everything at once" verification - the equivalent of make asm +
+make modelsim + make test, with a per-step verdict in the results table.
 
-Daca un pas da eroare de MEDIU (portocaliu: vsim lipsa, vlog failed,
-lock), lantul se opreste - nu are sens sa continue pe un mediu stricat.
-Un FAIL de test (rosu) nu opreste lantul: celelalte fluxuri tot ruleaza,
-ca sa vezi tabloul complet."""),
+If a step reports an ENVIRONMENT error (orange: vsim missing, vlog failed, a
+stale lock), the chain stops - there is no point continuing on a broken
+environment. A test FAIL (red) does not stop the chain: the other flows still
+run, so you get the whole picture."""),
 
-    ("Clean / Stop / verdicte", """\
-Clean: sterge artefactele de build (work/, obj_dir/, cov_annotated/,
-coverage.dat, transcript, *.log). Sursele si hex-urile raman. Util cand
-vrei o recompilare de la zero sau dupa un crash ciudat.
+    ("Clean / Stop / verdicts", """\
+Clean: deletes the build artifacts (work/, obj_dir/, cov_annotated/,
+coverage.dat, transcript, *.log). The sources and the hex files stay. Useful
+when you want a from-scratch rebuild, or after an odd crash.
 
-Stop: omoara TOT arborele de procese al rularii curente (vsim isi
-porneste copii - taskkill /T). Dupa stop, lock-ul work/_lock ramas orfan
-e sters automat, ca urmatoarea rulare (de aici sau din terminal) sa nu
-se blocheze.
+Stop: kills the ENTIRE process tree of the current run (vsim spawns children,
+so taskkill /T). After a stop, an orphaned work/_lock is removed automatically,
+so the next run - from here or from a terminal - does not block on it.
 
-Cum se decide verdictul (important: exit code-ul ModelSim MINTE - quit -f
-intoarce 0 si cand testele pica):
-  - PASS (verde)     banner-ele asteptate numarate exact
-                     ("ALL TESTS PASSED" x4 + dual la regresie) si zero
-                     linii "FAIL:"
-  - FAIL (rosu)      exista "FAIL:" sau lipsesc bannere - un test a picat
-  - INFRA (portocaliu) mediul e stricat: vsim negasit, eroare de
-                     compilare, lock blocat. NU inseamna ca RTL-ul e
-                     gresit - repara mediul si ruleaza din nou.
+How the verdict is decided (important: the ModelSim exit code LIES - quit -f
+returns 0 even when tests fail):
+  - PASS (green)         the expected banners counted exactly (11 x "ALL TESTS
+                         PASSED" plus the dual-core one, for the regression)
+                         and zero "FAIL:" lines
+  - FAIL (red)           there is a "FAIL:", or banners are missing, so a test
+                         failed
+  - ENVIRONMENT (orange) the environment is broken: vsim not found, a compile
+                         error, a stuck lock. This does NOT mean the RTL is
+                         wrong - fix the environment and run again.
 
-Parametrii (-G) din panou se aplica DOAR rularii "ModelSim TB":
-latente/backpressure pe modelele de memorie si ENTRIES/RAS_DEPTH pe
-predictor. Valorile default sunt exact cele din testbench; doar ce
-schimbi e trimis ca override."""),
+The -G parameters in the panel apply ONLY to the "ModelSim TB" run: latency and
+backpressure on the memory models, ENTRIES and RAS_DEPTH on the predictor. The
+defaults are exactly the testbench values; only what you change is sent as an
+override."""),
 ]
 
 
@@ -294,27 +315,37 @@ def _classify(lines, need_all, need_dual, extra_ok=None):
     txt = "\n".join(lines)
     for tok in INFRA_TOKENS:
         if tok in txt:
-            return "INFRA", f"eroare de mediu: '{tok}'"
+            return "INFRA", f"environment error: '{tok}'"
     n_all = txt.count("ALL TESTS PASSED")
     n_dual = txt.count("DUAL-CORE TEST PASSED")
     n_fail = sum(1 for l in lines if "FAIL:" in l)
     n_pass = sum(1 for l in lines if "PASS:" in l)
     if n_fail == 0 and n_all >= need_all and n_dual >= need_dual \
             and (extra_ok is None or extra_ok(txt)):
-        return "PASS", f"{n_pass} checks, {n_all + n_dual} banner(e)"
-    return "FAIL", f"{n_fail} FAIL, bannere {n_all}+{n_dual} " \
-                   f"(necesar {need_all}+{need_dual})"
+        return "PASS", f"{n_pass} checks, {n_all + n_dual} banner(s)"
+    return "FAIL", f"{n_fail} FAIL, banners {n_all}+{n_dual} " \
+                   f"(required {need_all}+{need_dual})"
 
 
 def verdict_sim(lines, rc):
     return _classify(lines, 1, 0)
 
 
+# The regression runs twelve benches from one compile. Eleven of them end in a
+# banner containing "ALL TESTS PASSED" (four system-bench configurations, the
+# PIC feature bench and the six block-level benches) and the dual-core bench
+# ends in its own. Counting them exactly is what catches a run that died early:
+# a crashed bench prints no banner but also no "FAIL:" line.
+REGRESS_ALL_BANNERS  = 11
+REGRESS_DUAL_BANNERS = 1
+REGRESS_RUNS         = 12
+
+
 def verdict_regress(lines, rc):
-    st, sm = _classify(lines, 4, 1,
+    st, sm = _classify(lines, REGRESS_ALL_BANNERS, REGRESS_DUAL_BANNERS,
                        extra_ok=lambda t: "regression done" in t)
     if st == "PASS":
-        sm = "5/5 configuratii, " + sm
+        sm = "%d/%d runs, " % (REGRESS_RUNS, REGRESS_RUNS) + sm
     return st, sm
 
 
@@ -326,27 +357,27 @@ def verdict_verilator(lines, rc):
     txt = "\n".join(lines)
     for tok in INFRA_TOKENS:
         if tok in txt:
-            return "INFRA", f"eroare de mediu: '{tok}'"
+            return "INFRA", f"environment error: '{tok}'"
     m = re.search(r"\[FCOV\] ---- (\d+)/(\d+) bins hit \((\d+)%\)", txt)
     fcov = f", FCOV {m.group(1)}/{m.group(2)} ({m.group(3)}%)" if m else ""
     if rc == 0 and "COVERAGE GATE PASSED" in txt and "ALL TESTS PASSED" in txt:
-        return "PASS", "SVA curat" + fcov
+        return "PASS", "SVA clean" + fcov
     if rc != 0 and "%Error" in txt:
-        return "FAIL", "asertiune picata / test FAIL" + fcov
+        return "FAIL", "assertion fired / test FAIL" + fcov
     # exit != 0 without a single PASS:/FAIL: line means the simulation never
-    # started (build intrerupt, WSL cazut, Stop in timpul compilarii g++) —
-    # asta e mediu, nu un test picat
+    # started (build interrupted, WSL down, the g++ compile killed) - that is
+    # an environment problem, not a failed test
     sim_ran = any(l.startswith(("PASS:", "FAIL:")) for l in lines)
     if rc != 0 and not sim_ran:
-        return "INFRA", "build intrerupt — simularea n-a pornit " \
-                        "(exit != 0, zero linii de sim)"
-    return ("FAIL", "gate/teste picate" + fcov) if rc else \
-           ("FAIL", "banner lipsa" + fcov)
+        return "INFRA", "build interrupted - the simulation never started " \
+                        "(exit != 0, zero simulation lines)"
+    return ("FAIL", "gate/tests failed" + fcov) if rc else \
+           ("FAIL", "banner missing" + fcov)
 
 
 def verdict_asm(lines, rc):
-    return ("PASS", "hex + sym regenerate") if rc == 0 else \
-           ("INFRA", "asamblare esuata (vezi log)")
+    return ("PASS", "hex + sym regenerated") if rc == 0 else \
+           ("INFRA", "assembly failed (see the log)")
 
 
 # ------------------------------------------------------------------- app
@@ -437,7 +468,7 @@ class App(tk.Tk):
         self.status_dot = tk.Label(sb, text="●", fg=STATUS_COLOR["IDLE"],
                                    bg="#e6e8eb", font=("Segoe UI", 11))
         self.status_dot.pack(side="left", padx=(10, 2), pady=2)
-        self.status_lbl = ttk.Label(sb, text="inactiv — alege o rulare",
+        self.status_lbl = ttk.Label(sb, text="idle - pick a run",
                                     style="Status.TLabel")
         self.status_lbl.pack(side="left")
         self.elapsed_lbl = ttk.Label(sb, text="", style="Status.TLabel")
@@ -459,7 +490,7 @@ class App(tk.Tk):
         actions = [
             ("msgui",   "ModelSim TB + waveforms", ["msgui"],
              "Run.TButton"),
-            ("regress", "Regression 5-cfg",        ["regress"],
+            ("regress", "Regression 12-run",        ["regress"],
              "Run.TButton"),
             ("dual",    "Dual-core",               ["dual"],
              "Run.TButton"),
@@ -489,12 +520,12 @@ class App(tk.Tk):
                                    style="Util.TButton", command=self._stop)
         self.stop_btn.pack(side="left", padx=16)
         self.auto_asm = tk.BooleanVar(value=True)
-        ttk.Checkbutton(uf, text="auto-assemble cand .s e mai nou ca .hex",
+        ttk.Checkbutton(uf, text="auto-assemble when a .s is newer than its .hex",
                         variable=self.auto_asm).pack(side="left", padx=12)
 
         # -- parameters (apply to the ModelSim TB run)
-        pf = ttk.LabelFrame(root, text=" Parametri — se aplica rularii "
-                                       "„ModelSim TB + waveforms” ")
+        pf = ttk.LabelFrame(root, text=" Parameters - applied to the "
+                                       "'ModelSim TB + waveforms' run only ")
         pf.pack(fill="x", **pad)
         self.pvars = {}
         groups = [("imem", ["imem_RL", "imem_SP", "imem_SEED"]),
@@ -517,12 +548,12 @@ class App(tk.Tk):
                     row=0, column=col + 1, pady=(8, 2))
                 col += 2
         ttk.Label(pf, style="Hint.TLabel",
-                  text="RL/WL = latenta de raspuns a memoriei (cicluri) · "
-                       "SP = probabilitate de stall READY, % (backpressure) · "
+                  text="RL/WL = memory response latency (cycles) - "
+                       "SP = READY stall probability, % (backpressure) - "
                        "SEED = samanta stall-urilor aleatoare · "
                        "ENTRIES/RAS_DEPTH = dimensiunea predictorului. "
-                       "Se trimit ca -G doar valorile diferite de default; "
-                       "RTL-ul nu se modifica.").grid(
+                       "Only values that differ from the defaults are sent "
+                       "as -G; the RTL is never modified.").grid(
             row=1, column=0, columnspan=col, sticky="w", padx=10, pady=(0, 6))
 
         # -- results
@@ -627,14 +658,14 @@ class App(tk.Tk):
         if not self.vsim:
             for k in ("msgui", "regress", "dual"):
                 self.buttons[k].config(state="disabled")
-            self._log_line("[gui] vsim negasit (nici in PATH, nici in "
-                           f"${VSIM_ENV_VAR}, nici in locatiile uzuale de "
-                           "instalare) — seteaza variabila de mediu "
-                           f"{VSIM_ENV_VAR}=<cale catre vsim.exe> sau adauga "
-                           "vsim in PATH — butoanele ModelSim sunt oprite")
+            self._log_line("[gui] vsim not found (not in PATH, not in "
+                           f"${VSIM_ENV_VAR}, and not in the usual install "
+                           "locations) - set the environment variable "
+                           f"{VSIM_ENV_VAR}=<path to vsim.exe>, or put vsim "
+                           "in PATH. The ModelSim buttons are disabled.")
         if not self.wsl:
             self.buttons["vlt"].config(state="disabled")
-            self._log_line("[gui] wsl negasit — butonul Verilator e oprit")
+            self._log_line("[gui] wsl not found - the Verilator button is disabled")
         self._clear_stale_lock(startup=True)
 
     # ----------------------------------------------------------- jobs
@@ -667,11 +698,11 @@ class App(tk.Tk):
             return dict(key=key, label="ModelSim TB (GUI)", mode="gui_tail",
                         argv=[self.vsim, "-do", do], verdict=verdict_sim)
         if key == "regress":
-            return dict(key=key, label="Regression 5-cfg", mode="stream",
+            return dict(key=key, label="Regression 12-run", mode="stream",
                         argv=[self.vsim, "-c", "-do",
                               "do regress.do; quit -f"],
                         verdict=verdict_regress,
-                        progress=re.compile(r"=== run (\d)/5: (.*?) ==="))
+                        progress=re.compile(r"=== run (\d+)/(\d+): (.*?) ==="))
         if key == "dual":
             return dict(key=key, label="Dual-core", mode="stream",
                         argv=[self.vsim, "-c", "-do",
@@ -716,7 +747,7 @@ class App(tk.Tk):
         key = self.chain.pop(0)
         job = self._job(key)
         self._set_busy(True, job["label"])
-        self._result_row(job, "RUN", "ruleaza...")
+        self._result_row(job, "RUN", "running...")
         if key in ("msgui", "regress", "dual"):
             self._clear_stale_lock()
         threading.Thread(target=self._worker, args=(job,),
@@ -734,13 +765,13 @@ class App(tk.Tk):
             if pr:
                 m = pr.search(s)
                 if m:
-                    self.q.put(("phase", f"faza {m.group(1)}/5: {m.group(2)}",
+                    self.q.put(("phase", f"phase {m.group(1)}/{m.group(2)}: {m.group(3)}",
                                 int(m.group(1)) * 20))
 
         try:
             proc = subprocess.Popen(job["argv"], **popen_kwargs())
         except OSError as e:
-            self.q.put(("done", job, "INFRA", f"nu pot porni: {e}"))
+            self.q.put(("done", job, "INFRA", f"cannot start: {e}"))
             return
         self.proc = proc
 
@@ -761,7 +792,7 @@ class App(tk.Tk):
                     emit(line)
                 rc = p2.wait()
             except OSError as e:
-                self.q.put(("done", job, "INFRA", f"nu pot porni: {e}"))
+                self.q.put(("done", job, "INFRA", f"cannot start: {e}"))
                 return
 
         st, sm = job["verdict"](lines, rc)
@@ -773,9 +804,9 @@ class App(tk.Tk):
         tpath = SIM_DIR / "transcript"
         off = tpath.stat().st_size if tpath.exists() else 0
         verdict_sent = False
-        self.q.put(("line", "[gui] ModelSim deschis — transcriptul e urmarit "
-                            "aici; inchide fereastra ModelSim ca sa "
-                            "eliberezi runner-ul"))
+        self.q.put(("line", "[gui] ModelSim is open - its transcript is "
+                            "tailed here; close the ModelSim window to "
+                            "release the runner"))
         while proc.poll() is None or off < (tpath.stat().st_size
                                             if tpath.exists() else 0):
             try:
@@ -795,12 +826,12 @@ class App(tk.Tk):
                                 "ALL TESTS PASSED" in chunk:
                             verdict_sent = True
                             self.q.put(("done_keep", job, "PASS",
-                                        "banner vazut — GUI ramane deschis"))
+                                        "banner seen - the GUI stays open"))
                         if not verdict_sent and any("FAIL:" in l
                                                     for l in chunk.splitlines()):
                             verdict_sent = True
                             self.q.put(("done_keep", job, "FAIL",
-                                        "FAIL in transcript (GUI deschis)"))
+                                        "FAIL in the transcript (GUI still open)"))
             except OSError:
                 pass
             if proc.poll() is not None:
@@ -834,7 +865,7 @@ class App(tk.Tk):
                 _, job, st, sm = m
                 self._result_row(job, st, sm)
                 self._status(st, f"{job['label']}: {st} — ModelSim inca "
-                                 "deschis (inchide-l ca sa rulezi altceva)")
+                                 "open (close it to run something else)")
             elif m[0] == "done":
                 _, job, st, sm = m
                 self._result_row(job, st, sm)
@@ -866,9 +897,9 @@ class App(tk.Tk):
             # keep the last verdict visible in the status bar; only reset
             # the dot to idle when nothing has run yet
             if not self.results:
-                self._status("IDLE", "inactiv — alege o rulare")
+                self._status("IDLE", "idle - pick a run")
         else:
-            self._status("RUN", f"{label} — ruleaza...")
+            self._status("RUN", f"{label} - running...")
         self.stop_btn.config(state="normal" if b else "disabled")
         self.pbar["value"] = 0
 
@@ -882,7 +913,7 @@ class App(tk.Tk):
     def _result_row(self, job, st, sm):
         now = datetime.now().strftime("%H:%M:%S")
         dot = {"PASS": "● PASS", "FAIL": "● FAIL",
-               "INFRA": "● MEDIU", "RUN": "◐ ..."}.get(st, st)
+               "INFRA": "● ENV", "RUN": "◐ ..."}.get(st, st)
         vals = (job["label"], dot, sm, now)
         tag = st if st in STATUS_COLOR else "RUN"
         if job["key"] in self.results:
@@ -915,16 +946,16 @@ class App(tk.Tk):
             try:
                 lock.unlink()
                 self._log_line("[gui] lock orfan work/_lock sters"
-                               + (" (la pornire)" if startup else ""))
+                               + (" (at startup)" if startup else ""))
             except OSError as e:
-                self._log_line(f"[gui] nu pot sterge lock-ul: {e}")
+                self._log_line(f"[gui] cannot remove the lock: {e}")
 
     # -------------------------------------------------------- actions
     def _stop(self):
         self.abort_chain = True
         self.chain = []
         if self.proc:
-            self._log_line("[gui] STOP — omor arborele de procese")
+            self._log_line("[gui] STOP - killing the process tree")
             kill_tree(self.proc)
         # the killed vsim leaves its lock behind — clean it
         self.after(500, self._clear_stale_lock)
@@ -975,7 +1006,7 @@ class App(tk.Tk):
     def _on_close(self):
         if self.busy and self.proc:
             if not messagebox.askyesno("Inchidere",
-                                       "Un run e in curs. Il opresc si ies?"):
+                                       "A run is in progress. Stop it and exit?"):
                 return
             kill_tree(self.proc)
             time.sleep(0.3)

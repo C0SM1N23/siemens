@@ -12,117 +12,117 @@
 `timescale 1ns/1ps
 
 module axi_lite_arb2 (
-    input             clk,
-    input             rst_n,
+    input             clk_i,
+    input             rst_n_i,
 
     // master 0 (slave-side ports facing CPU 0)
-    input      [31:0] m0_awaddr,
-    input             m0_awvalid,
-    output            m0_awready,
-    input      [31:0] m0_wdata,
-    input      [3:0]  m0_wstrb,
-    input             m0_wvalid,
-    output            m0_wready,
-    output     [1:0]  m0_bresp,
-    output            m0_bvalid,
-    input             m0_bready,
-    input      [31:0] m0_araddr,
-    input             m0_arvalid,
-    output            m0_arready,
-    output     [31:0] m0_rdata,
-    output     [1:0]  m0_rresp,
-    output            m0_rvalid,
-    input             m0_rready,
+    input      [31:0] m0_awaddr_i,
+    input             m0_awvalid_i,
+    output            m0_awready_o,
+    input      [31:0] m0_wdata_i,
+    input      [3:0]  m0_wstrb_i,
+    input             m0_wvalid_i,
+    output            m0_wready_o,
+    output     [1:0]  m0_bresp_o,
+    output            m0_bvalid_o,
+    input             m0_bready_i,
+    input      [31:0] m0_araddr_i,
+    input             m0_arvalid_i,
+    output            m0_arready_o,
+    output     [31:0] m0_rdata_o,
+    output     [1:0]  m0_rresp_o,
+    output            m0_rvalid_o,
+    input             m0_rready_i,
 
     // master 1 (facing CPU 1)
-    input      [31:0] m1_awaddr,
-    input             m1_awvalid,
-    output            m1_awready,
-    input      [31:0] m1_wdata,
-    input      [3:0]  m1_wstrb,
-    input             m1_wvalid,
-    output            m1_wready,
-    output     [1:0]  m1_bresp,
-    output            m1_bvalid,
-    input             m1_bready,
-    input      [31:0] m1_araddr,
-    input             m1_arvalid,
-    output            m1_arready,
-    output     [31:0] m1_rdata,
-    output     [1:0]  m1_rresp,
-    output            m1_rvalid,
-    input             m1_rready,
+    input      [31:0] m1_awaddr_i,
+    input             m1_awvalid_i,
+    output            m1_awready_o,
+    input      [31:0] m1_wdata_i,
+    input      [3:0]  m1_wstrb_i,
+    input             m1_wvalid_i,
+    output            m1_wready_o,
+    output     [1:0]  m1_bresp_o,
+    output            m1_bvalid_o,
+    input             m1_bready_i,
+    input      [31:0] m1_araddr_i,
+    input             m1_arvalid_i,
+    output            m1_arready_o,
+    output     [31:0] m1_rdata_o,
+    output     [1:0]  m1_rresp_o,
+    output            m1_rvalid_o,
+    input             m1_rready_i,
 
     // shared slave
-    output     [31:0] s_awaddr,
-    output            s_awvalid,
-    input             s_awready,
-    output     [31:0] s_wdata,
-    output     [3:0]  s_wstrb,
-    output            s_wvalid,
-    input             s_wready,
-    input      [1:0]  s_bresp,
-    input             s_bvalid,
-    output            s_bready,
-    output     [31:0] s_araddr,
-    output            s_arvalid,
-    input             s_arready,
-    input      [31:0] s_rdata,
-    input      [1:0]  s_rresp,
-    input             s_rvalid,
-    output            s_rready
+    output     [31:0] s_awaddr_o,
+    output            s_awvalid_o,
+    input             s_awready_i,
+    output     [31:0] s_wdata_o,
+    output     [3:0]  s_wstrb_o,
+    output            s_wvalid_o,
+    input             s_wready_i,
+    input      [1:0]  s_bresp_i,
+    input             s_bvalid_i,
+    output            s_bready_o,
+    output     [31:0] s_araddr_o,
+    output            s_arvalid_o,
+    input             s_arready_i,
+    input      [31:0] s_rdata_i,
+    input      [1:0]  s_rresp_i,
+    input             s_rvalid_i,
+    output            s_rready_o
 );
 
 reg busy, grant, last, kind_rd;
 
-wire req0 = m0_arvalid | m0_awvalid;
-wire req1 = m1_arvalid | m1_awvalid;
+wire req0 = m0_arvalid_i | m0_awvalid_i;
+wire req1 = m1_arvalid_i | m1_awvalid_i;
 // round-robin: whoever didn't go last wins a tie
 wire pick = (req0 && req1) ? ~last : req1;
 
-wire done = kind_rd ? (s_rvalid && s_rready) : (s_bvalid && s_bready);
+wire done = kind_rd ? (s_rvalid_i && s_rready_o) : (s_bvalid_i && s_bready_o);
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
         busy <= 0; grant <= 0; last <= 0; kind_rd <= 0;
     end else if (!busy) begin
         if (req0 || req1) begin
             busy    <= 1;
             grant   <= pick;
             last    <= pick;
-            kind_rd <= pick ? m1_arvalid : m0_arvalid;
+            kind_rd <= pick ? m1_arvalid_i : m0_arvalid_i;
         end
     end else if (done)
         busy <= 0;
 end
 
 // granted master drives the slave; the other one waits on low READYs
-assign s_arvalid = busy && (grant ? m1_arvalid : m0_arvalid);
-assign s_araddr  =          grant ? m1_araddr  : m0_araddr;
-assign s_awvalid = busy && (grant ? m1_awvalid : m0_awvalid);
-assign s_awaddr  =          grant ? m1_awaddr  : m0_awaddr;
-assign s_wvalid  = busy && (grant ? m1_wvalid  : m0_wvalid);
-assign s_wdata   =          grant ? m1_wdata   : m0_wdata;
-assign s_wstrb   =          grant ? m1_wstrb   : m0_wstrb;
-assign s_rready  = busy && (grant ? m1_rready  : m0_rready);
-assign s_bready  = busy && (grant ? m1_bready  : m0_bready);
+assign s_arvalid_o = busy && (grant ? m1_arvalid_i : m0_arvalid_i);
+assign s_araddr_o  =          grant ? m1_araddr_i  : m0_araddr_i;
+assign s_awvalid_o = busy && (grant ? m1_awvalid_i : m0_awvalid_i);
+assign s_awaddr_o  =          grant ? m1_awaddr_i  : m0_awaddr_i;
+assign s_wvalid_o  = busy && (grant ? m1_wvalid_i  : m0_wvalid_i);
+assign s_wdata_o   =          grant ? m1_wdata_i   : m0_wdata_i;
+assign s_wstrb_o   =          grant ? m1_wstrb_i   : m0_wstrb_i;
+assign s_rready_o  = busy && (grant ? m1_rready_i  : m0_rready_i);
+assign s_bready_o  = busy && (grant ? m1_bready_i  : m0_bready_i);
 
-assign m0_arready = (busy && !grant) ? s_arready : 1'b0;
-assign m0_awready = (busy && !grant) ? s_awready : 1'b0;
-assign m0_wready  = (busy && !grant) ? s_wready  : 1'b0;
-assign m0_rvalid  = (busy && !grant) ? s_rvalid  : 1'b0;
-assign m0_bvalid  = (busy && !grant) ? s_bvalid  : 1'b0;
-assign m0_rdata   = s_rdata;
-assign m0_rresp   = s_rresp;
-assign m0_bresp   = s_bresp;
+assign m0_arready_o = (busy && !grant) ? s_arready_i : 1'b0;
+assign m0_awready_o = (busy && !grant) ? s_awready_i : 1'b0;
+assign m0_wready_o  = (busy && !grant) ? s_wready_i  : 1'b0;
+assign m0_rvalid_o  = (busy && !grant) ? s_rvalid_i  : 1'b0;
+assign m0_bvalid_o  = (busy && !grant) ? s_bvalid_i  : 1'b0;
+assign m0_rdata_o   = s_rdata_i;
+assign m0_rresp_o   = s_rresp_i;
+assign m0_bresp_o   = s_bresp_i;
 
-assign m1_arready = (busy && grant) ? s_arready : 1'b0;
-assign m1_awready = (busy && grant) ? s_awready : 1'b0;
-assign m1_wready  = (busy && grant) ? s_wready  : 1'b0;
-assign m1_rvalid  = (busy && grant) ? s_rvalid  : 1'b0;
-assign m1_bvalid  = (busy && grant) ? s_bvalid  : 1'b0;
-assign m1_rdata   = s_rdata;
-assign m1_rresp   = s_rresp;
-assign m1_bresp   = s_bresp;
+assign m1_arready_o = (busy && grant) ? s_arready_i : 1'b0;
+assign m1_awready_o = (busy && grant) ? s_awready_i : 1'b0;
+assign m1_wready_o  = (busy && grant) ? s_wready_i  : 1'b0;
+assign m1_rvalid_o  = (busy && grant) ? s_rvalid_i  : 1'b0;
+assign m1_bvalid_o  = (busy && grant) ? s_bvalid_i  : 1'b0;
+assign m1_rdata_o   = s_rdata_i;
+assign m1_rresp_o   = s_rresp_i;
+assign m1_bresp_o   = s_bresp_i;
 
 endmodule

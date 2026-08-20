@@ -24,8 +24,8 @@ module tb_dual_core;
 wire clk, rst_n;
 
 ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst_inst (
-    .clk   (clk),
-    .rst_n (rst_n)
+    .clk_o   (clk),
+    .rst_n_o (rst_n)
 );
 
 // per-core ibus/dbus bundles; s = the shared bus behind the arbiter
@@ -41,27 +41,27 @@ wire        intrap [0:1];
 
 // no PIC in the dual-core bench: the interrupt inputs are tied off
 cpu_top #(.HART_ID(0)) cpu0 (
-    .clk         (clk),
-    .rst_n       (rst_n),
-    `AXIL_M_RD(ibus_axi, ib0),
-    `AXIL_M(dbus_axi, db0),
-    .cpu_irq     (1'b0),
-    .cpu_irq_vec (4'b0),
-    .cpu_irq_ack (ack[0]),
-    .cpu_irq_eoi (eoi[0]),
-    .cpu_in_trap (intrap[0])
+    .clk_i         (clk),
+    .rst_n_i       (rst_n),
+    `AXIL_MST_RD(ibus_axi, ib0),
+    `AXIL_MST(dbus_axi, db0),
+    .cpu_irq_i     (1'b0),
+    .cpu_irq_vec_i (4'b0),
+    .cpu_irq_ack_o (ack[0]),
+    .cpu_irq_eoi_o (eoi[0]),
+    .cpu_in_trap_o (intrap[0])
 );
 
 cpu_top #(.HART_ID(1)) cpu1 (
-    .clk         (clk),
-    .rst_n       (rst_n),
-    `AXIL_M_RD(ibus_axi, ib1),
-    `AXIL_M(dbus_axi, db1),
-    .cpu_irq     (1'b0),
-    .cpu_irq_vec (4'b0),
-    .cpu_irq_ack (ack[1]),
-    .cpu_irq_eoi (eoi[1]),
-    .cpu_in_trap (intrap[1])
+    .clk_i         (clk),
+    .rst_n_i       (rst_n),
+    `AXIL_MST_RD(ibus_axi, ib1),
+    `AXIL_MST(dbus_axi, db1),
+    .cpu_irq_i     (1'b0),
+    .cpu_irq_vec_i (4'b0),
+    .cpu_irq_ack_o (ack[1]),
+    .cpu_irq_eoi_o (eoi[1]),
+    .cpu_in_trap_o (intrap[1])
 );
 
 // private instruction memories, same binary in both
@@ -69,40 +69,40 @@ axi_lite_mem_model #(
     .WORDS(256), .BASE(32'h0000_0000), .INIT_FILE("program_dual.hex"),
     .READ_LAT(0)
 ) imem0 (
-    .clk(clk), .rst_n(rst_n),
+    .clk_i(clk), .rst_n_i(rst_n),
     `AXIL_BARE_WR_TIEOFF,
-    `AXIL_BARE_RD(ib0)
+    `AXIL_BARE_RD_SLV(ib0)
 );
 
 axi_lite_mem_model #(
     .WORDS(256), .BASE(32'h0000_0000), .INIT_FILE("program_dual.hex"),
     .READ_LAT(0)
 ) imem1 (
-    .clk(clk), .rst_n(rst_n),
+    .clk_i(clk), .rst_n_i(rst_n),
     `AXIL_BARE_WR_TIEOFF,
-    `AXIL_BARE_RD(ib1)
+    `AXIL_BARE_RD_SLV(ib1)
 );
 
 // both data buses share one memory through the arbiter
 axi_lite_arb2 arb (
-    .clk(clk), .rst_n(rst_n),
-    `AXIL_NP(m0, db0),
-    `AXIL_NP(m1, db1),
-    `AXIL_NP(s, s)
+    .clk_i(clk), .rst_n_i(rst_n),
+    `AXIL_NP_SLV(m0, db0),
+    `AXIL_NP_SLV(m1, db1),
+    `AXIL_NP_MST(s, s)
 );
 
 axi_lite_mem_model #(
     .WORDS(1024), .BASE(32'h0000_2000),
     .READ_LAT(1), .WRITE_LAT(1)
 ) dmem_inst (
-    .clk(clk), .rst_n(rst_n), `AXIL_BARE(s)
+    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_SLV(s)
 );
 
 // keep the arbitrated link protocol-clean too
 wire [15:0] mon_err;
 axi_lite_monitor #(.NAME("shared"), .HAS_WRITE(1)) mon (
-    .clk(clk), .rst_n(rst_n), `AXIL_BARE(s),
-    .err_cnt(mon_err), .rd_cnt(), .wr_cnt()
+    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_MON(s),
+    .err_cnt_o(mon_err), .rd_cnt_o(), .wr_cnt_o()
 );
 
 integer errors;

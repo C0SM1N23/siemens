@@ -19,27 +19,27 @@ module axi_lite_mem_model #(
     parameter STALL_PROB = 0,     // % chance per cycle to hold a READY low
     parameter SEED       = 1
 )(
-    input             clk,
-    input             rst_n,
+    input             clk_i,
+    input             rst_n_i,
 
-    input      [31:0] awaddr,
-    input             awvalid,
-    output            awready,
-    input      [31:0] wdata,
-    input      [3:0]  wstrb,
-    input             wvalid,
-    output            wready,
-    output reg [1:0]  bresp,
-    output reg        bvalid,
-    input             bready,
+    input      [31:0] awaddr_i,
+    input             awvalid_i,
+    output            awready_o,
+    input      [31:0] wdata_i,
+    input      [3:0]  wstrb_i,
+    input             wvalid_i,
+    output            wready_o,
+    output reg [1:0]  bresp_o,
+    output reg        bvalid_o,
+    input             bready_i,
 
-    input      [31:0] araddr,
-    input             arvalid,
-    output            arready,
-    output reg [31:0] rdata,
-    output reg [1:0]  rresp,
-    output reg        rvalid,
-    input             rready
+    input      [31:0] araddr_i,
+    input             arvalid_i,
+    output            arready_o,
+    output reg [31:0] rdata_o,
+    output reg [1:0]  rresp_o,
+    output reg        rvalid_o,
+    input             rready_i
 );
 
 reg [31:0] mem [0:WORDS-1];
@@ -63,13 +63,12 @@ function in_range;
     end
 endfunction
 
-// random backpressure (deterministic per SEED)
+// random backpressure (deterministic per SEED). rseed is seeded in an initial
+// block because $random needs it before the first edge; the stall flops are
+// reset so the model, like the RTL, holds no X out of reset.
 integer rseed;
 reg ar_stall, aw_stall, w_stall;
-initial begin
-    rseed = SEED;
-    ar_stall = 0; aw_stall = 0; w_stall = 0;
-end
+initial rseed = SEED;
 
 function do_stall;
     input dummy;
@@ -81,10 +80,16 @@ function integer rand_wait;
     rand_wait = base_wait + ((STALL_PROB > 0) ? (($random(rseed) & 32'h7FFFFFFF) % 4) : 0);
 endfunction
 
-always @(posedge clk) begin
-    ar_stall <= do_stall(0);
-    aw_stall <= do_stall(0);
-    w_stall  <= do_stall(0);
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        ar_stall <= 1'b0;
+        aw_stall <= 1'b0;
+        w_stall  <= 1'b0;
+    end else begin
+        ar_stall <= do_stall(0);
+        aw_stall <= do_stall(0);
+        w_stall  <= do_stall(0);
+    end
 end
 
 // read channel. With READ_LAT=0 and no backpressure this is a true latency-1
@@ -100,40 +105,41 @@ task read_resp;
     input [31:0] a;
     begin
         if (in_range(a)) begin
-            rdata <= mem[(a - BASE) >> 2];
-            rresp <= 2'b00;                               // OKAY
+            rdata_o <= mem[(a - BASE) >> 2];
+            rresp_o <= 2'b00;                               // OKAY
         end else begin
-            rdata <= 32'hDEC0_DEC0;
-            rresp <= 2'b11;                               // DECERR
+            rdata_o <= 32'hDEC0_DEC0;
+            rresp_o <= 2'b11;                               // DECERR
         end
     end
 endtask
 
-assign arready = (!rd_busy || (rvalid && rready)) && !ar_stall;
+assign arready_o = (!rd_busy || (rvalid_o && rready_i)) && !ar_stall;
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-        rd_busy <= 0; rvalid <= 0; rresp <= 2'b00; rdata <= 32'b0; rd_wait <= 0;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        rd_busy <= 0; rvalid_o <= 0; rresp_o <= 2'b00; rdata_o <= 32'b0; rd_wait <= 0;
+        rd_addr <= 32'b0;
     end else begin
-        if (arvalid && arready) begin
+        if (arvalid_i && arready_o) begin
             rd_busy <= 1;
-            rd_addr <= araddr;
+            rd_addr <= araddr_i;
             rd_wait <= rand_wait(READ_LAT);
             if (READ_LAT == 0 && STALL_PROB == 0) begin
-                read_resp(araddr);                        // data next cycle
-                rvalid <= 1;
-            end else if (rvalid && rready)
-                rvalid <= 0;                              // new txn waits its turn
+                read_resp(araddr_i);                        // data next cycle
+                rvalid_o <= 1;
+            end else if (rvalid_o && rready_i)
+                rvalid_o <= 0;                              // new txn waits its turn
         end else begin
-            if (rvalid && rready) begin
-                rvalid  <= 0;
+            if (rvalid_o && rready_i) begin
+                rvalid_o  <= 0;
                 rd_busy <= 0;
             end
-            if (rd_busy && !rvalid) begin
+            if (rd_busy && !rvalid_o) begin
                 if (rd_wait > 0)
                     rd_wait <= rd_wait - 1;
                 else begin
-                    rvalid <= 1;
+                    rvalid_o <= 1;
                     read_resp(rd_addr);
                 end
             end
@@ -147,40 +153,41 @@ reg [31:0] wr_addr, wr_data;
 reg [3:0]  wr_strb;
 integer    wr_wait;
 
-assign awready = !aw_got && !bvalid && !aw_stall;
-assign wready  = !w_got  && !bvalid && !w_stall;
+assign awready_o = !aw_got && !bvalid_o && !aw_stall;
+assign wready_o  = !w_got  && !bvalid_o && !w_stall;
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-        aw_got <= 0; w_got <= 0; bvalid <= 0; bresp <= 2'b00; wr_wait <= 0;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        aw_got <= 0; w_got <= 0; bvalid_o <= 0; bresp_o <= 2'b00; wr_wait <= 0;
+        wr_addr <= 32'b0; wr_data <= 32'b0; wr_strb <= 4'b0;
     end else begin
-        if (awvalid && awready) begin
+        if (awvalid_i && awready_o) begin
             aw_got  <= 1;
-            wr_addr <= awaddr;
+            wr_addr <= awaddr_i;
             wr_wait <= rand_wait(WRITE_LAT);
         end
-        if (wvalid && wready) begin
+        if (wvalid_i && wready_o) begin
             w_got   <= 1;
-            wr_data <= wdata;
-            wr_strb <= wstrb;
+            wr_data <= wdata_i;
+            wr_strb <= wstrb_i;
         end
-        if (aw_got && w_got && !bvalid) begin
+        if (aw_got && w_got && !bvalid_o) begin
             if (wr_wait > 0)
                 wr_wait <= wr_wait - 1;
             else begin
-                bvalid <= 1;
+                bvalid_o <= 1;
                 if (in_range(wr_addr)) begin
-                    bresp <= 2'b00;
+                    bresp_o <= 2'b00;
                     if (wr_strb[0]) mem[(wr_addr-BASE)>>2][7:0]   <= wr_data[7:0];
                     if (wr_strb[1]) mem[(wr_addr-BASE)>>2][15:8]  <= wr_data[15:8];
                     if (wr_strb[2]) mem[(wr_addr-BASE)>>2][23:16] <= wr_data[23:16];
                     if (wr_strb[3]) mem[(wr_addr-BASE)>>2][31:24] <= wr_data[31:24];
                 end else
-                    bresp <= 2'b11;                       // DECERR
+                    bresp_o <= 2'b11;                       // DECERR
             end
         end
-        if (bvalid && bready) begin
-            bvalid <= 0;
+        if (bvalid_o && bready_i) begin
+            bvalid_o <= 0;
             aw_got <= 0;
             w_got  <= 0;
         end

@@ -7,9 +7,9 @@
 // a MISS is a test-plan hole, not a failure.
 //
 // Sampling points:
-// - commit     = a real instruction leaves S2 (s2_advance && ifdx_valid && !trap_take)
-// - trap entry = trap_take && s2_advance, binned by mcause
-// - resolution = predictor outcome at a committed branch/jump
+// - commit     = a real instruction leaves S2 (s2_advance_i && ifdx_valid && !trap_take_i)
+// - trap entry = trap_take_i && s2_advance_i, binned by mcause
+// - resolution = predictor outcome at a committed branch_i/jump_i
 // - bus beats  = response handshakes on ibus/dbus, binned by RRESP/BRESP
 //
 // Plain counters (portable to Verilator, Questa, even ModelSim ASE minus the
@@ -18,62 +18,62 @@
 `timescale 1ns/1ps
 
 module cpu_func_cov (
-    input        clk,
-    input        rst_n,
+    input        clk_i,
+    input        rst_n_i,
 
     // S2 instruction + control (cpu_top internals, wired up by the bind)
-    input        valid,          // ifdx_valid_q
-    input [31:0] instr,          // ifdx_instr_q
-    input        pred_taken,     // ifdx_ptk_q
-    input        s2_advance,
-    input        trap_take,
-    input [4:0]  trap_code,
-    input        irq_take,
-    input        mispredict,
-    input        branch,
-    input        jump,
-    input        ctl_taken,
-    input        csr_instr,
-    input [1:0]  csr_op,
-    input        csr_imm,
-    input        csr_wen,
-    input        mret_exec,
-    input        fwd_rs1,
-    input        fwd_rs2,
-    input        lsu_active,
-    input        ctrl_wfi,       // WFI in S2 (D23)
-    input        wfi_wait,       // WFI sleeping this cycle
-    input        ras_push,       // committed call (D24)
-    input        ras_pop,        // committed return
+    input        valid_i,          // ifdx_valid_q
+    input [31:0] instr_i,          // ifdx_instr_q
+    input        pred_taken_i,     // ifdx_ptk_q
+    input        s2_advance_i,
+    input        trap_take_i,
+    input [4:0]  trap_code_i,
+    input        irq_take_i,
+    input        mispredict_i,
+    input        branch_i,
+    input        jump_i,
+    input        ctl_taken_i,
+    input        csr_instr_i,
+    input [1:0]  csr_op_i,
+    input        csr_imm_i,
+    input        csr_wen_i,
+    input        mret_exec_i,
+    input        fwd_rs1_i,
+    input        fwd_rs2_i,
+    input        lsu_active_i,
+    input        ctrl_wfi_i,       // WFI in S2 (D23)
+    input        wfi_wait_i,       // WFI sleeping this cycle
+    input        ras_push_i,       // committed call (D24)
+    input        ras_pop_i,        // committed return
 
     // PIC interface
-    input        cpu_irq,
-    input [3:0]  cpu_irq_vec,
-    input        cpu_irq_ack,
+    input        cpu_irq_i,
+    input [3:0]  cpu_irq_vec_i,
+    input        cpu_irq_ack_i,
 
     // bus response beats
-    input        ib_arvalid,
-    input        ib_arready,
-    input        ib_rvalid,
-    input        ib_rready,
-    input [1:0]  ib_rresp,
-    input        db_arvalid,
-    input        db_arready,
-    input        db_rvalid,
-    input        db_rready,
-    input [1:0]  db_rresp,
-    input        db_bvalid,
-    input        db_bready,
-    input [1:0]  db_bresp
+    input        ib_arvalid_i,
+    input        ib_arready_i,
+    input        ib_rvalid_i,
+    input        ib_rready_i,
+    input [1:0]  ib_rresp_i,
+    input        db_arvalid_i,
+    input        db_arready_i,
+    input        db_rvalid_i,
+    input        db_rready_i,
+    input [1:0]  db_rresp_i,
+    input        db_bvalid_i,
+    input        db_bready_i,
+    input [1:0]  db_bresp_i
 );
 
-wire [6:0] opcode = instr[6:0];
-wire [2:0] funct3 = instr[14:12];
+wire [6:0] opcode = instr_i[6:0];
+wire [2:0] funct3 = instr_i[14:12];
 
-wire commit  = s2_advance && valid && !trap_take;
-wire ib_r_hs = ib_rvalid && ib_rready;
-wire db_r_hs = db_rvalid && db_rready;
-wire db_b_hs = db_bvalid && db_bready;
+wire commit  = s2_advance_i && valid_i && !trap_take_i;
+wire ib_r_hs = ib_rvalid_i && ib_rready_i;
+wire db_r_hs = db_rvalid_i && db_rready_i;
+wire db_b_hs = db_bvalid_i && db_bready_i;
 
 // instruction class index (RV32I major opcodes)
 localparam C_LUI = 0, C_AUIPC = 1, C_JAL  = 2, C_JALR  = 3, C_BR  = 4,
@@ -103,7 +103,7 @@ endfunction
 integer cls_cnt [0:10];       // committed instruction classes
 integer ld_cnt  [0:7];        // load sizes (funct3: LB LH LW LBU LHU)
 integer st_cnt  [0:7];        // store sizes (funct3: SB SH SW)
-integer br_cnt  [0:7][0:1];   // branch funct3 x {not-taken, taken}
+integer br_cnt  [0:7][0:1];   // branch_i funct3 x {not-taken, taken}
 integer bp_cnt  [0:3];        // predictor {pred, actual} at resolution
 integer bp_tgt_wrong;         // right direction, wrong BTB target
 integer trap_cnt[0:31];       // trap entries by mcause code (16+ = irq)
@@ -139,92 +139,92 @@ initial begin
     db_wr_ok = 0; db_wr_slverr = 0; db_wr_decerr = 0;
 end
 
-// committed instructions: class, size, branch outcome, CSR form, forwarding
-always @(posedge clk) begin
-    if (rst_n && commit) begin
+// committed instructions: class, size, branch_i outcome, CSR form, forwarding
+always @(posedge clk_i) begin
+    if (rst_n_i && commit) begin
         cls_i = cls_idx(opcode);
         if (cls_i >= 0)
             cls_cnt[cls_i] <= cls_cnt[cls_i] + 1;
         if (opcode == 7'b0000011) ld_cnt[funct3] <= ld_cnt[funct3] + 1;
         if (opcode == 7'b0100011) st_cnt[funct3] <= st_cnt[funct3] + 1;
         if (opcode == 7'b1100011)
-            br_cnt[funct3][ctl_taken] <= br_cnt[funct3][ctl_taken] + 1;
-        if (branch || jump)
-            bp_cnt[{pred_taken, ctl_taken}] <= bp_cnt[{pred_taken, ctl_taken}] + 1;
-        if (csr_instr) begin
-            csr_cnt[{csr_imm, csr_op}] <= csr_cnt[{csr_imm, csr_op}] + 1;
-            if (!csr_wen) csr_ro <= csr_ro + 1;
+            br_cnt[funct3][ctl_taken_i] <= br_cnt[funct3][ctl_taken_i] + 1;
+        if (branch_i || jump_i)
+            bp_cnt[{pred_taken_i, ctl_taken_i}] <= bp_cnt[{pred_taken_i, ctl_taken_i}] + 1;
+        if (csr_instr_i) begin
+            csr_cnt[{csr_imm_i, csr_op_i}] <= csr_cnt[{csr_imm_i, csr_op_i}] + 1;
+            if (!csr_wen_i) csr_ro <= csr_ro + 1;
         end
-        if (fwd_rs1 && !fwd_rs2) fwd_cnt[0] <= fwd_cnt[0] + 1;
-        if (!fwd_rs1 && fwd_rs2) fwd_cnt[1] <= fwd_cnt[1] + 1;
-        if (fwd_rs1 && fwd_rs2)  fwd_cnt[2] <= fwd_cnt[2] + 1;
+        if (fwd_rs1_i && !fwd_rs2_i) fwd_cnt[0] <= fwd_cnt[0] + 1;
+        if (!fwd_rs1_i && fwd_rs2_i) fwd_cnt[1] <= fwd_cnt[1] + 1;
+        if (fwd_rs1_i && fwd_rs2_i)  fwd_cnt[2] <= fwd_cnt[2] + 1;
     end
 end
 
 // trap entries, binned by cause; irq sources land on codes 16..31 (D3);
 // the test program exercises sources 0..7 (codes 16..23)
-always @(posedge clk) begin
-    if (rst_n && trap_take && s2_advance)
-        trap_cnt[trap_code] <= trap_cnt[trap_code] + 1;
+always @(posedge clk_i) begin
+    if (rst_n_i && trap_take_i && s2_advance_i)
+        trap_cnt[trap_code_i] <= trap_cnt[trap_code_i] + 1;
 end
 
 // resolution events that are not commits
-always @(posedge clk) begin
-    if (rst_n && s2_advance) begin
-        if (mret_exec)   ev_mret <= ev_mret + 1;
-        if (mispredict)  ev_mispredict <= ev_mispredict + 1;
-        if (mispredict && pred_taken && ctl_taken)
+always @(posedge clk_i) begin
+    if (rst_n_i && s2_advance_i) begin
+        if (mret_exec_i)   ev_mret <= ev_mret + 1;
+        if (mispredict_i)  ev_mispredict <= ev_mispredict + 1;
+        if (mispredict_i && pred_taken_i && ctl_taken_i)
             bp_tgt_wrong <= bp_tgt_wrong + 1;
-        if (irq_take && ctrl_wfi) wfi_preempt <= wfi_preempt + 1;
+        if (irq_take_i && ctrl_wfi_i) wfi_preempt <= wfi_preempt + 1;
     end
 end
 
 // WFI (D23) and RAS (D24) scenarios
-always @(posedge clk) begin
-    if (rst_n) begin
-        if (wfi_wait) wfi_sleep <= wfi_sleep + 1;
-        if (commit && ctrl_wfi) wfi_commit <= wfi_commit + 1;
-        if (commit && ras_push) ras_pushes <= ras_pushes + 1;
-        if (commit && ras_pop) begin
+always @(posedge clk_i) begin
+    if (rst_n_i) begin
+        if (wfi_wait_i) wfi_sleep <= wfi_sleep + 1;
+        if (commit && ctrl_wfi_i) wfi_commit <= wfi_commit + 1;
+        if (commit && ras_push_i) ras_pushes <= ras_pushes + 1;
+        if (commit && ras_pop_i) begin
             ras_pops <= ras_pops + 1;
-            if (mispredict) ret_pred_bad <= ret_pred_bad + 1;
+            if (mispredict_i) ret_pred_bad <= ret_pred_bad + 1;
             else            ret_pred_ok  <= ret_pred_ok  + 1;
         end
     end
 end
 
 // interrupt scenarios (cycle counts, not instruction counts)
-always @(posedge clk) begin
-    if (rst_n) begin
-        if (cpu_irq && lsu_active)
+always @(posedge clk_i) begin
+    if (rst_n_i) begin
+        if (cpu_irq_i && lsu_active_i)
             ev_irq_in_stall <= ev_irq_in_stall + 1;
         // the PIC now resolves priority and offers one prioritised source, so the
-        // channel is read from cpu_irq_vec at the (single) claim pulse
-        if (cpu_irq_ack) begin
+        // channel is read from cpu_irq_vec_i at the (single) claim pulse
+        if (cpu_irq_ack_i) begin
             ev_irq_taken <= ev_irq_taken + 1;
-            if (cpu_irq_vec < 4'd8) ack_cnt[cpu_irq_vec[2:0]] <= ack_cnt[cpu_irq_vec[2:0]] + 1;
+            if (cpu_irq_vec_i < 4'd8) ack_cnt[cpu_irq_vec_i[2:0]] <= ack_cnt[cpu_irq_vec_i[2:0]] + 1;
         end
     end
 end
 
 // bus response beats and backpressure
-always @(posedge clk) begin
-    if (rst_n) begin
+always @(posedge clk_i) begin
+    if (rst_n_i) begin
         if (ib_r_hs) begin
-            if (ib_rresp[1]) ib_err <= ib_err + 1;
+            if (ib_rresp_i[1]) ib_err <= ib_err + 1;
             else             ib_ok  <= ib_ok  + 1;
         end
-        if (ib_arvalid && !ib_arready) ib_bp <= ib_bp + 1;
+        if (ib_arvalid_i && !ib_arready_i) ib_bp <= ib_bp + 1;
         if (db_r_hs) begin
-            case (db_rresp)
+            case (db_rresp_i)
                 2'b10:   db_rd_slverr <= db_rd_slverr + 1;
                 2'b11:   db_rd_decerr <= db_rd_decerr + 1;
                 default: db_rd_ok     <= db_rd_ok     + 1;
             endcase
         end
-        if (db_arvalid && !db_arready) db_rd_bp <= db_rd_bp + 1;
+        if (db_arvalid_i && !db_arready_i) db_rd_bp <= db_rd_bp + 1;
         if (db_b_hs) begin
-            case (db_bresp)
+            case (db_bresp_i)
                 2'b10:   db_wr_slverr <= db_wr_slverr + 1;
                 2'b11:   db_wr_decerr <= db_wr_decerr + 1;
                 default: db_wr_ok     <= db_wr_ok     + 1;
@@ -240,7 +240,7 @@ end
 // scoreboard miss. The optional bins are the ones the default run legitimately
 // leaves untouched: the masked ch5 negatives (must never fire), the two AR
 // backpressure bins (only the regress random-READY configs hit them), and the
-// right-direction-wrong-target mispredict (the RAS covers those targets).
+// right-direction-wrong-target mispredict_i (the RAS covers those targets).
 
 localparam bit REQ = 1'b1, OPT = 1'b0;
 
@@ -283,27 +283,27 @@ final begin
     rep("store SH", st_cnt[3'b001], REQ);
     rep("store SW", st_cnt[3'b010], REQ);
 
-    rep("branch BEQ  not-taken", br_cnt[3'b000][0], REQ);
-    rep("branch BEQ  taken",     br_cnt[3'b000][1], REQ);
-    rep("branch BNE  not-taken", br_cnt[3'b001][0], REQ);
-    rep("branch BNE  taken",     br_cnt[3'b001][1], REQ);
-    rep("branch BLT  not-taken", br_cnt[3'b100][0], REQ);
-    rep("branch BLT  taken",     br_cnt[3'b100][1], REQ);
-    rep("branch BGE  not-taken", br_cnt[3'b101][0], REQ);
-    rep("branch BGE  taken",     br_cnt[3'b101][1], REQ);
-    rep("branch BLTU not-taken", br_cnt[3'b110][0], REQ);
-    rep("branch BLTU taken",     br_cnt[3'b110][1], REQ);
-    rep("branch BGEU not-taken", br_cnt[3'b111][0], REQ);
-    rep("branch BGEU taken",     br_cnt[3'b111][1], REQ);
+    rep("branch_i BEQ  not-taken", br_cnt[3'b000][0], REQ);
+    rep("branch_i BEQ  taken",     br_cnt[3'b000][1], REQ);
+    rep("branch_i BNE  not-taken", br_cnt[3'b001][0], REQ);
+    rep("branch_i BNE  taken",     br_cnt[3'b001][1], REQ);
+    rep("branch_i BLT  not-taken", br_cnt[3'b100][0], REQ);
+    rep("branch_i BLT  taken",     br_cnt[3'b100][1], REQ);
+    rep("branch_i BGE  not-taken", br_cnt[3'b101][0], REQ);
+    rep("branch_i BGE  taken",     br_cnt[3'b101][1], REQ);
+    rep("branch_i BLTU not-taken", br_cnt[3'b110][0], REQ);
+    rep("branch_i BLTU taken",     br_cnt[3'b110][1], REQ);
+    rep("branch_i BGEU not-taken", br_cnt[3'b111][0], REQ);
+    rep("branch_i BGEU taken",     br_cnt[3'b111][1], REQ);
 
     rep("predict NT actual NT (correct)",    bp_cnt[2'b00], REQ);
-    rep("predict NT actual T  (mispredict)", bp_cnt[2'b01], REQ);
-    rep("predict T  actual NT (mispredict)", bp_cnt[2'b10], REQ);
+    rep("predict NT actual T  (mispredict_i)", bp_cnt[2'b01], REQ);
+    rep("predict T  actual NT (mispredict_i)", bp_cnt[2'b10], REQ);
     rep("predict T  actual T",               bp_cnt[2'b11], REQ);
     rep("predict T, right dir, wrong target", bp_tgt_wrong, OPT);
 
-    rep("trap instr misaligned (0)",  trap_cnt[0],  REQ);
-    rep("trap instr fault (1)",       trap_cnt[1],  REQ);
+    rep("trap instr_i misaligned (0)",  trap_cnt[0],  REQ);
+    rep("trap instr_i fault (1)",       trap_cnt[1],  REQ);
     rep("trap illegal (2)",           trap_cnt[2],  REQ);
     rep("trap EBREAK (3)",            trap_cnt[3],  REQ);
     rep("trap load misaligned (4)",   trap_cnt[4],  REQ);
@@ -328,7 +328,7 @@ final begin
     rep("forward S3->S2 both",     fwd_cnt[2], REQ);
 
     rep("MRET executed",              ev_mret,          REQ);
-    rep("mispredict redirects",       ev_mispredict,    REQ);
+    rep("mispredict_i redirects",       ev_mispredict,    REQ);
     rep("irq pending during a stall", ev_irq_in_stall,  REQ);
     rep("interrupts taken (claims)",  ev_irq_taken,     REQ);
 
