@@ -33,8 +33,14 @@
 // Cost note: this puts ENTRIES x (TAG_W + 1 + 32) + RAS_DEPTH x 32 flops (about
 // 7.2 kbit at the default ENTRIES = 128, RAS_DEPTH = 8) on the reset tree. This
 // is a deliberate trade of area/reset-tree size for a fully X-free design; if a
-// future synthesis target cannot afford it, the two payload always blocks below
-// are the only places to change, and the design stays functionally identical.
+// future synthesis target cannot afford it, the payload always blocks below are
+// the only places to change, and the design stays functionally identical.
+//
+// The BTB payload is held in packed vectors, not unpacked arrays, so each one
+// resets in a single assignment instead of a for loop. A non-blocking
+// assignment to an unpacked array inside a loop is only accepted by tools that
+// can unroll that loop, and 128 entries is past the usual unroll budget; the
+// packed form is the same hardware with no such dependency.
 
 `timescale 1ns/1ps
 
@@ -66,14 +72,25 @@ module branch_predictor #(
 localparam IDX_W = $clog2(ENTRIES);   // index bits: PC[IDX_W+1:2]
 localparam TAG_W = 32 - IDX_W - 2;    // the remaining high PC bits are the tag
 
-reg [ENTRIES-1:0] valid;              // packed: resets in one assignment
-reg [ENTRIES-1:0] isret;              // entry predicts via the RAS (D24)
-reg  [TAG_W-1:0]  tag    [0:ENTRIES-1];
-reg               state  [0:ENTRIES-1];
-reg  [31:0]       target [0:ENTRIES-1];
+// Every array here is packed into one vector rather than declared as an
+// unpacked array, so each resets in a single assignment. That is what keeps the
+// reset loop-free: a non-blocking assignment to an unpacked array inside a for
+// loop is only legal for tools that can unroll the loop, and at ENTRIES = 128
+// that exceeds the usual unroll budget. Entries are addressed with an indexed
+// part-select, which is the same hardware and is portable everywhere.
+reg [ENTRIES-1:0]         valid;      // entry holds something believable
+reg [ENTRIES-1:0]         isret;      // entry predicts via the RAS (D24)
+reg [ENTRIES-1:0]         state;      // 1-bit saturating direction (REQ8)
+reg [ENTRIES*TAG_W-1:0]   tag;        // TAG_W bits per entry
+reg [ENTRIES*32-1:0]      target;     // 32 bits per entry
 
 wire [IDX_W-1:0] r_idx = lookup_pc_i[IDX_W+1:2];
-wire             hit   = valid[r_idx] && (tag[r_idx] == lookup_pc_i[31:IDX_W+2]);
+
+// per-entry slices of the packed vectors
+wire [TAG_W-1:0] r_tag    = tag   [r_idx*TAG_W +: TAG_W];
+wire [31:0]      r_target = target[r_idx*32    +: 32];
+
+wire             hit   = valid[r_idx] && (r_tag == lookup_pc_i[31:IDX_W+2]);
 
 // RAS top + non-empty flag, tied off when the stack is disabled
 wire [31:0] ras_top;
@@ -82,11 +99,11 @@ wire        ras_ok;
 // pred_target_o is junk on a miss, only consumed when pred_taken_o=1. A return entry
 // prefers the RAS; an empty RAS falls back to the BTB target.
 assign pred_taken_o  = hit && state[r_idx];
-assign pred_target_o = (isret[r_idx] && ras_ok) ? ras_top : target[r_idx];
+assign pred_target_o = (isret[r_idx] && ras_ok) ? ras_top : r_target;
 
 wire [IDX_W-1:0] w_idx = update_pc_i[IDX_W+1:2];
 
-// valid bits: the only resettable state
+// valid bits
 always @(posedge clk_i or negedge rst_n_i) begin
     if (~rst_n_i)
         valid <= {ENTRIES{1'b0}};
@@ -94,22 +111,34 @@ always @(posedge clk_i or negedge rst_n_i) begin
         valid[w_idx] <= 1'b1;
 end
 
-// entry payload, written together with the valid bit (reset, see header)
-integer e;
+// entry payload, written together with the valid bit (reset, see header).
+// One always block per register, each resetting its whole vector at once.
 always @(posedge clk_i or negedge rst_n_i) begin
-    if (~rst_n_i) begin
-        for (e = 0; e < ENTRIES; e = e + 1) begin
-            tag   [e] <= {TAG_W{1'b0}};
-            state [e] <= 1'b0;
-            target[e] <= 32'b0;
-        end
+    if (~rst_n_i)
+        tag <= {(ENTRIES*TAG_W){1'b0}};
+    else if (update_en_i)
+        tag[w_idx*TAG_W +: TAG_W] <= update_pc_i[31:IDX_W+2];
+end
+
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
+        state <= {ENTRIES{1'b0}};
+    else if (update_en_i)
+        state[w_idx] <= update_taken_i;
+end
+
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
+        target <= {(ENTRIES*32){1'b0}};
+    else if (update_en_i)
+        target[w_idx*32 +: 32] <= update_target_i;
+end
+
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         isret <= {ENTRIES{1'b0}};
-    end else if (update_en_i) begin
-        tag   [w_idx] <= update_pc_i[31:IDX_W+2];
-        state [w_idx] <= update_taken_i;
-        target[w_idx] <= update_target_i;
-        isret [w_idx] <= update_is_ret_i;
-    end
+    else if (update_en_i)
+        isret[w_idx] <= update_is_ret_i;
 end
 
 // --- return address stack (D24) ---
