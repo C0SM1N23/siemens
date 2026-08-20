@@ -21,6 +21,19 @@ supports.
   peripherals on \sig{irq\_src}. \\
 \file{debug/hdl/tb\_pic.v} & Feature bench for the PIC alone, so each mechanism is a named check
   rather than something buried in a system run. \\
+\file{debug/hdl/tb\_pic\_reset.v} & Reset bench for the PIC: every register's reset value, X-freedom
+  including state with no register view, and an asynchronous reset taken from a fully configured,
+  nested state. \\
+\file{debug/hdl/tb\_pic\_ro.v} & Read-only and reserved-bit bench for the PIC: rejection and
+  non-modification for every read-only object, and zero for every reserved position. \\
+\file{debug/hdl/tb\_pic\_status.v} & \reg{SRCx\_STATUS} field by field, each in both directions,
+  plus a per-clock-edge watch of the bump-escalation walk. \\
+\file{debug/hdl/tb\_mtimer\_regs.v} & Machine-timer registers: reset values, exact counting rate,
+  byte lanes, unmapped offsets, and the arm/fire/clear sequence. \\
+\file{debug/hdl/tb\_csr\_ro.v} & CSR access classes kept distinct: read-only, WARL, tied off,
+  absent. \\
+\file{debug/hdl/tb\_traps.v} & One isolated directed test per trap cause, at CPU level, with
+  \reg{mcause}, \reg{mepc}, \reg{mtval} and the handler entry address checked individually. \\
 \file{debug/hdl/tb\_dual\_core.v} & Two cores sharing one memory behind a 2:1 arbiter. \\
 \file{debug/hdl/axi\_lite\_monitor.v} & Passive protocol checker, instantiated on all four AXI links. \\
 \file{debug/hdl/axi\_lite\_mem\_model.v} & Behavioural slave with configurable latency and seeded
@@ -29,6 +42,11 @@ supports.
   zero and released at 123\,ns, deliberately between clock edges. \\
 \file{debug/sva/} & Assertion and coverage layer, attached with \sig{bind} so neither the RTL nor
   the testbench is modified. \\
+\file{debug/hdl/tb\_axil\_master.vh} & Shared AXI4-Lite master driver tasks, so all five
+  register-level benches drive the slave the same way and a change to the protocol handling
+  happens once. \\
+\file{debug/sim/rtl.f} & The RTL source list, ordered bottom-up by dependency level and shared by
+  both flows; see Chapter~\ref{ch:buildorder}. \\
 \file{debug/sim/asm.py} & Two-pass RV32I assembler with range-checked immediates and a symbol
   table the bench includes, so checks do not break when a label moves. \\
 \bottomrule
@@ -62,6 +80,19 @@ silently ignored override looks exactly like a pass.
 \paragraph{Coverage is measured and gated.} Required bins must be hit or the run
 fails.
 
+\paragraph{Negative properties get a witness, and a paired positive.} ``No
+transaction was issued'' and ``the interrupt was never taken'' cannot be observed
+directly, so the benches count what did happen --- AXI handshakes, acknowledge
+pulses, handler entries --- and require the count to be zero. A count is
+falsifiable; an absence of output is not. And every such check is followed by the
+step that removes the suppressing condition and requires the thing to happen,
+which is what separates masking from a dead path.
+
+\paragraph{A test of a read-only register is only as good as its precondition.}
+Writing zero to a register that already reads zero and then observing zero proves
+nothing. Every read-only register is driven to a known non-zero value by real
+hardware activity before the write is attempted.
+
 \section{Regression results}
 
 The following are the results of the regression as run on the documented
@@ -69,23 +100,34 @@ baseline.
 
 \begin{table}[H]
 \centering
-\caption{ModelSim regression, six runs from one compile}
+\caption{ModelSim regression, twelve runs from one compile}
 \label{tab:regress}
-\begin{tabular}{@{}clL{0.40\linewidth}l@{}}
+\begin{tabular}{@{}clL{0.36\linewidth}rl@{}}
 \toprule
-\textbf{Run} & \textbf{Bench} & \textbf{Configuration} & \textbf{Result} \\
+\textbf{Run} & \textbf{Bench} & \textbf{Configuration or scope} & \textbf{Checks} & \textbf{Result} \\
 \midrule
-1 & \file{tb\_cpu\_axi}   & Default latencies; the CPI check is active only here & Passed \\
-2 & \file{tb\_cpu\_axi}   & High fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) & Passed \\
-3 & \file{tb\_cpu\_axi}   & Random \sig{READY} backpressure, seeds 101 / 202 & Passed \\
-4 & \file{tb\_cpu\_axi}   & Random \sig{READY} backpressure, seeds 777 / 888 & Passed \\
-5 & \file{tb\_dual\_core} & Two cores, shared memory, 2:1 arbiter & Passed \\
-6 & \file{tb\_pic}        & PIC feature bench, 139 checks & Passed \\
+1  & \file{tb\_cpu\_axi}    & Default latencies; the CPI check is active only here & 90 & Passed \\
+2  & \file{tb\_cpu\_axi}    & High fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) & 90 & Passed \\
+3  & \file{tb\_cpu\_axi}    & Random \sig{READY} backpressure, seeds 101 / 202 & 90 & Passed \\
+4  & \file{tb\_cpu\_axi}    & Random \sig{READY} backpressure, seeds 777 / 888 & 90 & Passed \\
+5  & \file{tb\_dual\_core}  & Two cores, shared memory, 2:1 arbiter & --- & Passed \\
+6  & \file{tb\_pic}         & PIC feature bench & 139 & Passed \\
+7  & \file{tb\_pic\_reset}  & PIC reset values, X-freedom, asynchronous reset & 350 & Passed \\
+8  & \file{tb\_pic\_ro}     & PIC read-only registers and reserved bits & 478 & Passed \\
+9  & \file{tb\_pic\_status} & PIC \reg{SRCx\_STATUS}, field by field & 424 & Passed \\
+10 & \file{tb\_mtimer\_regs}& Machine-timer registers, reset and access rules & 224 & Passed \\
+11 & \file{tb\_csr\_ro}     & CSR read-only / WARL / tied-off / absent & 282 & Passed \\
+12 & \file{tb\_traps}       & One directed test per trap cause & 111 & Passed \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All six runs report \texttt{Errors: 0, Warnings: 0} at compile and elaboration.
+Runs 1--6 are the system and feature regression. Runs 7--12 are block-level
+benches that isolate what a system run cannot: reset values, read-only
+enforcement, individual status fields, and one trap cause at a time. The
+procedures behind them are in Chapter~\ref{ch:verifplan}.
+
+All twelve runs report \texttt{Errors: 0, Warnings: 0} at compile and elaboration.
 The Verilator flow reports \texttt{ALL TESTS PASSED}, no assertion violations,
 and no warnings on its default warning set.
 
@@ -97,8 +139,15 @@ and no warnings on its default warning set.
 \toprule
 \textbf{Metric} & \textbf{Value} \\
 \midrule
+Total self-checks in the regression & 2\,278, all passing \\
 System bench checks    & 90, all passing \\
 PIC feature bench      & 139 checks, all passing \\
+PIC reset bench        & 350 checks, all passing \\
+PIC read-only bench    & 478 checks, all passing \\
+PIC status bench       & 424 checks, all passing \\
+Machine-timer bench    & 224 checks, all passing \\
+CSR access-rule bench  & 282 checks, all passing \\
+Trap-cause bench       & 111 checks, all passing \\
 Assertion violations   & 0 \\
 Functional coverage    & 88 of 92 bins (95\,\%), gate passed \\
 Synchronous trap count & Exactly 17 direct, 26 total \\
@@ -135,7 +184,16 @@ CPU--PIC contract. The feature bench covers the mechanisms individually.
 \toprule
 \textbf{Area} & \textbf{What is exercised} \\
 \midrule
-Reset defaults      & Every register read back against its documented reset value. \\
+Reset defaults      & All 59 mapped registers read back against their documented reset values,
+  twice: out of power-on reset and out of an asynchronous reset asserted off a clock edge from a
+  fully configured, nested state. Nothing in the block leaves reset holding X, including the
+  nesting-stack arrays, which are probed directly. \\
+Read-only enforcement & Every read-only register and every reserved bit position: the write must
+  be rejected with SLVERR \emph{and} the value must be unchanged, with the register first driven
+  non-zero by hardware so the second half is not vacuous. \\
+Status fields       & Each of the six \reg{SRCx\_STATUS} fields on its own and in both directions;
+  the bump-escalation walk watched on every clock edge, because a register read is too slow to
+  distinguish three correct steps from one jump. \\
 Priority bands      & Inter-band, intra-band and index tie-break resolution. \\
 Preemptive nesting  & A more urgent source preempting an active handler; depth tracking; \reg{NEST\_MAX} overflow raising \reg{OVF} without loss. \\
 Band reconfiguration & A source re-banded while active keeps its claimed priority. \\
@@ -188,10 +246,23 @@ Recording what the method caught is part of the evidence that it works.
 \toprule
 \textbf{Kind} & \textbf{Defect} & \textbf{Found by} \\
 \midrule
+RTL & Two AXI response-code flags (\sig{bresp\_err\_q}, \sig{rresp\_err\_q}) in the shared slave
+  were unreset. \sig{BRESP} and \sig{RRESP} are combinational functions of them and are driven
+  whether or not the corresponding \sig{VALID} is high, so both peripherals presented X on their
+  response codes from time zero until their first transaction. A monitor cannot distinguish that
+  from a real protocol violation. Fixed by resetting them, and by extending the reset policy to
+  every flop in the delivery (Chapter~\ref{ch:reset}). & Reset bench, X-freedom checks \\
+RTL & The interrupt controller's nesting-stack arrays were unreset, and are read by
+  \reg{NEST\_STATUS.TOP\_ID} and \reg{ACTIVE\_VEC.ID}. Fixed by the same policy change. &
+  Reset bench, direct probe of state with no register view \\
+RTL & The bit positions the register map describes as reserved in \reg{SRCx\_CONFIG} ([15:8],
+  [3]) and \reg{ESCALATION\_CFG} ([7:5], [3:2]) were stored and read back rather than hardwired
+  to zero, so software could acquire a dependency on a bit a later revision might define. Fixed
+  by masking on write. & Read-only bench, reserved-bit checks \\
 RTL & \sig{ARVALID} asserted during reset. The issue logic is combinational and requested
-  \sig{RESET\_PC} while \sig{rst\_n} was still low. AXI forbids this, and a slave holding
+  \sig{RESET\_PC} while \sig{rst\_n\_i} was still low. AXI forbids this, and a slave holding
   \sig{READY} high in reset would have accepted a phantom address. Fixed by gating with
-  \sig{rst\_n}. & Assertion layer, first run \\
+  \sig{rst\_n\_i}. & Assertion layer, first run \\
 RTL & Illegal load/store encodings issued their AXI transaction before trapping, so an illegal
   store could write memory. Fixed by gating the LSU request with the decoder's \sig{illegal}. &
   Scoreboard check \\

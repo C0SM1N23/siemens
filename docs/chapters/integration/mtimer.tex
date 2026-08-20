@@ -33,7 +33,7 @@ honoured per lane on all four registers.
 
 \section{Behaviour}
 
-The interrupt is a registered level: \sig{irq $\leftarrow$ (mtime\_q >=
+The interrupt is a registered level: \sig{irq\_o $\leftarrow$ (mtime\_q >=
 mtimecmp\_q)}. There is no interrupt-status register, and that is deliberate ---
 the comparison \emph{is} the status, and the handler clears the line by moving
 \reg{mtimecmp} forward. That keeps the timer consistent with the level-sensitive
@@ -79,7 +79,7 @@ convention is part of the block's contract.
   \end{pgfonlayer}
 \end{tikztimingtable}
 \caption{Arming sequence. The compare cannot pass while the upper half is all
-ones, so writing the low half first is safe. \sig{irq} follows the comparison one
+ones, so writing the low half first is safe. \sig{irq\_o} follows the comparison one
 cycle later, since it is registered.}
 \label{fig:tmrarm}
 \end{figure}

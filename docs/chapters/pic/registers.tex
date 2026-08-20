@@ -32,6 +32,17 @@ silently discarding the access.
 \end{tabular}
 \end{table}
 
+\paragraph{Reserved bits are hardwired to zero.} Every bit position marked
+reserved in the tables below reads 0 and drops a write into it: the value is
+masked before it reaches the register, not stored and read back. This is the
+WPRI behaviour the RISC-V privileged specification uses for the same situation,
+and it is what lets a later revision define one of those bits without breaking
+software that happened to write a 1 there. The rule covers the whole map:
+\reg{SRCx\_CONFIG} and \reg{ESCALATION\_CFG} mask on write, and every other
+register drives its reserved positions as constant 0 out of the read multiplexer.
+Verified for every register and every reserved position in
+Section~\ref{sec:vp-picro}.
+
 \paragraph{Reset state.} The block comes out of reset fully disarmed:
 \reg{INT\_ENABLE} = 0, so nothing can reach the CPU until software opts a source
 in. All sources are level-triggered, band 0, intra-band priority 0, deadlines
@@ -121,16 +132,17 @@ needs no key.
 \centering
 \caption{\reg{SRCx\_STATUS} fields}
 \label{tab:srcstat}
-\begin{tabular}{@{}llL{0.60\linewidth}@{}}
+\begin{tabular}{@{}lllL{0.48\linewidth}@{}}
 \toprule
-\textbf{Bits} & \textbf{Field} & \textbf{Meaning} \\
+\textbf{Bits} & \textbf{Field} & \textbf{Reset} & \textbf{Meaning} \\
 \midrule
-{[0]}       & \sig{PEND}      & The source has an enabled request. Does not imply it is the one being offered. \\
-{[1]}     & \sig{ACTIVE}    & In service, on the nesting stack. Cannot be offered again until its end-of-interrupt. \\
-{[2]}     & \sig{ESC}       & Missed its deadline and was escalated. Clears when the source returns to idle. \\
-{[3]}     & \sig{SPUR}      & The current claim was spurious. \\
-{[5:4]}   & \sig{EFF\_BAND} & The band actually in use now; differs from \sig{BAND} after an escalation. \\
-{[31:16]} & \sig{DDL\_TIMER}& Cycles elapsed on the deadline counter. Runs while pending and unserviced. \\
+{[0]}       & \sig{PEND}      & 0 & The source has an enabled request. Does not imply it is the one being offered. \\
+{[1]}     & \sig{ACTIVE}    & 0 & In service, on the nesting stack. Cannot be offered again until its end-of-interrupt. \\
+{[2]}     & \sig{ESC}       & 0 & Missed its deadline and was escalated. Clears when the source returns to idle. \\
+{[3]}     & \sig{SPUR}      & 0 & The current claim was spurious. Clears on the return; the sticky \reg{SPURIOUS\_LOG} bit does not. \\
+{[5:4]}   & \sig{EFF\_BAND} & 00 & The band actually in use now; differs from \sig{BAND} after an escalation. \\
+{[15:6]}  & ---             & 0 & Reserved, hardwired to zero. \\
+{[31:16]} & \sig{DDL\_TIMER}& 0 & Cycles elapsed on the deadline counter. Runs while pending and unserviced; cleared on claim and on return to idle. \\
 \bottomrule
 \end{tabular}
 \end{table}

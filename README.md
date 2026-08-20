@@ -108,9 +108,10 @@ Scheduling* brief ([pic/](pic/)): 16 hardware sources + 16 software channels
 spurious detection, deadline-aware escalation, and software-triggered
 interrupts. Full design in [pic.v](hdl/pic.v) and [ARCHITECTURE.md](ARCHITECTURE.md) §5.
 
-The CPU side: `cpu_irq` in (single level request), `cpu_irq_vec[3:0]` in (id of
-the offered source), `cpu_irq_ack` out (1-cycle claim pulse at handler entry),
-`cpu_irq_eoi` out (1-cycle pulse on an interrupt-returning MRET). A source maps
+The CPU side: `cpu_irq_i` (single level request), `cpu_irq_vec_i[3:0]` (id of
+the offered source), `cpu_irq_ack_o` (1-cycle claim pulse at handler entry),
+`cpu_irq_eoi_o` (1-cycle pulse on an interrupt-returning MRET). Every port in
+the design carries a direction suffix, `_i` or `_o`; internal wires do not. A source maps
 to mcause `16+vec`; the CPU builds a one-hot `mip[16+vec]` from the offer, and
 `mie[16+vec]` is the per-source CPU enable. An irq is taken only at an
 instruction boundary, only under `mstatus.MIE`, held through a multi-cycle AXI
@@ -188,16 +189,25 @@ debug/hdl/
   axi_lite_dec2.v      1-master/2-slave address decoder (TB interconnect for
                        the PIC window)
   ck_rst_tb.v          clock/reset generator (async reset, released at 123 ns)
+  tb_pic_reset.v       PIC reset values, X-freedom, asynchronous reset
+  tb_pic_ro.v          PIC read-only registers and reserved bits
+  tb_pic_status.v      PIC SRCx_STATUS, field by field
+  tb_mtimer_regs.v     machine-timer registers, reset and access rules
+  tb_csr_ro.v          CSR file: read-only, WARL, tied-off, absent
+  tb_traps.v           one directed test per trap cause, at CPU level
   tb_check.vh          shared self-check task (=== compare, PASS/FAIL per check)
+  tb_axil_master.vh    shared AXI4-Lite master driver tasks for the block benches
   axi_lite_macros.vh   bare AXI read/write helper macros shared by the benches
 debug/sim/
   program_axi.s        main test program   (py asm.py program_axi.s program_axi.hex)
   program_dual.s       dual-core handshake (py asm.py program_dual.s program_dual.hex)
   asm.py               tiny RV32I assembler (range-checked imms, %hi/%lo, .org)
-  rtl.f  tb_cpu.f      shared filelists — one module list for both flows
+  rtl.f  tb_cpu.f      shared filelists — one module list for both flows,
+                       ordered bottom-up by dependency level (see rtl.f header)
+  tb_block.f           filelist for the block-level benches
   compile.do           the single canonical vlog compile both .do scripts use
   soc_map.vh           TB address map (PIC / mtimer / dmem bases) in one place
-  sim.do               quick single run     regress.do  full 6-run regression
+  sim.do               quick single run     regress.do  full 12-run regression
   wave.do              AXI-grouped waveform set for the ModelSim GUI
   run_verilator.sh     SVA + functional coverage run (Verilator, free)
   run_verilator.ps1    same, one command from Windows (via WSL)
@@ -209,8 +219,9 @@ debug/sim/
 
 ```
 cd debug/sim
-vsim -c -do "do regress.do; quit -f"      # full regression (6 runs: 4 single-core
-                                          # configs + dual-core + tb_pic)
+vsim -c -do "do regress.do; quit -f"      # full regression (12 runs: 4 single-core
+                                          # configs + dual-core + tb_pic + the six
+                                          # block-level reset/read-only/trap benches)
 vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
 
 .\run_verilator.ps1                       # SVA + functional coverage —
@@ -227,7 +238,7 @@ depend on filelist order, and every width is explicit).
 
 The SVA layer found a real bug on its first run: the fetch unit drove
 `ARVALID` during reset (the issue logic is combinational, requested `RESET_PC`
-while `rst_n` was still low), which the AXI spec forbids. The procedural
+while `rst_n_i` was still low), which the AXI spec forbids. The procedural
 monitor missed it — it only arms after reset. One-line fix in
 [fetch_unit.v](hdl/fetch_unit.v); details in
 [debug/VERIFICATION.md](debug/VERIFICATION.md).
@@ -242,6 +253,12 @@ latency-1 memory, protocol monitors on all four AXI ports, seeded random
 backpressure, the dual-core handshake. The standalone `tb_pic.v` then drives the
 PIC's advanced features directly — priority bands, preemptive nesting, spurious
 detection, deadline escalation, keyed software triggers, AXI error responses.
+Six block-level benches then cover what a system run cannot isolate: every
+register's reset value and X-freedom (`tb_pic_reset`, `tb_mtimer_regs`,
+`tb_csr_ro`), read-only and reserved-bit enforcement on every read-only object
+in each map (`tb_pic_ro`, `tb_csr_ro`), every `SRCx_STATUS` field on its own
+(`tb_pic_status`), and one isolated directed test per trap cause with its
+mcause / mepc / mtval / handler address checked individually (`tb_traps`).
 Functional coverage: 88/92 bins hit; the four misses are the two intentional ch5
 negatives and the two backpressure bins the regression configs cover instead of
 the default run.

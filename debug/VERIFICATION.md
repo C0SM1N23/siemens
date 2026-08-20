@@ -52,26 +52,50 @@ py asm.py program_dual.s program_dual.hex
 
 ```
 vsim -c -do "do sim.do;     quit -f"     # quick single run (tb_cpu_axi)
-vsim -c -do "do regress.do; quit -f"     # full regression, 6 runs off one compile
+vsim -c -do "do regress.do; quit -f"     # full regression, 12 runs off one compile
 ```
 
-The six regression runs:
+The twelve regression runs. Runs 1-6 are the system and feature regression;
+runs 7-12 are block-level benches that isolate the properties a system run
+cannot — reset values, read-only enforcement, individual status fields and one
+trap cause at a time.
 
-| # | Bench | Configuration |
-|---|---|---|
-| 1 | `tb_cpu_axi` | default latencies (the CPI check is active only here) |
-| 2 | `tb_cpu_axi` | high fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) |
-| 3 | `tb_cpu_axi` | random READY backpressure, seeds 101/202 |
-| 4 | `tb_cpu_axi` | random READY backpressure, seeds 777/888 |
-| 5 | `tb_dual_core` | 2 cores + shared memory behind a 2:1 arbiter |
-| 6 | `tb_pic` | standalone PIC feature bench (139 checks) |
+| # | Bench | Configuration / scope | Checks |
+|---|---|---|---|
+| 1 | `tb_cpu_axi` | default latencies (the CPI check is active only here) | 90 |
+| 2 | `tb_cpu_axi` | high fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) | 90 |
+| 3 | `tb_cpu_axi` | random READY backpressure, seeds 101/202 | 90 |
+| 4 | `tb_cpu_axi` | random READY backpressure, seeds 777/888 | 90 |
+| 5 | `tb_dual_core` | 2 cores + shared memory behind a 2:1 arbiter | — |
+| 6 | `tb_pic` | standalone PIC feature bench | 139 |
+| 7 | `tb_pic_reset` | PIC reset values, X-freedom, asynchronous reset | 350 |
+| 8 | `tb_pic_ro` | PIC read-only registers and reserved bits | 478 |
+| 9 | `tb_pic_status` | PIC `SRCx_STATUS`, field by field | 424 |
+| 10 | `tb_mtimer_regs` | machine-timer registers, reset and access rules | 224 |
+| 11 | `tb_csr_ro` | CSR file: read-only / WARL / tied-off / absent | 282 |
+| 12 | `tb_traps` | one directed test per trap cause | 111 |
 
-`-c` is console mode. Each ends in `ALL TESTS PASSED` / `DUAL-CORE TEST PASSED` /
-`PIC TESTBENCH: ALL TESTS PASSED`, zero `FAIL:`, monitor error counters 0. The
-regression echoes every config's parameters read back from the elaborated design,
-so a silently-ignored override can't hide behind a green run.
+`-c` is console mode. Every run ends in its own banner (`ALL TESTS PASSED`,
+`DUAL-CORE TEST PASSED`, `PIC RESET TESTBENCH: ALL TESTS PASSED`, and so on),
+zero `FAIL:`, monitor error counters 0. The banners are distinct per bench so
+the log can be checked by counting them rather than by trusting an exit code —
+a bench that dies early prints no banner and also no `FAIL:` line. The
+regression echoes every parameterised config's values read back from the
+elaborated design, so a silently-ignored override can't hide behind a green run.
 
-To run just the PIC feature bench (compile once, then elaborate it alone):
+**Compile order.** `rtl.f` is written bottom-up by dependency level (leaf
+modules, then `alu_top`/`mtimer`/`pic`, then `cpu_top`), and `compile.do`
+compiles the filelists in the same order. Verilog-2005 resolves instances at
+elaboration rather than at compile time, so this is not strictly required by
+the simulator; it is kept because macro and `` `include `` visibility *is*
+order-dependent, because a missing module is then reported at the level that
+needed it instead of as one unresolved instance at the top, and because lint,
+synthesis and formal front-ends do require definition before use. The reasoning
+is written out in the header of `rtl.f`.
+
+To run just one bench (compile once, then elaborate it alone) — substitute any
+of `tb_pic`, `tb_pic_reset`, `tb_pic_ro`, `tb_pic_status`, `tb_mtimer_regs`,
+`tb_csr_ro`, `tb_traps`, `tb_dual_core`:
 
 ```
 vsim -c -do "do compile.do; vsim -onfinish stop work.tb_pic; run -all; quit -f"
@@ -184,6 +208,12 @@ tags as the README index and the code.
 | D6 | Back-to-back fetch: 1 instr/cycle on a latency-1 memory | the throughput claim, measured not asserted | mcycle delta across 33 straight-line instrs = 33 (gated to the latency-1 config) |
 | REQ2,REQ12 | AXI4-Lite legality on both master ports | interoperability with DMA/DP-SRAM | protocol monitors, all runs, all configs |
 | D5 | 2 cores + shared memory via arbiter, mhartid split, flag handshake | "2-3 cores in a bigger SoC" | `tb_dual_core`: flags + both results + clean shared bus |
+| D28 (D-RST) | Reset: every flop in the PIC is reset; every mapped register reads its documented reset value; nothing leaves reset holding X; reset is asynchronous and dominant | a reset defect is a first-cycle defect, and a bench that spends its first hundred cycles configuring the block cannot see one | `tb_pic_reset`: all 59 mapped registers read back twice (out of power-on reset and out of a reset asserted off a clock edge from a fully configured, nested state); BVALID/RVALID low and BRESP/RRESP/RDATA X-free during reset; the nesting-stack arrays probed directly; the block proven disarmed (a held source line produces nothing until `INT_ENABLE` is written) — 350 checks |
+| D22, D-RSV | Read-only enforcement across the whole PIC map: the write is rejected **and** the value is unchanged; reserved bits are hardwired to zero; W1C ignores a written 0; `NEST_MAX` is WARL | "read-only" is two promises, and the second one is vacuous unless the register holds a non-trivial value at the time of the attempt | `tb_pic_ro`: all 16 `SRCx_STATUS` (driven non-zero by real hardware activity first), `NEST_STATUS`, `ACTIVE_VEC`, the 8 unmapped words in both directions, reserved bits register by register, the write-only `KEY` field, narrow byte-lane writes to a read-only register, and a byte-lane write to a *writable* register as the control — 478 checks |
+| D-BAND/NEST/SPUR/DDL | Every `SRCx_STATUS` field on its own, in both directions: `PEND`, `ACTIVE`, `ESC`, `SPUR`, `EFF_BAND`, `DDL_TIMER` | a status bit stuck at 1 is as useless as one stuck at 0, and only a two-sided check finds the first | `tb_pic_status`: each field raised and cleared under its own condition; the deadline counter proven to run only while pending-and-unserviced; bump escalation watched on **every clock edge** so a 3→0 jump cannot pass as three correct steps; a full idle→pending→in-service→returned life cycle read at every transition — 424 checks |
+| D26, D27 | Machine-timer registers as a block: reset values (including `mtimecmp` = all-ones, i.e. born disarmed), free-running rate, round-trips, byte lanes, unmapped offsets, arm/fire/clear | the mtimer's only defence against a stray pointer is the slave's address decode, and its reset values are the unusual ones | `tb_mtimer_regs`: mtime proven to advance *exactly* one count per clock (two deltas over gaps differing by a known number of cycles, which cancels the fixed AXI overhead); all 60 unmapped words SLVERR in both directions with the 4 mapped ones still OKAY as the control; the documented LO-then-HI arming order proven not to false-fire — 224 checks |
+| REQ9, D15, Priv | CSR access classes kept distinct: read-only (write traps, value unchanged) vs WARL (write accepted and ignored, must **not** trap) vs tied-off (reads 0, swallows writes) vs absent (read and write both trap) | mixing these up is the classic CSR bug: a WARL field that traps breaks conforming software, a read-only register that silently accepts breaks the software that trusted it | `tb_csr_ro`: all five read-only CSRs attacked with CSRRW/CSRRS/CSRRC; read-only *fields* inside writable CSRs (mstatus WPRI, `mie[15:0]`, `mepc[1:0]`) with `mtvec`/`mscratch` as the fully-writable control; `misa` proven WARL rather than read-only; all 77 tied-off hpm addresses; the boundaries one address either side of each tied-off range; reset of every implemented CSR — 282 checks |
+| D3, D16, D17, D18 | One isolated directed test per trap cause, with `mcause`, `mepc`, `mtval` and the handler entry address each checked individually | the system bench proves every cause is *reachable* and counts them exactly; it cannot show that cause 6 records the right `mtval`, because one failing cause is one line in a hundred | `tb_traps`: causes 0, 1, 2, 3, 4 (LW and LH forms), 5, 6 (SW and SH forms), 7, 11, and machine-external 16/19/31; cause priority when an address is both misaligned *and* unmapped (4 must win, with zero bus transactions); negatives for a vector masked in `mie` and for `mstatus.MIE`=0, each followed by the positive that proves the negative was masking and not a dead path; vectored `mtvec` sending an interrupt to BASE+4·cause while an exception still enters at BASE — 111 checks |
 
 ## SVA + functional coverage (the Verilator flow)
 
@@ -252,10 +282,10 @@ it end to end.
 
 - **RTL (found by the SVA layer on its first run)**: the fetch unit drove
   `ARVALID` high *during reset* — `issue_now` is combinational free-slot
-  logic and asks for `RESET_PC` while `rst_n` is still low. AXI forbids it
+  logic and asks for `RESET_PC` while `rst_n_i` is still low. AXI forbids it
   (IHI0022E A3.1.2: VALID low in reset), and a slave whose READY is high in
   reset would accept a phantom address. Invisible to the procedural monitor,
-  which arms only after reset. Fixed by gating `ibus_arvalid` with `rst_n`.
+  which arms only after reset. Fixed by gating `ibus_arvalid_o` with `rst_n_i`.
 - **RTL**: illegal load/store encodings issued their AXI transaction before
   trapping — an illegal store could write memory. Caught by the
   illegal-store scoreboard check; fixed by gating `lsu_req` with the
@@ -313,7 +343,7 @@ it end to end.
   This is legal: AXI only requires the payload to be stable and meaningful
   while the matching VALID is high, and VALID is low the whole time, which is
   why the monitors and the SVA X-hygiene checks pass. It is still visual noise
-  in the waveform, so `s_axi_rdata` has been given a reset value of 0 and the
+  in the waveform, so `s_axi_rdata_o` has been given a reset value of 0 and the
   remaining latches are a candidate for the same treatment — the trade-off is
   reset-tree size versus a clean-looking wave, and it is a documented design
   decision (D1), not an oversight.

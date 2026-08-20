@@ -88,7 +88,7 @@ The word is delivered with \sig{fetch\_fault} set and traps as an instruction
 access fault only if it reaches S2. A faulting fetch on a mispredicted path is
 therefore flushed silently, which is the intended behaviour.
 
-\sig{ARVALID} is explicitly gated with \sig{rst\_n}:
+\sig{ARVALID} is explicitly gated with \sig{rst\_n\_i}:
 
 \begin{center}
 \ttfamily\small

@@ -191,6 +191,56 @@ masters small. The per-channel handshake tracking described in
 Chapter~\ref{ch:lsu} was written so that lifting the one-outstanding restriction,
 or moving to AXI4-Full, extends the existing structure rather than replacing it.
 
+\section{Port naming convention}
+\label{sec:portnaming}
+
+Every port of every module in this delivery carries a direction suffix:
+\texttt{\_i} on an input, \texttt{\_o} on an output. The rule has no exceptions,
+including the clock and reset (\sig{clk\_i}, \sig{rst\_n\_i}) and the AXI4-Lite
+channels (\sig{s\_axi\_awaddr\_i}, \sig{s\_axi\_bresp\_o}).
+
+The point is that direction becomes readable at the point of use rather than
+only at the declaration. In a port map several hundred lines away from the
+module header, \sig{s\_axi\_awready\_o} states which side drives the wire without
+opening another file, and a connection that has the direction backwards is
+visible as a mismatched pair rather than as an elaboration error.
+
+\begin{table}[H]
+\centering
+\caption{The convention, and what it looks like on each kind of port}
+\label{tab:portnaming}
+\begin{tabular}{@{}lL{0.30\linewidth}L{0.34\linewidth}@{}}
+\toprule
+\textbf{Kind of port} & \textbf{Example} & \textbf{Note} \\
+\midrule
+Clock and reset & \sig{clk\_i}, \sig{rst\_n\_i} & The reset stays active low; the
+  suffix says only that the module receives it. \\
+Scalar or bus signal & \sig{cpu\_irq\_i}, \sig{cpu\_irq\_ack\_o} & The same
+  logical signal is \sig{cpu\_irq\_o} on the PIC and \sig{cpu\_irq\_i} on the
+  CPU, which is exactly the information the suffix is there to carry. \\
+AXI4-Lite master port & \sig{dbus\_axi\_awaddr\_o}, \sig{dbus\_axi\_awready\_i} &
+  Address, data and \sig{VALID} out; \sig{READY} and the response in. \\
+AXI4-Lite slave port & \sig{s\_axi\_awaddr\_i}, \sig{s\_axi\_awready\_o} & The
+  mirror of the master port. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Internal signals are \emph{not} suffixed. A wire inside a module has no
+direction, so a suffix on one would be noise, and the absence of a suffix is
+itself a useful signal to the reader: an identifier without one is local.
+
+\begin{deviation}
+\textbf{Consequence for AXI4-Lite tooling.} The AXI channel names in this
+delivery are the protocol names plus the direction suffix, so they no longer
+match the exact spelling ARM IHI0022E uses. Vendor flows that infer a bus
+interface from port names alone (IP-XACT generation, Vivado's automatic AXI
+inference) will not recognise them without a name mapping. The trade was made
+deliberately, in favour of uniform readability across the whole delivery; the
+channel structure, widths and behaviour are unchanged, so a mapping is a
+rename table and nothing more.
+\end{deviation}
+
 \section{Interrupt path}
 
 The interrupt path is the only place where all three delivered blocks meet, and
@@ -208,15 +258,15 @@ the handler produces a one-cycle \sig{cpu\_irq\_ack} pulse --- the PIC's
 \centering
 \caption{CPU\,$\leftrightarrow$\,PIC interface (\file{hdl/cpu\_top.v}, \file{hdl/pic.v})}
 \label{tab:cpupic}
-\begin{tabular}{@{}llL{0.52\linewidth}@{}}
+\begin{tabular}{@{}L{0.32\linewidth}lL{0.38\linewidth}@{}}
 \toprule
 \textbf{Signal} & \textbf{Direction} & \textbf{Function} \\
 \midrule
-\sig{cpu\_irq}      & PIC $\to$ CPU & Level request. High while the PIC is offering a source. \\
-\sig{cpu\_irq\_vec[3:0]} & PIC $\to$ CPU & Identifier of the offered source; becomes trap cause $16+v$. \\
-\sig{cpu\_irq\_ack} & CPU $\to$ PIC & One-cycle claim pulse, asserted when the CPU commits to the handler. \\
-\sig{cpu\_irq\_eoi} & CPU $\to$ PIC & One-cycle pulse on an interrupt-returning \sig{MRET}; pops one nesting level. \\
-\sig{cpu\_in\_trap} & CPU $\to$ observer & High from trap entry until \sig{MRET}. Not used by the PIC; kept for observability and assertions. \\
+\sig{cpu\_irq\_o} $\to$ \sig{cpu\_irq\_i} & PIC $\to$ CPU & Level request. High while the PIC is offering a source. \\
+\sig{cpu\_irq\_vec\_o[3:0]} $\to$ \sig{cpu\_irq\_vec\_i} & PIC $\to$ CPU & Identifier of the offered source; becomes trap cause $16+v$. \\
+\sig{cpu\_irq\_ack\_o} $\to$ \sig{cpu\_irq\_ack\_i} & CPU $\to$ PIC & One-cycle claim pulse, asserted when the CPU commits to the handler. \\
+\sig{cpu\_irq\_eoi\_o} $\to$ \sig{cpu\_irq\_eoi\_i} & CPU $\to$ PIC & One-cycle pulse on an interrupt-returning \sig{MRET}; pops one nesting level. \\
+\sig{cpu\_in\_trap\_o} & CPU $\to$ observer & High from trap entry until \sig{MRET}. Not used by the PIC; kept for observability and assertions. \\
 \bottomrule
 \end{tabular}
 \end{table}

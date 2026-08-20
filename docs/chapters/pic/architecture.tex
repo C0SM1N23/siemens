@@ -21,12 +21,12 @@ those areas.
 \toprule
 \textbf{Signal} & \textbf{Width} & \textbf{Function} \\
 \midrule
-\sig{irq\_src}      & 16 & Hardware interrupt lines, level- or edge-triggered per source. \\
-\sig{cpu\_irq}      & 1  & Registered level request to the CPU. \\
-\sig{cpu\_irq\_vec} & 4  & Identifier of the source being offered. \\
-\sig{cpu\_irq\_ack} & 1  & Claim pulse from the CPU. \\
-\sig{cpu\_irq\_eoi} & 1  & End-of-interrupt pulse from the CPU. \\
-\sig{s\_axi\_*}     & -- & AXI4-Lite slave, all five channels. \\
+\sig{irq\_src\_i}      & 16 & Hardware interrupt lines, level- or edge-triggered per source. \\
+\sig{cpu\_irq\_o}      & 1  & Registered level request to the CPU. \\
+\sig{cpu\_irq\_vec\_o} & 4  & Identifier of the source being offered. \\
+\sig{cpu\_irq\_ack\_i} & 1  & Claim pulse from the CPU. \\
+\sig{cpu\_irq\_eoi\_i} & 1  & End-of-interrupt pulse from the CPU. \\
+\sig{s\_axi\_*\_i} / \sig{\_o} & -- & AXI4-Lite slave, all five channels. \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -154,6 +154,108 @@ previous cycle. Claims are attributed to \emph{that} copy, because
 \sig{cpu\_irq\_ack} arrives one cycle after the CPU sampled the vector it acted
 on. This keeps the PIC's notion of the claimed source aligned with the CPU's
 latched \reg{mcause} even if a more urgent source appeared in the meantime.
+
+
+\subsection{How a request is chosen, end to end}
+\label{sec:reqchosen}
+
+The three subsections above describe the pieces. This one puts them in order, as
+the hardware evaluates them, every clock cycle, for all 16 slots at once. Nothing
+here is sequential: steps 1 to 4 are one combinational cone, and only step 5 is a
+register.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4.2mm]
+  \node[blkf,text width=108mm,align=left] (s1)
+    {\textbf{1. Build the request, per slot $s$} \hfill \footnotesize combinational\\[2pt]
+     \ttfamily\footnotesize hw\_req = TRIG[s] ? edge\_pend[s] : irq\_src[s];\\
+     \ttfamily\footnotesize req[s]\ \ = (hw\_req | sw\_pend[s]) \& INT\_ENABLE[s];\\[2pt]
+     \footnotesize Hardware and software requests merge here, so past this point
+     they are indistinguishable. \reg{INT\_ENABLE} is the first of the two masks.};
+  \node[blkf,below=of s1,text width=108mm,align=left] (s2)
+    {\textbf{2. Build the priority key, per slot} \hfill \footnotesize combinational\\[2pt]
+     \ttfamily\footnotesize key[s] = \{ band\_urg(eff\_band[s], BAND\_CONFIG), INTRA[s], 15-s \};\\[2pt]
+     \footnotesize \sig{eff\_band} is the \emph{escalated} band, not the configured
+     one, which is how a missed deadline changes the outcome without changing
+     configuration. The $15-s$ field makes the ordering total.};
+  \node[blkf,below=of s2,text width=108mm,align=left] (s3)
+    {\textbf{3. Filter to the eligible slots} \hfill \footnotesize combinational\\[2pt]
+     \ttfamily\footnotesize eligible[s] = req[s] \&\& !active[s] \&\&\\
+     \ttfamily\footnotesize \ \ \ \ \ \ \ \ \ \ \ \ \ \ (!has\_active || key[s] > top\_key);\\[2pt]
+     \footnotesize \sig{!active[s]} is in-service suppression. The strict
+     comparison against the top of the nesting stack is both the preemption rule
+     and the re-entrancy guarantee: a source is never strictly greater than
+     itself.};
+  \node[blkf,below=of s3,text width=108mm,align=left] (s4)
+    {\textbf{4. Take the maximum key among the eligible} \hfill \footnotesize combinational\\[2pt]
+     \footnotesize A linear scan over the 16 slots yields
+     \sig{res\_id}, \sig{res\_key} and \sig{res\_val}. The winner is unique
+     because the key ordering is total.};
+  \node[blkf,below=of s4,text width=108mm,align=left] (s5)
+    {\textbf{5. Apply the depth limit} \hfill \footnotesize combinational\\[2pt]
+     \ttfamily\footnotesize offer\_val\ \ = res\_val \&\& (depth <\ NEST\_MAX);\\
+     \ttfamily\footnotesize depth\_block = res\_val \&\& (depth >= NEST\_MAX);\\[2pt]
+     \footnotesize The limit is enforced by \emph{withholding the offer}, so the
+     CPU is never shown an interrupt it could not legally claim. A blocked
+     preemption is visible, not silent: it sets \reg{INT\_STATUS.OVF} and
+     \reg{NEST\_STATUS.OVF}, and the source stays pending.};
+  \node[blk,below=of s5,text width=108mm,align=left] (s6)
+    {\textbf{6. Register the offer} \hfill \footnotesize one clock edge\\[2pt]
+     \ttfamily\footnotesize cpu\_irq <= offer\_val;\\
+     \ttfamily\footnotesize if (offer\_val) cpu\_irq\_vec <= res\_id;\\[2pt]
+     \footnotesize Both from the same edge, so the pair the CPU sees is always
+     self-consistent, and the PIC never sits on the combinational path of the
+     source lines.};
+  \node[blk,below=of s6,text width=108mm,align=left] (s7)
+    {\textbf{7. The CPU applies its own mask} \hfill \footnotesize in \file{cpu\_top.v}\\[2pt]
+     \ttfamily\footnotesize irq\_take = valid \&\& !lsu\_active \&\& mstatus.MIE \&\&\\
+     \ttfamily\footnotesize \ \ \ \ \ \ \ \ \ \ \ cpu\_irq \&\& mie[16 + cpu\_irq\_vec];\\[2pt]
+     \footnotesize The second of the two masks, and the instruction-boundary
+     condition. \reg{INT\_ENABLE} and \reg{mie} are deliberately independent:
+     ``this source may reach the CPU'' and ``current software cares'' are
+     different questions.};
+  \foreach \x/\y in {s1/s2,s2/s3,s3/s4,s4/s5,s5/s6,s6/s7} \draw[flow] (\x) -- (\y);
+\end{tikzpicture}
+\caption{How a request is chosen. Steps 1--5 are one combinational cone
+evaluated every cycle for all 16 slots; step 6 is the only register on the
+path; step 7 happens in the CPU, not the controller.}
+\label{fig:reqflow}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Where each step can stop a request, and what makes it visible}
+\label{tab:reqstops}
+\begin{tabular}{@{}cL{0.34\linewidth}L{0.36\linewidth}@{}}
+\toprule
+\textbf{Step} & \textbf{Reason a request stops here} & \textbf{How software sees it} \\
+\midrule
+1 & the source is not enabled in \reg{INT\_ENABLE} &
+    \reg{SRCx\_STATUS.PEND} stays 0 \\
+3 & the source is already in service &
+    \reg{SRCx\_STATUS.ACTIVE} = 1 \\
+3 & its key is not strictly above the top of the nesting stack &
+    \reg{SRCx\_STATUS.PEND} = 1 with \reg{NEST\_STATUS.DEPTH} $>$ 0 \\
+4 & another source has a higher key &
+    both read \reg{PEND} = 1; \reg{ACTIVE\_VEC} names the winner \\
+5 & the nesting depth limit is reached &
+    \reg{INT\_STATUS.OVF} and \reg{NEST\_STATUS.OVF} \\
+7 & masked in \reg{mie}, or \reg{mstatus.MIE} = 0, or an access is in flight &
+    \reg{mip}[16+vec] = 1 while no trap is taken \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{deviation}
+\textbf{Integration rule, not a defect.} A source enabled in \reg{INT\_ENABLE}
+but masked in \reg{mie} stops at step 7, \emph{after} winning step 4. It
+therefore remains the controller's standing offer and starves every less urgent
+source. The two masks are independent by design, so the discipline is: a source
+that software does not want should be disabled in \reg{INT\_ENABLE}, not merely
+masked in \reg{mie}. The test program respects this and the effect is verified
+in the channel sweep.
+\end{deviation}
 
 \section{Per-source lifecycle}
 

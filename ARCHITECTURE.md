@@ -33,16 +33,22 @@ code comments.
 
 Interfaces (REQ2, REQ3):
 
+Every port in the design carries a direction suffix — `_i` on an input, `_o` on
+an output — with no exceptions, clock, reset and the AXI channels included. A
+port map then states its own direction without opening the module header, and a
+backwards connection reads as a mismatched pair. Internal wires are *not*
+suffixed: a wire has no direction, and the absence of a suffix marks it local.
+
 | Signal | Dir | Description |
 |---|---|---|
-| `ibus_axi_*` | master | instruction fetch, AR/R channels only |
-| `dbus_axi_*` | master | load/store, all 5 channels, WSTRB per byte lane |
-| `clk`, `rst_n` | in | one clock domain, async active-low reset |
-| `cpu_irq` | in | interrupt request from the PIC (single level line) |
-| `cpu_irq_vec[3:0]` | in | id (0..15) of the highest-priority offered source |
-| `cpu_irq_ack` | out | 1-cycle claim pulse at handler entry |
-| `cpu_irq_eoi` | out | 1-cycle pulse on an interrupt-returning MRET (PIC pops its nesting stack) |
-| `cpu_in_trap` | out | high from trap entry until MRET (observability / SVA) |
+| `ibus_axi_*_i/_o` | master | instruction fetch, AR/R channels only |
+| `dbus_axi_*_i/_o` | master | load/store, all 5 channels, WSTRB per byte lane |
+| `clk_i`, `rst_n_i` | in | one clock domain, async active-low reset |
+| `cpu_irq_i` | in | interrupt request from the PIC (single level line) |
+| `cpu_irq_vec_i[3:0]` | in | id (0..15) of the highest-priority offered source |
+| `cpu_irq_ack_o` | out | 1-cycle claim pulse at handler entry |
+| `cpu_irq_eoi_o` | out | 1-cycle pulse on an interrupt-returning MRET (PIC pops its nesting stack) |
+| `cpu_in_trap_o` | out | high from trap entry until MRET (observability / SVA) |
 
 Parameters: `RESET_PC` (boot address), `HART_ID` (drives `mhartid`, D5), and
 `BP_ENTRIES` / `RAS_DEPTH`, forwarded to the branch predictor (D9/D24) so a
@@ -133,7 +139,7 @@ Implementation choices:
 - **Fetch bus errors** (D8): SLVERR/DECERR does not trap in S1. The word
   is tagged `fetch_fault` and traps as instruction access fault (cause 1)
   only if it reaches S2 — a wrong-path faulting fetch just gets flushed.
-- **ARVALID is gated with `rst_n`**: the issue logic is combinational and
+- **ARVALID is gated with `rst_n_i`**: the issue logic is combinational and
   would otherwise request `RESET_PC` while reset is still asserted, which
   AXI forbids (found by the SVA layer, see debug/VERIFICATION.md).
 
@@ -403,7 +409,7 @@ SLVERR, byte strobes are honoured on writes.
 
 | Offset | Register | Access | Reset | Fields |
 |---|---|---|---|---|
-| 0x00–0x3C | `SRCx_CONFIG` (x=0..15) | R/W | `0x0000_0000` | `TRIG`[0], `BAND`[2:1], `INTRA`[7:4], `DEADLINE`[31:16] |
+| 0x00–0x3C | `SRCx_CONFIG` (x=0..15) | R/W | `0x0000_0000` | `TRIG`[0], `BAND`[2:1], `INTRA`[7:4], `DEADLINE`[31:16]; [3] and [15:8] reserved |
 | 0x40–0x7C | `SRCx_SW_TRIG` | R/W | `0x0000_0000` | software request bit0 (set needs key `0xA5A5` in [31:16]) |
 | 0x80–0xBC | `SRCx_STATUS` | RO | `0x0000_0000` | `PEND`[0], `ACTIVE`[1], `ESC`[2], `SPUR`[3], `EFF_BAND`[5:4], `DDL_TIMER`[31:16] |
 | 0xC0 | `BAND_CONFIG` | R/W | `0x0000_001B` | 2-bit urgency per band {b3,b2,b1,b0} — band0=3 (most urgent) … band3=0 |
@@ -411,9 +417,15 @@ SLVERR, byte strobes are honoured on writes.
 | 0xC8 | `NEST_MAX` | R/W | `0x0000_0008` | max nesting depth, writes clamped to [1,16] |
 | 0xCC | `ACTIVE_VEC` | RO | `0x0000_0000` | `ID`[3:0], `VALID`[8] |
 | 0xD0 | `SPURIOUS_LOG` | R/W1C | `0x0000_0000` | per-source sticky spurious flags |
-| 0xD4 | `ESCALATION_CFG` | R/W | `0x0000_0000` | `TARGET`[1:0], `MODE`[4] (0 jump / 1 bump), `MULTI`[8] |
+| 0xD4 | `ESCALATION_CFG` | R/W | `0x0000_0000` | `TARGET`[1:0], `MODE`[4] (0 jump / 1 bump), `MULTI`[8]; [3:2] and [7:5] reserved |
 | 0xD8 | `INT_ENABLE` | R/W | `0x0000_0000` | per-source master enable mask |
 | 0xDC | `INT_STATUS` | R/W1C | `0x0000_0000` | global sticky {`SPUR`[0], `ESC`[1], `OVF`[2]} |
+
+Reserved bit positions are hardwired to zero (D-RSV): they read 0 and a write
+into them is dropped, so a later revision can define one of them without
+breaking software that happened to write a 1 there. Every flop in the block,
+including the nesting-stack arrays, is reset by `rst_n_i`, so no register can
+return X on a first access (D-RST).
 
 Every register resets to 0 except the two that would be dangerous as zero:
 `BAND_CONFIG` needs a sane default ordering, and `NEST_MAX` = 0 would mask every

@@ -1,8 +1,8 @@
 \documentclass[11pt,openany]{report}
 
-\newcommand{\docrevision}{1.0}
-\newcommand{\docdate}{17 August 2026}
-\newcommand{\docbaseline}{\texttt{95d1e29} (branch \texttt{RISCV})}
+\newcommand{\docrevision}{2.0}
+\newcommand{\docdate}{20 August 2026}
+\newcommand{\docbaseline}{branch \texttt{RISCV}, on top of \texttt{a964eb2}}
 
 \input{preamble}
 
@@ -59,9 +59,21 @@ smoothed over.
 \toprule
 \textbf{Rev.} & \textbf{Date} & \textbf{Change} \\
 \midrule
-1.0 & \docdate & First issue. Covers the CPU, PIC and machine timer as delivered on
-baseline \docbaseline, including the requirement and design-decision traceability
-matrix and the verification evidence available at that baseline. \\
+1.0 & 17 August 2026 & First issue. Covers the CPU, PIC and machine timer as
+delivered on baseline \texttt{95d1e29}, including the requirement and
+design-decision traceability matrix and the verification evidence available at
+that baseline. \\
+\addlinespace
+2.0 & \docdate & Second issue. Adds Chapter~\ref{ch:buildorder} (build and
+compile order, with the dependency levelling of the source list),
+Chapter~\ref{ch:reset} (reset architecture, with the reset value of every
+register in the delivery) and Chapter~\ref{ch:verifplan} (the step-by-step
+verification procedures and their results). Records the two RTL changes made in
+this revision: every flop is now reset, and the reserved bits of
+\reg{SRCx\_CONFIG} and \reg{ESCALATION\_CFG} are now hardwired to zero as the
+register map always specified. The regression grew from six runs to twelve with
+the addition of six block-level benches covering reset values, read-only
+enforcement, individual status fields and one isolated test per trap cause. \\
 \bottomrule
 \end{tabular}
 
@@ -87,6 +99,21 @@ the two feature specifications and the project's own requirement tags
 comes from the RTL. Where a section states what the hardware does, the file it was
 read from is named in the margin or in the text. Verification results come from
 the two simulation flows and are quoted only where a run produced them.
+
+\paragraph{What changed in revision 2.0.} Two behavioural changes were made to
+the RTL, both of which close a gap between the delivered hardware and this
+document rather than adding a feature. First, every sequential element in the
+delivery is now reset; previously a small number of flops --- two AXI
+response-code flags, the interrupt controller's nesting-stack arrays, and
+several pipeline and command payloads --- were left unreset on the argument that
+a valid bit made them unobservable. The response-code flags were in fact
+observable, on the bus, as X. Chapter~\ref{ch:reset} states the new policy, its
+cost, and the reset value of every register. Second, the bit positions this
+document has always described as reserved in \reg{SRCx\_CONFIG} and
+\reg{ESCALATION\_CFG} were being stored and read back rather than hardwired to
+zero; they are now masked on write. Both changes were found by the verification
+work described in Chapter~\ref{ch:verifplan}, and both are covered by tests that
+have been shown to fail against the previous revision.
 
 \paragraph{Assumed background.} The reader is expected to know RV32I and normal
 RTL practice; the base instruction set is not re-explained here. AXI4-Lite
@@ -124,9 +151,12 @@ as far as is needed to follow what this implementation does with it.
 \input{chapters/integration/mtimer}
 
 \part{Engineering reference}\label{part:reference}
+\input{chapters/reference/build_order}
+\input{chapters/reference/reset}
 \input{chapters/reference/fsm_summary}
 \input{chapters/reference/traceability}
 \input{chapters/reference/verification}
+\input{chapters/reference/verif_plan}
 \input{chapters/reference/limitations}
 
 \appendix
