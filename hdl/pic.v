@@ -11,12 +11,12 @@
 // README.md / ARCHITECTURE.md.
 //
 // SOURCES (brief "Interrupt Sources")
-//   - 16 hardware lines irq_src[15:0], each level- or edge-triggered per
+//   - 16 hardware lines irq_src_i[15:0], each level- or edge-triggered per
 //     SRCx_CONFIG.TRIG.
 //   - 16 software channels, one per slot, set by a keyed SRCx_SW_TRIG write.
 //     A software request merges into the same slot, so once in the pipeline it
 //     is indistinguishable from a hardware request.
-//   - Slot request:  req = (level ? irq_src : edge_latch | sw) & INT_ENABLE.
+//   - Slot request:  req = (level ? irq_src_i : edge_latch | sw) & INT_ENABLE.
 //
 // PRIORITY BANDS (D-BAND) — "Custom Priority Grouping"
 //   - 4 bands. BAND_CONFIG gives each band a 2-bit urgency (higher = more
@@ -34,14 +34,14 @@
 //   - Hardware nesting stack (depth 0..NEST_MAX, NEST_MAX in [1,16]) holds the
 //     key+id of every in-service source. Only a source strictly more urgent
 //     than the top-of-stack key is offered, so a higher one preempts a lower
-//     one. cpu_irq_ack pushes (claim); cpu_irq_eoi pops (return).
+//     one. cpu_irq_ack_i pushes (claim); cpu_irq_eoi_i pops (return).
 //   - The depth limit is enforced by masking offers at depth==NEST_MAX, so the
 //     CPU never claims past the limit. A preemption blocked by the limit sets
 //     INT_STATUS.OVF / NEST_STATUS.OVF (visible, non-destructive).
 //
 // SPURIOUS (D-SPUR) — "Spurious Interrupt Detection and Handling"
 //   - Detected at claim: if the offered source's request has deasserted by the
-//     time cpu_irq_ack lands, the claim is spurious. A source still asserted at
+//     time cpu_irq_ack_i lands, the claim is spurious. A source still asserted at
 //     claim (cleared later, in-handler) is legitimate, not spurious.
 //   - Response: SRCx_STATUS.SPUR + sticky SPURIOUS_LOG[x] (R/W1C) +
 //     INT_STATUS.SPUR. The claim is still accounted on the stack so ack/eoi
@@ -65,52 +65,71 @@
 //     deadlines / escalation like any other source.
 //
 // CPU HANDSHAKE
-//   cpu_irq      registered level request (off the source timing path, D-LAT).
-//   cpu_irq_vec  id (0..15) of the source presented in cpu_irq.
-//   cpu_irq_ack  claim pulse: CPU entered the handler for cpu_irq_vec.
-//   cpu_irq_eoi  end-of-interrupt pulse: innermost handler is returning (the
+//   cpu_irq_o      registered level request (off the source timing path, D-LAT).
+//   cpu_irq_vec_o  id (0..15) of the source presented in cpu_irq_o.
+//   cpu_irq_ack_i  claim pulse: CPU entered the handler for cpu_irq_vec_o.
+//   cpu_irq_eoi_i  end-of-interrupt pulse: innermost handler is returning (the
 //                completion signal the brief's nesting section requires; the
 //                CPU raises it on an interrupt-returning MRET).
 //
 // AXI4-Lite (D-AXI): the shared axi_lite_slave owns the handshake; this module
 // is the register file. Unmapped words, and writes to read-only words, SLVERR.
 // Byte strobes are honoured on writes.
+//
+// RESET (D-RST)
+//   - Every flop in the block, including the nesting-stack arrays, is reset by
+//     the asynchronous active-low rst_n_i. Nothing in the PIC leaves reset holding
+//     X, so every readable register returns its documented reset value on the
+//     very first access and a status read can never propagate X into software.
+//   - The block comes out of reset fully disarmed: INT_ENABLE = 0, so no source
+//     can reach the CPU until software opts it in. All sources are level-
+//     triggered, band 0, intra-priority 0, deadline disabled.
+//   - Only two registers reset to a non-zero value, and in both cases zero would
+//     be the wrong behaviour rather than a neutral one:
+//         BAND_CONFIG = 0x1B  band0=3 (most urgent) .. band3=0, the natural
+//                             ordering; an all-zero BAND_CONFIG would make all
+//                             four bands equally urgent.
+//         NEST_MAX    = 8     a NEST_MAX of 0 would mask every offer forever,
+//                             so the register is also clamped to [1,16] on write.
+//   - Exactly one always block drives each register / memory in this file, so
+//     the reset value and the update rules of a given piece of state are always
+//     read in one place.
 
 `timescale 1ns/1ps
 
 module pic (
-    input             clk,
-    input             rst_n,
+    input             clk_i,
+    input             rst_n_i,
 
     // 16 hardware interrupt source lines, level- or edge-triggered per source
-    input      [15:0] irq_src,
+    input      [15:0] irq_src_i,
 
     // CPU side
-    output reg        cpu_irq,        // level-sensitive request to the CPU
-    output reg [3:0]  cpu_irq_vec,    // id of the highest-priority active source
-    input             cpu_irq_ack,    // claim pulse (enter handler)
-    input             cpu_irq_eoi,    // end-of-interrupt pulse (return)
+    output reg        cpu_irq_o,        // level-sensitive request to the CPU
+    output reg [3:0]  cpu_irq_vec_o,    // id of the highest-priority active source
+    input             cpu_irq_ack_i,    // claim pulse (enter handler)
+    input             cpu_irq_eoi_i,    // end-of-interrupt pulse (return)
 
     // AXI4-Lite slave: configuration and status
-    input      [31:0] s_axi_awaddr,
-    input      [2:0]  s_axi_awprot,
-    input             s_axi_awvalid,
-    output            s_axi_awready,
-    input      [31:0] s_axi_wdata,
-    input      [3:0]  s_axi_wstrb,
-    input             s_axi_wvalid,
-    output            s_axi_wready,
-    output     [1:0]  s_axi_bresp,
-    output            s_axi_bvalid,
-    input             s_axi_bready,
-    input      [31:0] s_axi_araddr,
-    input      [2:0]  s_axi_arprot,
-    input             s_axi_arvalid,
-    output            s_axi_arready,
-    output     [31:0] s_axi_rdata,
-    output     [1:0]  s_axi_rresp,
-    output            s_axi_rvalid,
-    input             s_axi_rready
+    input      [31:0] s_axi_awaddr_i,
+    input      [2:0]  s_axi_awprot_i,
+    input             s_axi_awvalid_i,
+    output            s_axi_awready_o,
+    input      [31:0] s_axi_wdata_i,
+    input      [3:0]  s_axi_wstrb_i,
+    input             s_axi_wvalid_i,
+    output            s_axi_wready_o,
+    output     [1:0]  s_axi_bresp_o,
+    output            s_axi_bvalid_o,
+    input             s_axi_bready_i,
+    input      [31:0] s_axi_araddr_i,
+    input      [2:0]  s_axi_arprot_i,
+    input             s_axi_arvalid_i,
+    output            s_axi_arready_o,
+    output     [31:0] s_axi_rdata_o,
+    output     [1:0]  s_axi_rresp_o,
+    output            s_axi_rvalid_o,
+    input             s_axi_rready_i
 );
 
 // Parameters and register map (word offset = byte addr[7:2])
@@ -131,6 +150,20 @@ localparam W_INT_ST    = 6'd55;   // INT_STATUS     0xDC  R/W1C
 localparam W_LAST      = 6'd55;   // last mapped word
 
 localparam SW_KEY = 16'hA5A5;     // software-trigger arming key (D-SW)
+
+// Reserved-bit masks (D-RSV). Reserved bits inside a writable register are
+// hardwired to zero: they read 0 and a write to them is dropped, rather than
+// being stored and read back. This is the WPRI behaviour the RISC-V privileged
+// spec uses for the same situation, and it is what lets a later revision define
+// one of these bits without breaking software that happened to write a 1 into
+// it. Every other register drives its reserved bits as constant 0 out of the
+// read mux already, so these two masks complete the rule for the whole block.
+//   SRCx_CONFIG:    [31:16] DEADLINE, [7:4] INTRA, [2:1] BAND, [0] TRIG
+//                   reserved: [15:8] and [3]
+//   ESCALATION_CFG: [8] MULTI, [4] MODE, [1:0] TARGET
+//                   reserved: [7:5] and [3:2]
+localparam [31:0] CFG_MASK = 32'hFFFF_00F7;
+localparam [8:0]  ESC_MASK = 9'b1_0001_0011;
 
 // State
 reg  [31:0] src_config [0:NSRC-1];  // {DEADLINE[31:16], INTRA[7:4], BAND[2:1], TRIG[0]}
@@ -188,13 +221,13 @@ function [1:0] band_urg;
 endfunction
 
 // Claim / end-of-interrupt (needs depth, nest_max, cpu handshake, req)
-// cpu_irq_ack is registered one cycle after the CPU sampled cpu_irq_vec, so the
+// cpu_irq_ack_i is registered one cycle after the CPU sampled cpu_irq_vec_o, so the
 // vector it acted on is the delayed copy; claiming that keeps the PIC's id in
 // step with the CPU's latched mcause even if a higher source arrived meanwhile.
 wire [3:0] claimed_id = cpu_irq_vec_d;
-wire       claim_push = cpu_irq_ack && (depth < nest_max);   // offers masked at limit
+wire       claim_push = cpu_irq_ack_i && (depth < nest_max);   // offers masked at limit
 wire       claim_spur = claim_push && !req[claimed_id];      // deasserted before ack
-wire       eoi_pop    = cpu_irq_eoi && has_active;
+wire       eoi_pop    = cpu_irq_eoi_i && has_active;
 
 // Per-source request, key, deadline / escalation
 genvar s;
@@ -205,7 +238,7 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     assign cfg_ddl[s]   = src_config[s][31:16];
 
     // request: raw level or a latched edge, OR the software channel, & enable
-    wire hw_req   = cfg_trig[s] ? edge_pend[s] : irq_src[s];
+    wire hw_req   = cfg_trig[s] ? edge_pend[s] : irq_src_i[s];
     assign req[s] = (hw_req | sw_pend[s]) & int_enable[s];
 
     // effective priority key (lowest index wins the final tie => 15-s)
@@ -221,17 +254,17 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     wire ddl_hit  = counting && (ddl_cnt[s] + 16'd1 >= cfg_ddl[s]);
     assign escalate_v[s] = ddl_hit && (!escalated[s] || esc_multi);
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             edge_pend[s] <= 1'b0;
         else if (claim_s)
             edge_pend[s] <= 1'b0;                 // consumed
-        else if (cfg_trig[s] && irq_src[s] && !irq_src_q[s])
+        else if (cfg_trig[s] && irq_src_i[s] && !irq_src_q[s])
             edge_pend[s] <= 1'b1;                 // rising edge
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             ddl_cnt[s] <= 16'd0;
         else if (!counting)
             ddl_cnt[s] <= 16'd0;                  // idle / no deadline
@@ -241,8 +274,8 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
             ddl_cnt[s] <= ddl_cnt[s] + 16'd1;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             escalated[s] <= 1'b0;
         else if (!waiting)
             escalated[s] <= 1'b0;
@@ -254,8 +287,8 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     // otherwise track config while still unescalated. The escalate branch is
     // ordered before the unescalated-track branch so it wins on the miss cycle
     // (escalated[s] only rises next cycle).
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             eff_band[s] <= 2'd0;
         else if (!waiting)
             eff_band[s] <= cfg_band[s];   // idle: reset to config
@@ -267,11 +300,11 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     end
 end endgenerate
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         irq_src_q <= 16'd0;
     else
-        irq_src_q <= irq_src;
+        irq_src_q <= irq_src_i;
 end
 
 // Priority resolver: most-urgent eligible source (combinational)
@@ -300,27 +333,27 @@ wire offer_val   = res_val && (depth < nest_max);
 wire depth_block = res_val && (depth >= nest_max);   // preemption blocked at limit
 
 // registered CPU request/vector (D-LAT: off the source timing path)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
-        cpu_irq     <= 1'b0;
-        cpu_irq_vec <= 4'd0;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        cpu_irq_o     <= 1'b0;
+        cpu_irq_vec_o <= 4'd0;
     end else begin
-        cpu_irq <= offer_val;
+        cpu_irq_o <= offer_val;
         if (offer_val)
-            cpu_irq_vec <= res_id;   // hold last presented id when idle
+            cpu_irq_vec_o <= res_id;   // hold last presented id when idle
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         cpu_irq_vec_d <= 4'd0;
     else
-        cpu_irq_vec_d <= cpu_irq_vec;
+        cpu_irq_vec_d <= cpu_irq_vec_o;
 end
 
 // Nesting stack, active mask, spurious flags (D-NEST / D-SPUR)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         depth <= 5'd0;
     else if (claim_push)
         depth <= depth + 5'd1;
@@ -328,15 +361,25 @@ always @(posedge clk or negedge rst_n) begin
         depth <= depth - 5'd1;
 end
 
-always @(posedge clk) begin
-    if (claim_push) begin
+// Nesting-stack payload. Entries below `depth` are the only ones ever read, so
+// the stack is functionally correct without a reset; it is reset anyway so that
+// the whole PIC leaves reset in one defined state and NEST_STATUS.TOP_ID /
+// ACTIVE_VEC.ID cannot read X under any fault condition (reset policy, D-RST).
+integer n;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        for (n = 0; n < MAXNEST; n = n + 1) begin
+            stack_id [n] <= 4'd0;
+            stack_key[n] <= 10'd0;
+        end
+    end else if (claim_push) begin
         stack_id [depth[3:0]] <= claimed_id;
         stack_key[depth[3:0]] <= key[claimed_id];
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         active <= 16'd0;
     else begin
         if (claim_push)
@@ -346,8 +389,8 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         spurious <= 16'd0;
     else begin
         if (claim_push && claim_spur)
@@ -372,17 +415,17 @@ wire wr_ok    = w_is_cfg | w_is_swt |
 wire rd_ok    = (reg_raddr <= W_LAST);
 
 axi_lite_slave pic_slv (
-    .clk(clk), .rst_n(rst_n),
-    .s_axi_awaddr(s_axi_awaddr), .s_axi_awvalid(s_axi_awvalid), .s_axi_awready(s_axi_awready),
-    .s_axi_wdata(s_axi_wdata), .s_axi_wstrb(s_axi_wstrb),
-    .s_axi_wvalid(s_axi_wvalid), .s_axi_wready(s_axi_wready),
-    .s_axi_bresp(s_axi_bresp), .s_axi_bvalid(s_axi_bvalid), .s_axi_bready(s_axi_bready),
-    .s_axi_araddr(s_axi_araddr), .s_axi_arvalid(s_axi_arvalid), .s_axi_arready(s_axi_arready),
-    .s_axi_rdata(s_axi_rdata), .s_axi_rresp(s_axi_rresp),
-    .s_axi_rvalid(s_axi_rvalid), .s_axi_rready(s_axi_rready),
-    .wr_en(reg_wr), .wr_addr(reg_waddr), .wr_data(reg_wdata), .wr_strb(reg_wstrb),
-    .wr_ok(wr_ok),
-    .rd_addr(reg_raddr), .rd_data(reg_rdata), .rd_ok(rd_ok)
+    .clk_i(clk_i), .rst_n_i(rst_n_i),
+    .s_axi_awaddr_i(s_axi_awaddr_i), .s_axi_awvalid_i(s_axi_awvalid_i), .s_axi_awready_o(s_axi_awready_o),
+    .s_axi_wdata_i(s_axi_wdata_i), .s_axi_wstrb_i(s_axi_wstrb_i),
+    .s_axi_wvalid_i(s_axi_wvalid_i), .s_axi_wready_o(s_axi_wready_o),
+    .s_axi_bresp_o(s_axi_bresp_o), .s_axi_bvalid_o(s_axi_bvalid_o), .s_axi_bready_i(s_axi_bready_i),
+    .s_axi_araddr_i(s_axi_araddr_i), .s_axi_arvalid_i(s_axi_arvalid_i), .s_axi_arready_o(s_axi_arready_o),
+    .s_axi_rdata_o(s_axi_rdata_o), .s_axi_rresp_o(s_axi_rresp_o),
+    .s_axi_rvalid_o(s_axi_rvalid_o), .s_axi_rready_i(s_axi_rready_i),
+    .wr_en_o(reg_wr), .wr_addr_o(reg_waddr), .wr_data_o(reg_wdata), .wr_strb_o(reg_wstrb),
+    .wr_ok_i(wr_ok),
+    .rd_addr_o(reg_raddr), .rd_data_i(reg_rdata), .rd_ok_i(rd_ok)
 );
 
 // byte-strobe merge
@@ -410,19 +453,19 @@ wire [31:0] inten_merge = wmerge({16'b0, int_enable}, reg_wdata, reg_wstrb);
 
 // SRCx_CONFIG
 integer c;
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
         for (c = 0; c < NSRC; c = c + 1) src_config[c] <= 32'd0;
     end else if (wr_cfg)
-        src_config[cfg_widx] <= wmerge(src_config[cfg_widx], reg_wdata, reg_wstrb);
+        src_config[cfg_widx] <= wmerge(src_config[cfg_widx], reg_wdata, reg_wstrb) & CFG_MASK;
 end
 
 // SRCx_SW_TRIG (D-SW): keyed set, plain clear, auto-clear on claim
 wire swt_key_ok = (reg_wdata[31:16] == SW_KEY);
 wire swt_set    = wr_swt && reg_wstrb[0] &&  reg_wdata[0] && swt_key_ok;
 wire swt_clr    = wr_swt && reg_wstrb[0] && !reg_wdata[0];
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         sw_pend <= 16'd0;
     else begin
         if (claim_push)
@@ -435,8 +478,8 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // BAND_CONFIG
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         band_cfg <= 8'h1B;         // band0=3 (most urgent) .. band3=0
     else if (reg_wr && reg_waddr == W_BAND)
         band_cfg <= band_merge[7:0];
@@ -444,8 +487,8 @@ end
 
 // NEST_MAX (clamp to [1, MAXNEST])
 wire [4:0] nest_max_wr = reg_wdata[4:0];
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         nest_max <= 5'd8;
     else if (reg_wr && reg_waddr == W_NEST_MAX && reg_wstrb[0]) begin
         if (nest_max_wr == 5'd0)
@@ -458,16 +501,16 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // ESCALATION_CFG
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         esc_cfg <= 9'd0;           // jump to band 0, single escalation
     else if (reg_wr && reg_waddr == W_ESC_CFG)
-        esc_cfg <= esc_merge[8:0];
+        esc_cfg <= esc_merge[8:0] & ESC_MASK;
 end
 
 // INT_ENABLE
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         int_enable <= 16'd0;
     else if (reg_wr && reg_waddr == W_INT_EN)
         int_enable <= inten_merge[15:0];
@@ -479,8 +522,8 @@ wire [15:0] spur_w1c = (reg_wr && reg_waddr == W_SPUR_LOG)
                        ? { (reg_wstrb[1] ? reg_wdata[15:8] : 8'b0),
                            (reg_wstrb[0] ? reg_wdata[7:0]  : 8'b0) } : 16'b0;
 wire [15:0] spur_set = (claim_push && claim_spur) ? (16'b1 << claimed_id) : 16'b0;
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         spurious_log <= 16'd0;
     else
         spurious_log <= (spurious_log & ~spur_w1c) | spur_set;
@@ -491,8 +534,8 @@ end
 wire      int_st_wr  = reg_wr && reg_waddr == W_INT_ST && reg_wstrb[0];
 wire [2:0] int_st_w1c = int_st_wr ? reg_wdata[2:0] : 3'b0;
 wire [2:0] int_st_set = { depth_block, (|escalate_v), (claim_push && claim_spur) };
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         int_status <= 3'd0;
     else
         int_status <= (int_status & ~int_st_w1c) | int_st_set;

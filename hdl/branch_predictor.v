@@ -21,10 +21,20 @@
 //      and underflow falls back to the BTB target, so only accuracy is ever at
 //      stake, never correctness.
 //
-// Only the valid bits reset. The tag/state/target arrays (~7k bits) don't: an
-// entry is never believed until its valid bit is set, and valid is set with a
-// full payload write, so keeping reset off the big arrays keeps the reset tree
-// small.
+// Reset: every flop in this module, including the BTB payload arrays and the
+// return-address stack, is reset by the asynchronous, active-low rst_n_i.
+// Functionally only the valid bits and the RAS counter need it -- an entry is
+// never believed until its valid bit is set, and valid is set together with a
+// full payload write. The payload arrays are reset all the same so that the
+// predictor holds no X after reset: pred_target_o is read combinationally on every
+// lookup, hit or miss, and an X there is visible in every waveform of the fetch
+// path and would propagate into the next-PC mux in a 2-state model.
+//
+// Cost note: this puts ENTRIES x (TAG_W + 1 + 32) + RAS_DEPTH x 32 flops (about
+// 7.2 kbit at the default ENTRIES = 128, RAS_DEPTH = 8) on the reset tree. This
+// is a deliberate trade of area/reset-tree size for a fully X-free design; if a
+// future synthesis target cannot afford it, the two payload always blocks below
+// are the only places to change, and the design stays functionally identical.
 
 `timescale 1ns/1ps
 
@@ -32,25 +42,25 @@ module branch_predictor #(
     parameter RAS_DEPTH = 8,    // return-address stack entries; 0 disables (D24)
     parameter ENTRIES   = 128   // BTB/BHT entries, power of 2 (index = PC[IDX_W+1:2])
 )(
-    input             clk,
-    input             rst_n,
+    input             clk_i,
+    input             rst_n_i,
 
     // read port (S1)
-    input      [31:0] lookup_pc,
-    output            pred_taken,
-    output     [31:0] pred_target,
+    input      [31:0] lookup_pc_i,
+    output            pred_taken_o,
+    output     [31:0] pred_target_o,
 
     // write port (S2 resolution)
-    input             update_en,
-    input      [31:0] update_pc,
-    input             update_taken,
-    input      [31:0] update_target,
+    input             update_en_i,
+    input      [31:0] update_pc_i,
+    input             update_taken_i,
+    input      [31:0] update_target_i,
 
     // RAS port (S2 resolution, D24)
-    input             update_is_ret,  // committing instr is a return -> tag entry
-    input             update_call,    // committed call: push update_link
-    input             update_ret,     // committed return: pop
-    input      [31:0] update_link     // pc+4 of the committing call
+    input             update_is_ret_i,  // committing instr is a return -> tag entry
+    input             update_call_i,    // committed call: push update_link_i
+    input             update_ret_i,     // committed return: pop
+    input      [31:0] update_link_i     // pc+4 of the committing call
 );
 
 localparam IDX_W = $clog2(ENTRIES);   // index bits: PC[IDX_W+1:2]
@@ -62,35 +72,43 @@ reg  [TAG_W-1:0]  tag    [0:ENTRIES-1];
 reg               state  [0:ENTRIES-1];
 reg  [31:0]       target [0:ENTRIES-1];
 
-wire [IDX_W-1:0] r_idx = lookup_pc[IDX_W+1:2];
-wire             hit   = valid[r_idx] && (tag[r_idx] == lookup_pc[31:IDX_W+2]);
+wire [IDX_W-1:0] r_idx = lookup_pc_i[IDX_W+1:2];
+wire             hit   = valid[r_idx] && (tag[r_idx] == lookup_pc_i[31:IDX_W+2]);
 
 // RAS top + non-empty flag, tied off when the stack is disabled
 wire [31:0] ras_top;
 wire        ras_ok;
 
-// pred_target is junk on a miss, only consumed when pred_taken=1. A return entry
+// pred_target_o is junk on a miss, only consumed when pred_taken_o=1. A return entry
 // prefers the RAS; an empty RAS falls back to the BTB target.
-assign pred_taken  = hit && state[r_idx];
-assign pred_target = (isret[r_idx] && ras_ok) ? ras_top : target[r_idx];
+assign pred_taken_o  = hit && state[r_idx];
+assign pred_target_o = (isret[r_idx] && ras_ok) ? ras_top : target[r_idx];
 
-wire [IDX_W-1:0] w_idx = update_pc[IDX_W+1:2];
+wire [IDX_W-1:0] w_idx = update_pc_i[IDX_W+1:2];
 
 // valid bits: the only resettable state
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         valid <= {ENTRIES{1'b0}};
-    else if (update_en)
+    else if (update_en_i)
         valid[w_idx] <= 1'b1;
 end
 
-// entry payload, written together with the valid bit (no reset, see header)
-always @(posedge clk) begin
-    if (update_en) begin
-        tag   [w_idx] <= update_pc[31:IDX_W+2];
-        state [w_idx] <= update_taken;
-        target[w_idx] <= update_target;
-        isret [w_idx] <= update_is_ret;
+// entry payload, written together with the valid bit (reset, see header)
+integer e;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        for (e = 0; e < ENTRIES; e = e + 1) begin
+            tag   [e] <= {TAG_W{1'b0}};
+            state [e] <= 1'b0;
+            target[e] <= 32'b0;
+        end
+        isret <= {ENTRIES{1'b0}};
+    end else if (update_en_i) begin
+        tag   [w_idx] <= update_pc_i[31:IDX_W+2];
+        state [w_idx] <= update_taken_i;
+        target[w_idx] <= update_target_i;
+        isret [w_idx] <= update_is_ret_i;
     end
 end
 
@@ -109,9 +127,9 @@ generate if (RAS_DEPTH > 0) begin : g_ras
 
     // push+pop together = a return that is itself a call (both-link JALR):
     // the popped slot is immediately refilled, so just replace the top
-    wire push_only = update_call && (!update_ret || cnt_q == 0);
-    wire pop_only  = update_ret  && !update_call && cnt_q != 0;
-    wire replace   = update_call &&  update_ret  && cnt_q != 0;
+    wire push_only = update_call_i && (!update_ret_i || cnt_q == 0);
+    wire pop_only  = update_ret_i  && !update_call_i && cnt_q != 0;
+    wire replace   = update_call_i &&  update_ret_i  && cnt_q != 0;
 
     // top-of-stack index, sized to the pointer so the wrap compare/assign stay
     // PW bits wide (RAS_DEPTH itself is a 32-bit parameter)
@@ -124,8 +142,8 @@ generate if (RAS_DEPTH > 0) begin : g_ras
     assign ras_top = ras[sp_q];
     assign ras_ok  = (cnt_q != 0);
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             sp_q <= {PW{1'b0}};
         else if (push_only)
             sp_q <= sp_inc;
@@ -133,8 +151,8 @@ generate if (RAS_DEPTH > 0) begin : g_ras
             sp_q <= sp_dec;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             cnt_q <= {(PW+1){1'b0}};
         else if (push_only && cnt_q != RAS_DEPTH)
             cnt_q <= cnt_q + 1'b1;
@@ -142,12 +160,16 @@ generate if (RAS_DEPTH > 0) begin : g_ras
             cnt_q <= cnt_q - 1'b1;
     end
 
-    // stack payload: no reset, never believed while cnt_q says empty
-    always @(posedge clk) begin
-        if (push_only)
-            ras[sp_inc] <= update_link;
+    // stack payload: reset, so ras_top is defined even while cnt_q says empty
+    integer r;
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i) begin
+            for (r = 0; r < RAS_DEPTH; r = r + 1)
+                ras[r] <= 32'b0;
+        end else if (push_only)
+            ras[sp_inc] <= update_link_i;
         else if (replace)
-            ras[sp_q] <= update_link;
+            ras[sp_q] <= update_link_i;
     end
 
 end else begin : g_no_ras

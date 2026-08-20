@@ -3,21 +3,21 @@
 `include "defines.vh"
 
 module writeback_mux (
-    input      [31:0] alu_result,       // rezultat ALU (sau valoarea CSR, muxata in S2)
-    input      [31:0] mem_data,
-    input      [31:0] pc_plus4,
-    input      [1:0]  MemtoReg,
+    input      [31:0] alu_result_i,       // ALU result (or the CSR read value, muxed in S2)
+    input      [31:0] mem_data_i,
+    input      [31:0] pc_plus4_i,
+    input      [1:0]  MemtoReg_i,
 
-    output reg [31:0] wb_data
+    output reg [31:0] wb_data_o
 );
 
-// ce ajunge in rd
+// what lands in rd
 always @(*)
-    case (MemtoReg)
-        `WB_ALU: wb_data = alu_result;   // R/I arit, LUI, AUIPC, CSR
-        `WB_MEM: wb_data = mem_data;     // load
-        `WB_PC4: wb_data = pc_plus4;     // JAL/JALR link
-        default: wb_data = 32'b0;
+    case (MemtoReg_i)
+        `WB_ALU: wb_data_o = alu_result_i;   // R/I arithmetic, LUI, AUIPC, CSR
+        `WB_MEM: wb_data_o = mem_data_i;     // load
+        `WB_PC4: wb_data_o = pc_plus4_i;     // JAL/JALR link
+        default: wb_data_o = 32'b0;
     endcase
 
 endmodule

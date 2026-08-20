@@ -27,13 +27,13 @@
 // mcountinhibit (0x320) is deliberately absent - the spec makes it optional and
 // defines the not-implemented behaviour as "all counters run", which is this.
 // D15: reading an unimplemented CSR, or writing a read-only one, raises illegal
-//      in S2 (illegal, not DECERR, since CSRs are internal). csr_wen already
+//      in S2 (illegal, not DECERR, since CSRs are internal). csr_wen_i already
 //      drops the "CSRRS/C with x0/uimm=0 = pure read" case, so those don't trap.
 // D16: vectored mtvec sends interrupts to BASE+4*cause and exceptions to BASE;
 //      direct mode sends everything to BASE.
 //
-// Trap entry and MRET are sequenced by cpu_top: trap_set commits mepc, mcause,
-// MPIE<-MIE and MIE<-0 atomically, mret does MIE<-MPIE and MPIE<-1. trap_set
+// Trap entry and MRET are sequenced by cpu_top: trap_set_i commits mepc, mcause,
+// MPIE<-MIE and MIE<-0 atomically, mret_i does MIE<-MPIE and MPIE<-1. trap_set_i
 // wins over a same-cycle software write, so the trapping instruction never
 // commits its own write.
 
@@ -44,41 +44,41 @@
 module csr_file #(
     parameter HART_ID = 32'd0
 )(
-    input             clk,
-    input             rst_n,
+    input             clk_i,
+    input             rst_n_i,
 
     // CSR access from S2
-    input      [11:0] csr_addr,
-    input      [31:0] csr_wdata,     // forwarded rs1 or zext(uimm5)
-    input      [1:0]  csr_op,        // CSROP_RW / _RS / _RC
-    input             csr_ren,       // valid CSR instruction (address check)
-    input             csr_wen,       // effective write requested
-    output reg [31:0] csr_rdata,
-    output            csr_illegal,
+    input      [11:0] csr_addr_i,
+    input      [31:0] csr_wdata_i,     // forwarded rs1 or zext(uimm5)
+    input      [1:0]  csr_op_i,        // CSROP_RW / _RS / _RC
+    input             csr_ren_i,       // valid CSR instruction (address check)
+    input             csr_wen_i,       // effective write requested
+    output reg [31:0] csr_rdata_o,
+    output            csr_illegal_o,
 
     // trap entry / return
-    input             trap_set,
-    input             trap_is_irq,
-    input      [4:0]  trap_code,     // cause code (sync 0..11, irq 16..31)
-    input      [31:0] trap_pc,       // -> mepc
-    input      [31:0] trap_val,      // -> mtval (fault address, or instruction on illegal)
-    input             mret,
+    input             trap_set_i,
+    input             trap_is_irq_i,
+    input      [4:0]  trap_code_i,     // cause code (sync 0..11, irq 16..31)
+    input      [31:0] trap_pc_i,       // -> mepc
+    input      [31:0] trap_val_i,      // -> mtval (fault address, or instruction on illegal)
+    input             mret_i,
 
     // interrupt side
-    input      [15:0] irq_lines,     // pending one-hot -> mip[31:16]
-    output     [15:0] irq_enable,    // mie[31:16]
-    output            mie_global,    // mstatus.MIE
+    input      [15:0] irq_lines_i,     // pending one-hot -> mip[31:16]
+    output     [15:0] irq_enable_o,    // mie[31:16]
+    output            mie_global_o,    // mstatus.MIE
 
     // architectural targets
-    output     [31:0] trap_vector,   // handler address for the current cause
-    output     [31:0] mepc_out,
+    output     [31:0] trap_vector_o,   // handler address for the current cause
+    output     [31:0] mepc_out_o,
 
     // counters
-    input             retire,        // instruction committed in S3
-    input             ev_mispredict, // one pulse per mispredict redirect (D25)
-    input             ev_ibus_wait,  // level: S2 has no instruction
-    input             ev_dbus_stall, // level: data AXI op in flight
-    input             ev_wfi_sleep   // level: WFI sleeping (D23)
+    input             retire_i,        // instruction committed in S3
+    input             ev_mispredict_i, // one pulse per mispredict redirect (D25)
+    input             ev_ibus_wait_i,  // level: S2 has no instruction
+    input             ev_dbus_stall_i, // level: data AXI op in flight
+    input             ev_wfi_sleep_i   // level: WFI sleeping (D23)
 );
 
 // CSR addresses (Privileged ISA v20211203)
@@ -122,9 +122,9 @@ reg [63:0] mhpm3_q, mhpm4_q, mhpm5_q, mhpm6_q, mhpm7_q;
 // hardwired to zero: the spec allows an implementation to tie off counters it
 // does not provide, but they must still read as 0 instead of trapping, and a
 // write to them is ignored (WARL) rather than raising illegal.
-wire hpm_wired0 = ((csr_addr >= 12'hB08) && (csr_addr <= 12'hB1F))   // mhpmcounter8..31
-               || ((csr_addr >= 12'hB88) && (csr_addr <= 12'hB9F))   // mhpmcounter8..31h
-               || ((csr_addr >= 12'h323) && (csr_addr <= 12'h33F));  // mhpmevent3..31
+wire hpm_wired0 = ((csr_addr_i >= 12'hB08) && (csr_addr_i <= 12'hB1F))   // mhpmcounter8..31
+               || ((csr_addr_i >= 12'hB88) && (csr_addr_i <= 12'hB9F))   // mhpmcounter8..31h
+               || ((csr_addr_i >= 12'h323) && (csr_addr_i <= 12'h33F));  // mhpmevent3..31
 
 wire [31:0] mstatus_rd = {19'b0, 2'b11, 3'b0, mstatus_mpie_q, 3'b0, mstatus_mie_q, 3'b0};
 wire [31:0] misa_rd    = 32'h4000_0100;   // MXL=32, extension I (RV32I)
@@ -134,51 +134,51 @@ reg addr_ok;
 reg addr_ro;    // implemented but read-only
 always @(*) begin
     addr_ok = 1; addr_ro = 0;
-    case (csr_addr)
-        MSTATUS:  csr_rdata = mstatus_rd;
-        MISA:     csr_rdata = misa_rd;   // WARL, writes ignored
-        MIE:      csr_rdata = {mie_q, 16'b0};
-        MTVEC:    csr_rdata = mtvec_q;
-        MSCRATCH: csr_rdata = mscratch_q;
-        MEPC:     csr_rdata = mepc_q;
-        MCAUSE:   csr_rdata = mcause_q;
-        MTVAL:    csr_rdata = mtval_q;
-        MIP:      begin csr_rdata = {irq_lines, 16'b0}; addr_ro = 1; end
-        MVENDID:  begin csr_rdata = 32'b0; addr_ro = 1; end
-        MARCHID:  begin csr_rdata = 32'b0; addr_ro = 1; end
-        MIMPID:   begin csr_rdata = 32'b0; addr_ro = 1; end
-        MCYCLE:    csr_rdata = mcycle_q[31:0];
-        MINSTRET:  csr_rdata = minstret_q[31:0];
-        MHPMC3:    csr_rdata = mhpm3_q[31:0];
-        MHPMC4:    csr_rdata = mhpm4_q[31:0];
-        MHPMC5:    csr_rdata = mhpm5_q[31:0];
-        MHPMC6:    csr_rdata = mhpm6_q[31:0];
-        MHPMC7:    csr_rdata = mhpm7_q[31:0];
-        MCYCLEH:   csr_rdata = mcycle_q[63:32];
-        MINSTRETH: csr_rdata = minstret_q[63:32];
-        MHPMC3H:   csr_rdata = mhpm3_q[63:32];
-        MHPMC4H:   csr_rdata = mhpm4_q[63:32];
-        MHPMC5H:   csr_rdata = mhpm5_q[63:32];
-        MHPMC6H:   csr_rdata = mhpm6_q[63:32];
-        MHPMC7H:   csr_rdata = mhpm7_q[63:32];
-        MHARTID:  begin csr_rdata = HART_ID;    addr_ro = 1; end
+    case (csr_addr_i)
+        MSTATUS:  csr_rdata_o = mstatus_rd;
+        MISA:     csr_rdata_o = misa_rd;   // WARL, writes ignored
+        MIE:      csr_rdata_o = {mie_q, 16'b0};
+        MTVEC:    csr_rdata_o = mtvec_q;
+        MSCRATCH: csr_rdata_o = mscratch_q;
+        MEPC:     csr_rdata_o = mepc_q;
+        MCAUSE:   csr_rdata_o = mcause_q;
+        MTVAL:    csr_rdata_o = mtval_q;
+        MIP:      begin csr_rdata_o = {irq_lines_i, 16'b0}; addr_ro = 1; end
+        MVENDID:  begin csr_rdata_o = 32'b0; addr_ro = 1; end
+        MARCHID:  begin csr_rdata_o = 32'b0; addr_ro = 1; end
+        MIMPID:   begin csr_rdata_o = 32'b0; addr_ro = 1; end
+        MCYCLE:    csr_rdata_o = mcycle_q[31:0];
+        MINSTRET:  csr_rdata_o = minstret_q[31:0];
+        MHPMC3:    csr_rdata_o = mhpm3_q[31:0];
+        MHPMC4:    csr_rdata_o = mhpm4_q[31:0];
+        MHPMC5:    csr_rdata_o = mhpm5_q[31:0];
+        MHPMC6:    csr_rdata_o = mhpm6_q[31:0];
+        MHPMC7:    csr_rdata_o = mhpm7_q[31:0];
+        MCYCLEH:   csr_rdata_o = mcycle_q[63:32];
+        MINSTRETH: csr_rdata_o = minstret_q[63:32];
+        MHPMC3H:   csr_rdata_o = mhpm3_q[63:32];
+        MHPMC4H:   csr_rdata_o = mhpm4_q[63:32];
+        MHPMC5H:   csr_rdata_o = mhpm5_q[63:32];
+        MHPMC6H:   csr_rdata_o = mhpm6_q[63:32];
+        MHPMC7H:   csr_rdata_o = mhpm7_q[63:32];
+        MHARTID:  begin csr_rdata_o = HART_ID;    addr_ro = 1; end
         default: begin
-            csr_rdata = 32'b0;
+            csr_rdata_o = 32'b0;
             addr_ok   = hpm_wired0;   // tied-off hpm reads 0; anything else is illegal
         end
     endcase
 end
 
-assign csr_illegal = ((csr_ren | csr_wen) & ~addr_ok) | (csr_wen & addr_ro);
+assign csr_illegal_o = ((csr_ren_i | csr_wen_i) & ~addr_ok) | (csr_wen_i & addr_ro);
 
-assign irq_enable = mie_q;
-assign mie_global = mstatus_mie_q;
-assign mepc_out   = mepc_q;
+assign irq_enable_o = mie_q;
+assign mie_global_o = mstatus_mie_q;
+assign mepc_out_o   = mepc_q;
 
 // vectored applies to interrupts only: BASE + 4*cause; exceptions go to BASE
 wire [31:0] tvec_base = {mtvec_q[31:2], 2'b00};
-assign trap_vector = (mtvec_q[1:0] == 2'b01 && trap_is_irq)
-                     ? tvec_base + {25'b0, trap_code, 2'b00}
+assign trap_vector_o = (mtvec_q[1:0] == 2'b01 && trap_is_irq_i)
+                     ? tvec_base + {25'b0, trap_code_i, 2'b00}
                      : tvec_base;
 
 // new value per CSR op type
@@ -216,49 +216,49 @@ function [63:0] cnt_next;
     end
 endfunction
 
-wire [31:0] mstatus_nv = csr_new_val(mstatus_rd, csr_wdata, csr_op);
-wire [31:0] mie_nv     = csr_new_val({mie_q, 16'b0}, csr_wdata, csr_op);
-wire [31:0] mepc_nv    = csr_new_val(mepc_q, csr_wdata, csr_op);
+wire [31:0] mstatus_nv = csr_new_val(mstatus_rd, csr_wdata_i, csr_op_i);
+wire [31:0] mie_nv     = csr_new_val({mie_q, 16'b0}, csr_wdata_i, csr_op_i);
+wire [31:0] mepc_nv    = csr_new_val(mepc_q, csr_wdata_i, csr_op_i);
 
-// committed software write. It never coincides with trap_set or mret: an
-// interrupt kills csr_wen, a CSR op's only exception is its own illegal access
+// committed software write. It never coincides with trap_set_i or mret_i: an
+// interrupt kills csr_wen_i, a CSR op's only exception is its own illegal access
 // (blocked here), and MRET is a different instruction. The trap arms below are
 // still checked first anyway, so hardware always wins over a software write.
-wire csr_wr = csr_wen && !csr_illegal;
+wire csr_wr = csr_wen_i && !csr_illegal_o;
 
-wire wr_mstatus  = csr_wr && (csr_addr == MSTATUS);
-wire wr_mie      = csr_wr && (csr_addr == MIE);
-wire wr_mtvec    = csr_wr && (csr_addr == MTVEC);
-wire wr_mscratch = csr_wr && (csr_addr == MSCRATCH);
-wire wr_mepc     = csr_wr && (csr_addr == MEPC);
-wire wr_mcause   = csr_wr && (csr_addr == MCAUSE);
-wire wr_mtval    = csr_wr && (csr_addr == MTVAL);
+wire wr_mstatus  = csr_wr && (csr_addr_i == MSTATUS);
+wire wr_mie      = csr_wr && (csr_addr_i == MIE);
+wire wr_mtvec    = csr_wr && (csr_addr_i == MTVEC);
+wire wr_mscratch = csr_wr && (csr_addr_i == MSCRATCH);
+wire wr_mepc     = csr_wr && (csr_addr_i == MEPC);
+wire wr_mcause   = csr_wr && (csr_addr_i == MCAUSE);
+wire wr_mtval    = csr_wr && (csr_addr_i == MTVAL);
 
 // counter writes (M-mode may write every counter half; Priv. spec 3.1.11)
-wire wr_cyc_lo   = csr_wr && (csr_addr == MCYCLE);
-wire wr_cyc_hi   = csr_wr && (csr_addr == MCYCLEH);
-wire wr_ins_lo   = csr_wr && (csr_addr == MINSTRET);
-wire wr_ins_hi   = csr_wr && (csr_addr == MINSTRETH);
-wire wr_h3_lo    = csr_wr && (csr_addr == MHPMC3);
-wire wr_h3_hi    = csr_wr && (csr_addr == MHPMC3H);
-wire wr_h4_lo    = csr_wr && (csr_addr == MHPMC4);
-wire wr_h4_hi    = csr_wr && (csr_addr == MHPMC4H);
-wire wr_h5_lo    = csr_wr && (csr_addr == MHPMC5);
-wire wr_h5_hi    = csr_wr && (csr_addr == MHPMC5H);
-wire wr_h6_lo    = csr_wr && (csr_addr == MHPMC6);
-wire wr_h6_hi    = csr_wr && (csr_addr == MHPMC6H);
-wire wr_h7_lo    = csr_wr && (csr_addr == MHPMC7);
-wire wr_h7_hi    = csr_wr && (csr_addr == MHPMC7H);
+wire wr_cyc_lo   = csr_wr && (csr_addr_i == MCYCLE);
+wire wr_cyc_hi   = csr_wr && (csr_addr_i == MCYCLEH);
+wire wr_ins_lo   = csr_wr && (csr_addr_i == MINSTRET);
+wire wr_ins_hi   = csr_wr && (csr_addr_i == MINSTRETH);
+wire wr_h3_lo    = csr_wr && (csr_addr_i == MHPMC3);
+wire wr_h3_hi    = csr_wr && (csr_addr_i == MHPMC3H);
+wire wr_h4_lo    = csr_wr && (csr_addr_i == MHPMC4);
+wire wr_h4_hi    = csr_wr && (csr_addr_i == MHPMC4H);
+wire wr_h5_lo    = csr_wr && (csr_addr_i == MHPMC5);
+wire wr_h5_hi    = csr_wr && (csr_addr_i == MHPMC5H);
+wire wr_h6_lo    = csr_wr && (csr_addr_i == MHPMC6);
+wire wr_h6_hi    = csr_wr && (csr_addr_i == MHPMC6H);
+wire wr_h7_lo    = csr_wr && (csr_addr_i == MHPMC7);
+wire wr_h7_hi    = csr_wr && (csr_addr_i == MHPMC7H);
 
 // mstatus.MIE/MPIE: the pair swaps on trap entry and swaps back on MRET
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n) begin
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
         mstatus_mie_q  <= 1'b0;      // interrupts off at boot
         mstatus_mpie_q <= 1'b0;
-    end else if (trap_set) begin
+    end else if (trap_set_i) begin
         mstatus_mpie_q <= mstatus_mie_q;
         mstatus_mie_q  <= 1'b0;
-    end else if (mret) begin
+    end else if (mret_i) begin
         mstatus_mie_q  <= mstatus_mpie_q;
         mstatus_mpie_q <= 1'b1;
     end else if (wr_mstatus) begin
@@ -268,110 +268,110 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // mepc: trap entry records the return address, bits [1:0] always 0
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mepc_q <= 32'b0;
-    else if (trap_set)
-        mepc_q <= {trap_pc[31:2], 2'b00};
+    else if (trap_set_i)
+        mepc_q <= {trap_pc_i[31:2], 2'b00};
     else if (wr_mepc)
         mepc_q <= {mepc_nv[31:2], 2'b00};
 end
 
 // mcause: interrupt flag in bit 31, code in the low bits
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mcause_q <= 32'b0;
-    else if (trap_set)
-        mcause_q <= {trap_is_irq, 26'b0, trap_code};
+    else if (trap_set_i)
+        mcause_q <= {trap_is_irq_i, 26'b0, trap_code_i};
     else if (wr_mcause)
-        mcause_q <= csr_new_val(mcause_q, csr_wdata, csr_op);
+        mcause_q <= csr_new_val(mcause_q, csr_wdata_i, csr_op_i);
 end
 
 // mtval: trap entry records the fault address (or the instruction on illegal)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mtval_q <= 32'b0;
-    else if (trap_set)
-        mtval_q <= trap_val;
+    else if (trap_set_i)
+        mtval_q <= trap_val_i;
     else if (wr_mtval)
-        mtval_q <= csr_new_val(mtval_q, csr_wdata, csr_op);
+        mtval_q <= csr_new_val(mtval_q, csr_wdata_i, csr_op_i);
 end
 
 // software-only CSRs
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mie_q <= 16'b0;
     else if (wr_mie)
         mie_q <= mie_nv[31:16];
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mtvec_q <= 32'b0;
     else if (wr_mtvec)
-        mtvec_q <= csr_new_val(mtvec_q, csr_wdata, csr_op);
+        mtvec_q <= csr_new_val(mtvec_q, csr_wdata_i, csr_op_i);
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mscratch_q <= 32'b0;
     else if (wr_mscratch)
-        mscratch_q <= csr_new_val(mscratch_q, csr_wdata, csr_op);
+        mscratch_q <= csr_new_val(mscratch_q, csr_wdata_i, csr_op_i);
 end
 
 // 64-bit counters. Every one has the same shape: increment on its event, or
 // take a software write on the addressed half (one always block per register).
 
 // free-running cycle counter
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mcycle_q <= 64'b0;
     else
-        mcycle_q <= cnt_next(mcycle_q, 1'b1, wr_cyc_lo, wr_cyc_hi, csr_wdata, csr_op);
+        mcycle_q <= cnt_next(mcycle_q, 1'b1, wr_cyc_lo, wr_cyc_hi, csr_wdata_i, csr_op_i);
 end
 
 // retired-instruction counter
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         minstret_q <= 64'b0;
     else
-        minstret_q <= cnt_next(minstret_q, retire, wr_ins_lo, wr_ins_hi, csr_wdata, csr_op);
+        minstret_q <= cnt_next(minstret_q, retire_i, wr_ins_lo, wr_ins_hi, csr_wdata_i, csr_op_i);
 end
 
 // hardware performance counters (D25): one per event
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mhpm3_q <= 64'b0;
     else
-        mhpm3_q <= cnt_next(mhpm3_q, ev_mispredict, wr_h3_lo, wr_h3_hi, csr_wdata, csr_op);
+        mhpm3_q <= cnt_next(mhpm3_q, ev_mispredict_i, wr_h3_lo, wr_h3_hi, csr_wdata_i, csr_op_i);
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mhpm4_q <= 64'b0;
     else
-        mhpm4_q <= cnt_next(mhpm4_q, ev_ibus_wait, wr_h4_lo, wr_h4_hi, csr_wdata, csr_op);
+        mhpm4_q <= cnt_next(mhpm4_q, ev_ibus_wait_i, wr_h4_lo, wr_h4_hi, csr_wdata_i, csr_op_i);
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mhpm5_q <= 64'b0;
     else
-        mhpm5_q <= cnt_next(mhpm5_q, ev_dbus_stall, wr_h5_lo, wr_h5_hi, csr_wdata, csr_op);
+        mhpm5_q <= cnt_next(mhpm5_q, ev_dbus_stall_i, wr_h5_lo, wr_h5_hi, csr_wdata_i, csr_op_i);
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mhpm6_q <= 64'b0;
     else
-        mhpm6_q <= cnt_next(mhpm6_q, trap_set, wr_h6_lo, wr_h6_hi, csr_wdata, csr_op);
+        mhpm6_q <= cnt_next(mhpm6_q, trap_set_i, wr_h6_lo, wr_h6_hi, csr_wdata_i, csr_op_i);
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mhpm7_q <= 64'b0;
     else
-        mhpm7_q <= cnt_next(mhpm7_q, ev_wfi_sleep, wr_h7_lo, wr_h7_hi, csr_wdata, csr_op);
+        mhpm7_q <= cnt_next(mhpm7_q, ev_wfi_sleep_i, wr_h7_lo, wr_h7_hi, csr_wdata_i, csr_op_i);
 end
 
 endmodule

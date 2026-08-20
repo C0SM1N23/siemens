@@ -8,13 +8,13 @@
 // abort (CHx_CONTROL) a real use: a handler that aborts a stuck channel.
 //
 // D26: 64-bit free-running mtime, 64-bit mtimecmp, registered level interrupt
-//      irq = (mtime >= mtimecmp). mtimecmp resets to all-ones, so the timer is
+//      irq_o = (mtime >= mtimecmp). mtimecmp resets to all-ones, so the timer is
 //      born disarmed. No INT_STATUS: the compare is the status, and the handler
 //      clears the line by moving mtimecmp (the PIC's level-sensitive contract,
 //      D19). Arming can't false-fire: write CMP_LO while CMP_HI is still all-ones,
 //      then CMP_HI. 32-bit reads of the 64-bit counter can tear, so software
 //      reads HI, LO, HI and retries if HI moved (mtime won't get near 2^32 in
-//      this SoC's lifetime anyway). Hookup: irq -> PIC channel 7, lowest priority
+//      this SoC's lifetime anyway). Hookup: irq_o -> PIC channel 7, lowest priority
 //      (D20), since a tick must not outrank DMA/DP-SRAM service.
 // D27: AXI4-Lite slave, same machinery as the PIC's port (D22): AW and W
 //      collected independently, one transaction per direction, response held
@@ -27,32 +27,32 @@
 `timescale 1ns/1ps
 
 module mtimer (
-    input             clk,
-    input             rst_n,
+    input             clk_i,
+    input             rst_n_i,
 
     // level interrupt to the system interrupt controller (PIC ch7 planned)
-    output reg        irq,
+    output reg        irq_o,
 
     // AXI4-Lite slave: software access
-    input      [31:0] s_axi_awaddr,
-    input      [2:0]  s_axi_awprot,
-    input             s_axi_awvalid,
-    output            s_axi_awready,
-    input      [31:0] s_axi_wdata,
-    input      [3:0]  s_axi_wstrb,
-    input             s_axi_wvalid,
-    output            s_axi_wready,
-    output     [1:0]  s_axi_bresp,
-    output            s_axi_bvalid,
-    input             s_axi_bready,
-    input      [31:0] s_axi_araddr,
-    input      [2:0]  s_axi_arprot,
-    input             s_axi_arvalid,
-    output            s_axi_arready,
-    output     [31:0] s_axi_rdata,
-    output     [1:0]  s_axi_rresp,
-    output            s_axi_rvalid,
-    input             s_axi_rready
+    input      [31:0] s_axi_awaddr_i,
+    input      [2:0]  s_axi_awprot_i,
+    input             s_axi_awvalid_i,
+    output            s_axi_awready_o,
+    input      [31:0] s_axi_wdata_i,
+    input      [3:0]  s_axi_wstrb_i,
+    input             s_axi_wvalid_i,
+    output            s_axi_wready_o,
+    output     [1:0]  s_axi_bresp_o,
+    output            s_axi_bvalid_o,
+    input             s_axi_bready_i,
+    input      [31:0] s_axi_araddr_i,
+    input      [2:0]  s_axi_arprot_i,
+    input             s_axi_arvalid_i,
+    output            s_axi_arready_o,
+    output     [31:0] s_axi_rdata_o,
+    output     [1:0]  s_axi_rresp_o,
+    output            s_axi_rvalid_o,
+    input             s_axi_rready_i
 );
 
 // register offsets (word address bits [7:2])
@@ -72,17 +72,17 @@ wire [31:0] reg_wdata, reg_rdata;
 wire [3:0]  reg_wstrb;
 
 axi_lite_slave tmr_slv (
-    .clk(clk), .rst_n(rst_n),
-    .s_axi_awaddr(s_axi_awaddr), .s_axi_awvalid(s_axi_awvalid), .s_axi_awready(s_axi_awready),
-    .s_axi_wdata(s_axi_wdata), .s_axi_wstrb(s_axi_wstrb),
-    .s_axi_wvalid(s_axi_wvalid), .s_axi_wready(s_axi_wready),
-    .s_axi_bresp(s_axi_bresp), .s_axi_bvalid(s_axi_bvalid), .s_axi_bready(s_axi_bready),
-    .s_axi_araddr(s_axi_araddr), .s_axi_arvalid(s_axi_arvalid), .s_axi_arready(s_axi_arready),
-    .s_axi_rdata(s_axi_rdata), .s_axi_rresp(s_axi_rresp),
-    .s_axi_rvalid(s_axi_rvalid), .s_axi_rready(s_axi_rready),
-    .wr_en(reg_wr), .wr_addr(reg_waddr), .wr_data(reg_wdata), .wr_strb(reg_wstrb),
-    .wr_ok(reg_waddr <= OFF_CMP_HI),
-    .rd_addr(reg_raddr), .rd_data(reg_rdata), .rd_ok(reg_raddr <= OFF_CMP_HI)
+    .clk_i(clk_i), .rst_n_i(rst_n_i),
+    .s_axi_awaddr_i(s_axi_awaddr_i), .s_axi_awvalid_i(s_axi_awvalid_i), .s_axi_awready_o(s_axi_awready_o),
+    .s_axi_wdata_i(s_axi_wdata_i), .s_axi_wstrb_i(s_axi_wstrb_i),
+    .s_axi_wvalid_i(s_axi_wvalid_i), .s_axi_wready_o(s_axi_wready_o),
+    .s_axi_bresp_o(s_axi_bresp_o), .s_axi_bvalid_o(s_axi_bvalid_o), .s_axi_bready_i(s_axi_bready_i),
+    .s_axi_araddr_i(s_axi_araddr_i), .s_axi_arvalid_i(s_axi_arvalid_i), .s_axi_arready_o(s_axi_arready_o),
+    .s_axi_rdata_o(s_axi_rdata_o), .s_axi_rresp_o(s_axi_rresp_o),
+    .s_axi_rvalid_o(s_axi_rvalid_o), .s_axi_rready_i(s_axi_rready_i),
+    .wr_en_o(reg_wr), .wr_addr_o(reg_waddr), .wr_data_o(reg_wdata), .wr_strb_o(reg_wstrb),
+    .wr_ok_i(reg_waddr <= OFF_CMP_HI),
+    .rd_addr_o(reg_raddr), .rd_data_i(reg_rdata), .rd_ok_i(reg_raddr <= OFF_CMP_HI)
 );
 
 // byte-lane merge for register writes (WSTRB per AXI, like the DP-SRAM)
@@ -105,8 +105,8 @@ wire wr_cmp_hi  = reg_wr && (reg_waddr == OFF_CMP_HI);
 // that half for that cycle (the other half still increments as a pair)
 wire [63:0] mtime_inc = mtime_q + 64'd1;
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mtime_q <= 64'b0;
     else begin
         mtime_q[31:0]  <= wr_time_lo ? lane_merge(mtime_inc[31:0], reg_wdata, reg_wstrb)
@@ -116,8 +116,8 @@ always @(posedge clk or negedge rst_n) begin
     end
 end
 
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         mtimecmp_q <= {64{1'b1}};                    // disarmed at reset (D26)
     else if (wr_cmp_lo)
         mtimecmp_q[31:0]  <= lane_merge(mtimecmp_q[31:0], reg_wdata, reg_wstrb);
@@ -126,11 +126,11 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // level interrupt, registered off the compare (D26)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        irq <= 1'b0;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
+        irq_o <= 1'b0;
     else
-        irq <= (mtime_q >= mtimecmp_q);
+        irq_o <= (mtime_q >= mtimecmp_q);
 end
 
 // read mux: combinational, the slave registers it on the AR handshake

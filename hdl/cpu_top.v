@@ -11,10 +11,10 @@
 //
 // REQ1: the 3-stage pipeline above.
 // REQ2: two AXI4-Lite master ports, ibus (read only) and dbus (read+write).
-// REQ3: one sync clock, async active-low reset, PIC lines cpu_irq / cpu_irq_vec
-//       / cpu_irq_ack / cpu_irq_eoi (cpu_in_trap kept for observability/SVA).
+// REQ3: one sync clock, async active-low reset, PIC lines cpu_irq_i / cpu_irq_vec_i
+//       / cpu_irq_ack_o / cpu_irq_eoi_o (cpu_in_trap_o kept for observability/SVA).
 // REQ4: interrupts sampled only under mstatus.MIE, at instruction boundaries.
-//       cpu_irq_ack pulses one cycle at claim; cpu_irq_eoi pulses one cycle when
+//       cpu_irq_ack_o pulses one cycle at claim; cpu_irq_eoi_o pulses one cycle when
 //       an interrupt handler returns (MRET), so the PIC pops its nesting stack.
 //       The advanced-scheduling PIC drives a single request line plus a 4-bit
 //       vector (id 0..15); the CPU gates it with mie[16+vec] and mstatus.MIE.
@@ -35,6 +35,19 @@
 // D23: WFI wake logic lives here (the stall itself is hazard_unit's): wake on any
 //     mie-enabled pending interrupt, ignoring mstatus.MIE, and a WFI-ending
 //     interrupt records mepc = wfi+4 so MRET resumes past it.
+// D28: reset policy. Every flop in the CPU and in its submodules is reset by the
+//      single asynchronous, active-low rst_n_i, including the pipeline-register
+//      payloads and the predictor arrays, which a valid bit would otherwise
+//      cover. The rule is "no flop leaves reset holding X", so that (a) no bus
+//      output or architectural read can ever return X, (b) a 2-state simulation
+//      and a 4-state simulation agree from cycle 0, and (c) a waveform taken
+//      immediately after reset is readable everywhere instead of only on the
+//      control bits. Where the reset value is not simply zero it is the value
+//      that makes the idle block behave: the canonical NOP for instruction
+//      words, RESET_PC for program addresses, all-ones for mtimecmp (disarmed),
+//      0x1B for the PIC's BAND_CONFIG and 8 for its NEST_MAX. Exactly one always
+//      block drives each register, so a register's reset value and its update
+//      rules are always found together.
 
 `timescale 1ns/1ps
 
@@ -46,46 +59,46 @@ module cpu_top #(
     parameter BP_ENTRIES = 128,           // BTB/BHT entries, power of 2 (D9)
     parameter RAS_DEPTH  = 8              // return-address stack depth, 0 disables (D24)
 )(
-    input             clk,
-    input             rst_n,             // async reset, active low
+    input             clk_i,
+    input             rst_n_i,             // async reset, active low
 
     // ibus_axi: AXI4-Lite master, read-only (instruction fetch)
-    output     [31:0] ibus_axi_araddr,
-    output     [2:0]  ibus_axi_arprot,
-    output            ibus_axi_arvalid,
-    input             ibus_axi_arready,
-    input      [31:0] ibus_axi_rdata,
-    input      [1:0]  ibus_axi_rresp,
-    input             ibus_axi_rvalid,
-    output            ibus_axi_rready,
+    output     [31:0] ibus_axi_araddr_o,
+    output     [2:0]  ibus_axi_arprot_o,
+    output            ibus_axi_arvalid_o,
+    input             ibus_axi_arready_i,
+    input      [31:0] ibus_axi_rdata_i,
+    input      [1:0]  ibus_axi_rresp_i,
+    input             ibus_axi_rvalid_i,
+    output            ibus_axi_rready_o,
 
     // dbus_axi: AXI4-Lite master, read+write (load/store)
-    output     [31:0] dbus_axi_awaddr,
-    output     [2:0]  dbus_axi_awprot,
-    output            dbus_axi_awvalid,
-    input             dbus_axi_awready,
-    output     [31:0] dbus_axi_wdata,
-    output     [3:0]  dbus_axi_wstrb,
-    output            dbus_axi_wvalid,
-    input             dbus_axi_wready,
-    input      [1:0]  dbus_axi_bresp,
-    input             dbus_axi_bvalid,
-    output            dbus_axi_bready,
-    output     [31:0] dbus_axi_araddr,
-    output     [2:0]  dbus_axi_arprot,
-    output            dbus_axi_arvalid,
-    input             dbus_axi_arready,
-    input      [31:0] dbus_axi_rdata,
-    input      [1:0]  dbus_axi_rresp,
-    input             dbus_axi_rvalid,
-    output            dbus_axi_rready,
+    output     [31:0] dbus_axi_awaddr_o,
+    output     [2:0]  dbus_axi_awprot_o,
+    output            dbus_axi_awvalid_o,
+    input             dbus_axi_awready_i,
+    output     [31:0] dbus_axi_wdata_o,
+    output     [3:0]  dbus_axi_wstrb_o,
+    output            dbus_axi_wvalid_o,
+    input             dbus_axi_wready_i,
+    input      [1:0]  dbus_axi_bresp_i,
+    input             dbus_axi_bvalid_i,
+    output            dbus_axi_bready_o,
+    output     [31:0] dbus_axi_araddr_o,
+    output     [2:0]  dbus_axi_arprot_o,
+    output            dbus_axi_arvalid_o,
+    input             dbus_axi_arready_i,
+    input      [31:0] dbus_axi_rdata_i,
+    input      [1:0]  dbus_axi_rresp_i,
+    input             dbus_axi_rvalid_i,
+    output            dbus_axi_rready_o,
 
     // PIC interface (see D3): single request + 4-bit vector, claim/eoi pulses
-    input             cpu_irq,
-    input      [3:0]  cpu_irq_vec,
-    output reg        cpu_irq_ack,
-    output reg        cpu_irq_eoi,
-    output reg        cpu_in_trap
+    input             cpu_irq_i,
+    input      [3:0]  cpu_irq_vec_i,
+    output reg        cpu_irq_ack_o,
+    output reg        cpu_irq_eoi_o,
+    output reg        cpu_in_trap_o
 );
 
 // pipeline regs (D1) and S2 results, declared up front because the
@@ -115,75 +128,83 @@ wire [31:0] bp_lookup_pc, bp_target;
 wire        bp_taken;
 
 fetch_unit #(.RESET_PC(RESET_PC)) fetch_unit_inst (
-    .clk           (clk),
-    .rst_n         (rst_n),
-    .ibus_araddr   (ibus_axi_araddr),
-    .ibus_arprot   (ibus_axi_arprot),
-    .ibus_arvalid  (ibus_axi_arvalid),
-    .ibus_arready  (ibus_axi_arready),
-    .ibus_rdata    (ibus_axi_rdata),
-    .ibus_rresp    (ibus_axi_rresp),
-    .ibus_rvalid   (ibus_axi_rvalid),
-    .ibus_rready   (ibus_axi_rready),
-    .bp_lookup_pc  (bp_lookup_pc),
-    .bp_pred_taken (bp_taken),
-    .bp_pred_target(bp_target),
-    .redirect      (redirect),
-    .redirect_pc   (redirect_pc),
-    .s2_ready      (s2_advance),
-    .instr_valid   (f_valid),
-    .instr         (f_instr),
-    .instr_pc      (f_pc),
-    .pred_taken    (f_ptk),
-    .pred_target   (f_ptg),
-    .fetch_fault   (f_fault)
+    .clk_i           (clk_i),
+    .rst_n_i         (rst_n_i),
+    .ibus_araddr_o   (ibus_axi_araddr_o),
+    .ibus_arprot_o   (ibus_axi_arprot_o),
+    .ibus_arvalid_o  (ibus_axi_arvalid_o),
+    .ibus_arready_i  (ibus_axi_arready_i),
+    .ibus_rdata_i    (ibus_axi_rdata_i),
+    .ibus_rresp_i    (ibus_axi_rresp_i),
+    .ibus_rvalid_i   (ibus_axi_rvalid_i),
+    .ibus_rready_o   (ibus_axi_rready_o),
+    .bp_lookup_pc_o  (bp_lookup_pc),
+    .bp_pred_taken_i (bp_taken),
+    .bp_pred_target_i(bp_target),
+    .redirect_i      (redirect),
+    .redirect_pc_i   (redirect_pc),
+    .s2_ready_i      (s2_advance),
+    .instr_valid_o   (f_valid),
+    .instr_o         (f_instr),
+    .instr_pc_o      (f_pc),
+    .pred_taken_o    (f_ptk),
+    .pred_target_o   (f_ptg),
+    .fetch_fault_o   (f_fault)
 );
 
 wire        bp_update_en;
 wire [31:0] actual_target;
 
 branch_predictor #(.ENTRIES(BP_ENTRIES), .RAS_DEPTH(RAS_DEPTH)) branch_predictor_inst (
-    .clk           (clk),
-    .rst_n         (rst_n),
-    .lookup_pc     (bp_lookup_pc),
-    .pred_taken    (bp_taken),
-    .pred_target   (bp_target),
-    .update_en     (bp_update_en),
-    .update_pc     (ifdx_pc_q),
-    .update_taken  (ctl_taken_raw),
-    .update_target (actual_target),
-    .update_is_ret (ras_pop),
-    .update_call   (bp_update_en && ras_push),
-    .update_ret    (bp_update_en && ras_pop),
-    .update_link   (s2_pc4)
+    .clk_i           (clk_i),
+    .rst_n_i         (rst_n_i),
+    .lookup_pc_i     (bp_lookup_pc),
+    .pred_taken_o    (bp_taken),
+    .pred_target_o   (bp_target),
+    .update_en_i     (bp_update_en),
+    .update_pc_i     (ifdx_pc_q),
+    .update_taken_i  (ctl_taken_raw),
+    .update_target_i (actual_target),
+    .update_is_ret_i (ras_pop),
+    .update_call_i   (bp_update_en && ras_push),
+    .update_ret_i    (bp_update_en && ras_pop),
+    .update_link_i   (s2_pc4)
 );
 
-// IF/DX valid: the only bit that needs a reset. valid=0 turns whatever the
-// payload holds into a safe bubble (D1)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+// IF/DX valid: valid=0 turns whatever the payload holds into a safe bubble (D1)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         ifdx_valid_q <= 1'b0;
     else if (if_dx_we)
         ifdx_valid_q <= ~if_dx_bubble;
 end
 
-// IF/DX instruction word: the one payload bit that does need a reset. control.v
+// IF/DX instruction word: the payload bit whose reset is load-bearing. control.v
 // decodes it combinationally, so an X here makes MemRead/MemWrite/illegal X from
 // time 0. Those are masked by dec_live while valid=0, but on the first cycle
 // valid rises the AND resolves to X for one delta before the decoder re-runs,
 // and that X reaches ibus_arvalid / dbus_awvalid / dbus_wvalid / dbus_arvalid.
 // Resetting to the canonical NOP keeps the decoder outputs defined at all times.
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         ifdx_instr_q <= 32'h0000_0013;              // addi x0, x0, 0
     else if (if_dx_we && !if_dx_bubble)
         ifdx_instr_q <= f_instr;
 end
 
 // Remaining IF/DX payload: only loaded on a real instruction, so bubbles and
-// stalls leave the S2 datapath quiet. No reset needed, valid gates it.
-always @(posedge clk) begin
-    if (if_dx_we && !if_dx_bubble) begin
+// stalls leave the S2 datapath quiet. Functionally ifdx_valid_q gates all of it,
+// but it is reset anyway (reset policy, D28): ifdx_pc_q feeds the S2 PC+4 adder,
+// the branch target adder and the predictor update port combinationally, so an
+// unreset value shows up as X on those nets in every waveform taken before the
+// first instruction is delivered.
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        ifdx_pc_q    <= RESET_PC;
+        ifdx_ptk_q   <= 1'b0;
+        ifdx_ptg_q   <= RESET_PC;
+        ifdx_fault_q <= 1'b0;
+    end else if (if_dx_we && !if_dx_bubble) begin
         ifdx_pc_q    <= f_pc;
         ifdx_ptk_q   <= f_ptk;
         ifdx_ptg_q   <= f_ptg;
@@ -199,18 +220,18 @@ wire [2:0]  funct3;
 wire [31:0] imm_out;
 
 decode decode_inst (
-    .instr  (ifdx_instr_q),
-    .opcode (opcode),
-    .rd     (rd),
-    .funct3 (funct3),
-    .rs1    (rs1),
-    .rs2    (rs2),
-    .funct7 (funct7)
+    .instr_i  (ifdx_instr_q),
+    .opcode_o (opcode),
+    .rd_o     (rd),
+    .funct3_o (funct3),
+    .rs1_o    (rs1),
+    .rs2_o    (rs2),
+    .funct7_o (funct7)
 );
 
 imm_gen imm_gen_inst (
-    .instr   (ifdx_instr_q),
-    .imm_out (imm_out)
+    .instr_i   (ifdx_instr_q),
+    .imm_out_o (imm_out)
 );
 
 wire        RegWrite, ALUSrc, MemRead, MemWrite, Branch, Jump;
@@ -221,28 +242,28 @@ wire        ctrl_wfi;
 wire [1:0]  csr_op;
 
 control control_inst (
-    .opcode    (opcode),
-    .funct3    (funct3),
-    .funct7    (funct7),
-    .rs1       (rs1),
-    .rd        (rd),
-    .imm12     (ifdx_instr_q[31:20]),
-    .RegWrite  (RegWrite),
-    .ALUSrc    (ALUSrc),
-    .ALUOp     (ALUOp),
-    .MemRead   (MemRead),
-    .MemWrite  (MemWrite),
-    .MemtoReg  (MemtoReg),
-    .Branch    (Branch),
-    .Jump      (Jump),
-    .csr_instr (csr_instr),
-    .csr_op    (csr_op),
-    .csr_imm   (csr_imm),
-    .mret      (ctrl_mret),
-    .ecall     (ctrl_ecall),
-    .ebreak    (ctrl_ebreak),
-    .wfi       (ctrl_wfi),
-    .illegal   (ctrl_illegal)
+    .opcode_i    (opcode),
+    .funct3_i    (funct3),
+    .funct7_i    (funct7),
+    .rs1_i       (rs1),
+    .rd_i        (rd),
+    .imm12_i     (ifdx_instr_q[31:20]),
+    .RegWrite_o  (RegWrite),
+    .ALUSrc_o    (ALUSrc),
+    .ALUOp_o     (ALUOp),
+    .MemRead_o   (MemRead),
+    .MemWrite_o  (MemWrite),
+    .MemtoReg_o  (MemtoReg),
+    .Branch_o    (Branch),
+    .Jump_o      (Jump),
+    .csr_instr_o (csr_instr),
+    .csr_op_o    (csr_op),
+    .csr_imm_o   (csr_imm),
+    .mret_o      (ctrl_mret),
+    .ecall_o     (ctrl_ecall),
+    .ebreak_o    (ctrl_ebreak),
+    .wfi_o       (ctrl_wfi),
+    .illegal_o   (ctrl_illegal)
 );
 
 // regfile reads combinationally; the S3 value is bypassed when it targets a
@@ -251,15 +272,15 @@ wire [31:0] rs1_data, rs2_data, wb_data;
 wire        fwd_rs1, fwd_rs2;
 
 regfile regfile_inst (
-    .clk      (clk),
-    .rst_n    (rst_n),
-    .rs1_addr (rs1),
-    .rs2_addr (rs2),
-    .rd_addr  (dxwb_rd_q),
-    .rd_data  (wb_data),
-    .RegWrite (dxwb_valid_q & dxwb_regwrite_q),
-    .rs1_data (rs1_data),
-    .rs2_data (rs2_data)
+    .clk_i      (clk_i),
+    .rst_n_i    (rst_n_i),
+    .rs1_addr_i (rs1),
+    .rs2_addr_i (rs2),
+    .rd_addr_i  (dxwb_rd_q),
+    .rd_data_i  (wb_data),
+    .RegWrite_i (dxwb_valid_q & dxwb_regwrite_q),
+    .rs1_data_o (rs1_data),
+    .rs2_data_o (rs2_data)
 );
 
 wire [31:0] rs1_v = fwd_rs1 ? wb_data : rs1_data;
@@ -273,11 +294,11 @@ wire [15:0] irq_enable;
 
 // the PIC offers one prioritised source; the CPU still masks it per-source with
 // mie[16+vec] (independent of the PIC's own INT_ENABLE) and globally with MIE
-wire irq_deliverable = cpu_irq && irq_enable[cpu_irq_vec];
+wire irq_deliverable = cpu_irq_i && irq_enable[cpu_irq_vec_i];
 wire irq_take = ifdx_valid_q && !lsu_active && mie_global && irq_deliverable;
 
 // the offered source as a one-hot for mip[31:16] (the machine external window)
-wire [15:0] irq_onehot = cpu_irq ? (16'b1 << cpu_irq_vec) : 16'b0;
+wire [15:0] irq_onehot = cpu_irq_i ? (16'b1 << cpu_irq_vec_i) : 16'b0;
 
 // instruction actually executes: not preempted, and the fetch was clean
 wire dec_live = ifdx_valid_q && !irq_take && !ifdx_fault_q;
@@ -299,30 +320,30 @@ wire [31:0] alu_result;
 wire [31:0] alu_opa = (ALUOp == `ALUOP_AUIPC) ? ifdx_pc_q : rs1_v;
 
 alu_top alu_top_inst (
-    .operand_a     (alu_opa),
-    .operand_b_reg (rs2_v),
-    .operand_b_imm (imm_out),
-    .ALUSrc        (ALUSrc),
-    .ALUOp         (ALUOp),
-    .funct3        (funct3),
-    .funct7        (funct7),
-    .result        (alu_result)
+    .operand_a_i     (alu_opa),
+    .operand_b_reg_i (rs2_v),
+    .operand_b_imm_i (imm_out),
+    .ALUSrc_i        (ALUSrc),
+    .ALUOp_i         (ALUOp),
+    .funct3_i        (funct3),
+    .funct7_i        (funct7),
+    .result_o        (alu_result)
 );
 
 // real direction + target of the control transfer
 wire pc_src;
 
 branch_unit branch_unit_inst (
-    .pc_in         (ifdx_pc_q),
-    .imm_out       (imm_out),
-    .rs1_data      (rs1_v),
-    .rs2_data      (rs2_v),
-    .opcode        (opcode),
-    .funct3        (funct3),
-    .Branch        (Branch),
-    .Jump          (Jump),
-    .branch_target (actual_target),
-    .pc_src        (pc_src)
+    .pc_in_i         (ifdx_pc_q),
+    .imm_out_i       (imm_out),
+    .rs1_data_i      (rs1_v),
+    .rs2_data_i      (rs2_v),
+    .opcode_i        (opcode),
+    .funct3_i        (funct3),
+    .Branch_i        (Branch),
+    .Jump_i          (Jump),
+    .branch_target_o (actual_target),
+    .pc_src_o        (pc_src)
 );
 
 assign ctl_taken_raw = dec_live && pc_src;   // pre-exception, feeds trap detect
@@ -338,41 +359,41 @@ wire [31:0] csr_wdata = csr_imm ? {27'b0, rs1} : rs1_v;
 wire        exception;
 wire [4:0]  exc_cause;
 wire        trap_take = irq_take | exception;
-wire [4:0]  trap_code = irq_take ? {1'b1, cpu_irq_vec} : exc_cause;  // irq: 16+vec
+wire [4:0]  trap_code = irq_take ? {1'b1, cpu_irq_vec_i} : exc_cause;  // irq: 16+vec
 
 // mtval payload: exception_unit picks it with the cause; interrupts write 0
 wire [31:0] exc_tval;
 wire [31:0] trap_val = irq_take ? 32'b0 : exc_tval;
 
 csr_file #(.HART_ID(HART_ID)) csr_file_inst (
-    .clk         (clk),
-    .rst_n       (rst_n),
-    .csr_addr    (ifdx_instr_q[31:20]),
-    .csr_wdata   (csr_wdata),
-    .csr_op      (csr_op),
-    .csr_ren     (csr_ren),
-    .csr_wen     (csr_wen),
-    .csr_rdata   (csr_rdata),
-    .csr_illegal (csr_illegal),
-    .trap_set    (trap_take & s2_advance),
-    .trap_is_irq (irq_take),
-    .trap_code   (trap_code),
+    .clk_i         (clk_i),
+    .rst_n_i       (rst_n_i),
+    .csr_addr_i    (ifdx_instr_q[31:20]),
+    .csr_wdata_i   (csr_wdata),
+    .csr_op_i      (csr_op),
+    .csr_ren_i     (csr_ren),
+    .csr_wen_i     (csr_wen),
+    .csr_rdata_o   (csr_rdata),
+    .csr_illegal_o (csr_illegal),
+    .trap_set_i    (trap_take & s2_advance),
+    .trap_is_irq_i (irq_take),
+    .trap_code_i   (trap_code),
     // an interrupt that wakes a WFI resumes past it (mepc = pc+4, Priv. 3.3.3);
     // everything else records the instruction itself
-    .trap_pc     (irq_take && ctrl_wfi && !ifdx_fault_q ? s2_pc4 : ifdx_pc_q),
-    .trap_val    (trap_val),
-    .mret        (mret_exec),
-    .irq_lines   (irq_onehot),
-    .irq_enable  (irq_enable),
-    .mie_global  (mie_global),
-    .trap_vector (trap_vector),
-    .mepc_out    (mepc_out),
-    .retire      (dxwb_valid_q),
+    .trap_pc_i     (irq_take && ctrl_wfi && !ifdx_fault_q ? s2_pc4 : ifdx_pc_q),
+    .trap_val_i    (trap_val),
+    .mret_i        (mret_exec),
+    .irq_lines_i   (irq_onehot),
+    .irq_enable_o  (irq_enable),
+    .mie_global_o  (mie_global),
+    .trap_vector_o (trap_vector),
+    .mepc_out_o    (mepc_out),
+    .retire_i      (dxwb_valid_q),
     // performance events (D25); trap count reuses trap_set inside
-    .ev_mispredict (mispredict && s2_advance),
-    .ev_ibus_wait  (~ifdx_valid_q),
-    .ev_dbus_stall (lsu_busy),
-    .ev_wfi_sleep  (wfi_wait)
+    .ev_mispredict_i (mispredict && s2_advance),
+    .ev_ibus_wait_i  (~ifdx_valid_q),
+    .ev_dbus_stall_i (lsu_busy),
+    .ev_wfi_sleep_i  (wfi_wait)
 );
 
 // LSU: only issue for a live, legal, aligned op. An illegal or misaligned
@@ -383,60 +404,60 @@ wire        lsu_req = dec_live && (MemRead | MemWrite) &&
                       !ctrl_illegal && !mem_misaligned;
 
 lsu lsu_inst (
-    .clk          (clk),
-    .rst_n        (rst_n),
-    .req          (lsu_req),
-    .we           (MemWrite),
-    .funct3       (funct3),
-    .addr         (alu_result),
-    .st_data      (rs2_v),
-    .busy         (lsu_busy),
-    .done         (lsu_done),
-    .err          (lsu_err),
-    .active       (lsu_active),
-    .ld_data      (lsu_rdata),
-    .dbus_awaddr  (dbus_axi_awaddr),
-    .dbus_awprot  (dbus_axi_awprot),
-    .dbus_awvalid (dbus_axi_awvalid),
-    .dbus_awready (dbus_axi_awready),
-    .dbus_wdata   (dbus_axi_wdata),
-    .dbus_wstrb   (dbus_axi_wstrb),
-    .dbus_wvalid  (dbus_axi_wvalid),
-    .dbus_wready  (dbus_axi_wready),
-    .dbus_bresp   (dbus_axi_bresp),
-    .dbus_bvalid  (dbus_axi_bvalid),
-    .dbus_bready  (dbus_axi_bready),
-    .dbus_araddr  (dbus_axi_araddr),
-    .dbus_arprot  (dbus_axi_arprot),
-    .dbus_arvalid (dbus_axi_arvalid),
-    .dbus_arready (dbus_axi_arready),
-    .dbus_rdata   (dbus_axi_rdata),
-    .dbus_rresp   (dbus_axi_rresp),
-    .dbus_rvalid  (dbus_axi_rvalid),
-    .dbus_rready  (dbus_axi_rready)
+    .clk_i          (clk_i),
+    .rst_n_i        (rst_n_i),
+    .req_i          (lsu_req),
+    .we_i           (MemWrite),
+    .funct3_i       (funct3),
+    .addr_i         (alu_result),
+    .st_data_i      (rs2_v),
+    .busy_o         (lsu_busy),
+    .done_o         (lsu_done),
+    .err_o          (lsu_err),
+    .active_o       (lsu_active),
+    .ld_data_o      (lsu_rdata),
+    .dbus_awaddr_o  (dbus_axi_awaddr_o),
+    .dbus_awprot_o  (dbus_axi_awprot_o),
+    .dbus_awvalid_o (dbus_axi_awvalid_o),
+    .dbus_awready_i (dbus_axi_awready_i),
+    .dbus_wdata_o   (dbus_axi_wdata_o),
+    .dbus_wstrb_o   (dbus_axi_wstrb_o),
+    .dbus_wvalid_o  (dbus_axi_wvalid_o),
+    .dbus_wready_i  (dbus_axi_wready_i),
+    .dbus_bresp_i   (dbus_axi_bresp_i),
+    .dbus_bvalid_i  (dbus_axi_bvalid_i),
+    .dbus_bready_o  (dbus_axi_bready_o),
+    .dbus_araddr_o  (dbus_axi_araddr_o),
+    .dbus_arprot_o  (dbus_axi_arprot_o),
+    .dbus_arvalid_o (dbus_axi_arvalid_o),
+    .dbus_arready_i (dbus_axi_arready_i),
+    .dbus_rdata_i   (dbus_axi_rdata_i),
+    .dbus_rresp_i   (dbus_axi_rresp_i),
+    .dbus_rvalid_i  (dbus_axi_rvalid_i),
+    .dbus_rready_o  (dbus_axi_rready_o)
 );
 
 exception_unit exception_unit_inst (
-    .valid          (ifdx_valid_q && !irq_take),
-    .fetch_fault    (ifdx_fault_q),
-    .illegal        (ctrl_illegal | csr_illegal),
-    .ecall          (ctrl_ecall),
-    .ebreak         (ctrl_ebreak),
-    .pc             (ifdx_pc_q),
-    .instr          (ifdx_instr_q),
-    .ctl_taken      (ctl_taken_raw),
-    .ctl_target     (actual_target),
-    .MemRead        (MemRead),
-    .MemWrite       (MemWrite),
-    .funct3         (funct3),
-    .mem_addr       (alu_result),
-    .mem_active     (lsu_active),
-    .mem_done       (lsu_done),
-    .mem_err        (lsu_err),
-    .exception      (exception),
-    .cause          (exc_cause),
-    .tval           (exc_tval),
-    .mem_misaligned (mem_misaligned)
+    .valid_i          (ifdx_valid_q && !irq_take),
+    .fetch_fault_i    (ifdx_fault_q),
+    .illegal_i        (ctrl_illegal | csr_illegal),
+    .ecall_i          (ctrl_ecall),
+    .ebreak_i         (ctrl_ebreak),
+    .pc_i             (ifdx_pc_q),
+    .instr_i          (ifdx_instr_q),
+    .ctl_taken_i      (ctl_taken_raw),
+    .ctl_target_i     (actual_target),
+    .MemRead_i        (MemRead),
+    .MemWrite_i       (MemWrite),
+    .funct3_i         (funct3),
+    .mem_addr_i       (alu_result),
+    .mem_active_i     (lsu_active),
+    .mem_done_i       (lsu_done),
+    .mem_err_i        (lsu_err),
+    .exception_o      (exception),
+    .cause_o          (exc_cause),
+    .tval_o           (exc_tval),
+    .mem_misaligned_o (mem_misaligned)
 );
 
 // MRET and mispredict come after interrupt/exception in priority (D2)
@@ -464,68 +485,68 @@ assign redirect_pc = trap_take ? trap_vector :
                      ctl_taken ? actual_target : s2_pc4;
 
 hazard_unit hazard_unit_inst (
-    .fetch_valid  (f_valid),
-    .lsu_busy     (lsu_busy),
-    .wfi_wait     (wfi_wait),
-    .trap_take    (trap_take),
-    .mret_exec    (mret_exec),
-    .mispredict   (mispredict),
-    .rs1          (rs1),
-    .rs2          (rs2),
-    .wb_valid     (dxwb_valid_q),
-    .wb_reg_write (dxwb_regwrite_q),
-    .wb_rd        (dxwb_rd_q),
-    .s2_advance   (s2_advance),
-    .redirect     (redirect),
-    .if_dx_we     (if_dx_we),
-    .if_dx_bubble (if_dx_bubble),
-    .dx_squash    (dx_squash),
-    .fwd_rs1      (fwd_rs1),
-    .fwd_rs2      (fwd_rs2)
+    .fetch_valid_i  (f_valid),
+    .lsu_busy_i     (lsu_busy),
+    .wfi_wait_i     (wfi_wait),
+    .trap_take_i    (trap_take),
+    .mret_exec_i    (mret_exec),
+    .mispredict_i   (mispredict),
+    .rs1_i          (rs1),
+    .rs2_i          (rs2),
+    .wb_valid_i     (dxwb_valid_q),
+    .wb_reg_write_i (dxwb_regwrite_q),
+    .wb_rd_i        (dxwb_rd_q),
+    .s2_advance_o   (s2_advance),
+    .redirect_o     (redirect),
+    .if_dx_we_o     (if_dx_we),
+    .if_dx_bubble_o (if_dx_bubble),
+    .dx_squash_o    (dx_squash),
+    .fwd_rs1_o      (fwd_rs1),
+    .fwd_rs2_o      (fwd_rs2)
 );
 
 // interrupt-in-progress flag: set when an interrupt trap is accepted, cleared on
-// MRET. It drives cpu_irq_eoi so the PIC pops exactly one nesting level per
+// MRET. It drives cpu_irq_eoi_o so the PIC pops exactly one nesting level per
 // interrupt-handler return. One level is exact for the integrated CPU (handlers
 // run with MIE=0 and take no synchronous trap of their own); the PIC verifies
 // deeper hardware nesting standalone in tb_pic, driven by the ack/eoi pulses.
 reg in_irq;
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)                       in_irq <= 1'b0;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)                       in_irq <= 1'b0;
     else if (irq_take && s2_advance)  in_irq <= 1'b1;
     else if (mret_exec && s2_advance) in_irq <= 1'b0;
 end
 
 // claim pulses one cycle at acceptance (REQ4)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        cpu_irq_ack <= 1'b0;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
+        cpu_irq_ack_o <= 1'b0;
     else
-        cpu_irq_ack <= irq_take && s2_advance;
+        cpu_irq_ack_o <= irq_take && s2_advance;
 end
 
 // eoi pulses one cycle when an interrupt handler returns (REQ4)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        cpu_irq_eoi <= 1'b0;
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
+        cpu_irq_eoi_o <= 1'b0;
     else
-        cpu_irq_eoi <= mret_exec && s2_advance && in_irq;
+        cpu_irq_eoi_o <= mret_exec && s2_advance && in_irq;
 end
 
-// cpu_in_trap holds until MRET; a nested sync trap in the handler keeps it up (REQ4)
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
-        cpu_in_trap <= 1'b0;
+// cpu_in_trap_o holds until MRET; a nested sync trap in the handler keeps it up (REQ4)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
+        cpu_in_trap_o <= 1'b0;
     else if (trap_take && s2_advance)
-        cpu_in_trap <= 1'b1;
+        cpu_in_trap_o <= 1'b1;
     else if (mret_exec && s2_advance)
-        cpu_in_trap <= 1'b0;
+        cpu_in_trap_o <= 1'b0;
 end
 
 // DX/WB valid, with trap squash: the offending instruction never commits (D3).
 // While S2 stalls, S3 gets bubbles so nothing commits twice.
-always @(posedge clk or negedge rst_n) begin
-    if (~rst_n)
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i)
         dxwb_valid_q <= 1'b0;
     else if (s2_advance)
         dxwb_valid_q <= ifdx_valid_q && !dx_squash;
@@ -534,10 +555,20 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // DX/WB payload, captured only when a real instruction leaves S2. Bubbles leave
-// these ~130 flops alone (everything downstream is gated by valid), so no reset
-// needed here.
-always @(posedge clk) begin
-    if (s2_advance && ifdx_valid_q) begin
+// these ~130 flops alone, and everything downstream is gated by dxwb_valid_q, so
+// a reset is not needed for correctness; it is applied anyway (reset policy,
+// D28) so that wb_data -- which the writeback mux drives combinationally, and
+// which the S3->S2 forwarding path muxes into the ALU operands -- is defined
+// from time zero rather than X until the first instruction retires.
+always @(posedge clk_i or negedge rst_n_i) begin
+    if (~rst_n_i) begin
+        dxwb_rd_q       <= 5'd0;
+        dxwb_regwrite_q <= 1'b0;
+        dxwb_wbsel_q    <= `WB_ALU;
+        dxwb_result_q   <= 32'd0;
+        dxwb_mem_q      <= 32'd0;
+        dxwb_pc4_q      <= 32'd0;
+    end else if (s2_advance && ifdx_valid_q) begin
         dxwb_rd_q       <= rd;
         dxwb_regwrite_q <= RegWrite && !ifdx_fault_q;
         dxwb_wbsel_q    <= MemtoReg;
@@ -549,11 +580,11 @@ end
 
 // S3: writeback
 writeback_mux writeback_mux_inst (
-    .alu_result (dxwb_result_q),
-    .mem_data   (dxwb_mem_q),
-    .pc_plus4   (dxwb_pc4_q),
-    .MemtoReg   (dxwb_wbsel_q),
-    .wb_data    (wb_data)
+    .alu_result_i (dxwb_result_q),
+    .mem_data_i   (dxwb_mem_q),
+    .pc_plus4_i   (dxwb_pc4_q),
+    .MemtoReg_i   (dxwb_wbsel_q),
+    .wb_data_o    (wb_data)
 );
 
 endmodule

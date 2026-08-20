@@ -3,27 +3,27 @@
 `include "defines.vh"
 
 module alu (
-    input      [31:0] operand_a,
-    input      [31:0] operand_b,
-    input      [3:0]  alu_ctrl,
+    input      [31:0] operand_a_i,
+    input      [31:0] operand_b_i,
+    input      [3:0]  alu_ctrl_i,
 
-    output reg [31:0] result
+    output reg [31:0] result_o
 );
 
 always @(*) begin
-    case (alu_ctrl)
-        `ALU_ADD:   result = operand_a + operand_b;
-        `ALU_SUB:   result = operand_a - operand_b;
-        `ALU_AND:   result = operand_a & operand_b;
-        `ALU_OR:    result = operand_a | operand_b;
-        `ALU_XOR:   result = operand_a ^ operand_b;
-        `ALU_SLL:   result = operand_a << operand_b[4:0];
-        `ALU_SRL:   result = operand_a >> operand_b[4:0];
-        `ALU_SRA:   result = $signed(operand_a) >>> operand_b[4:0];
-        `ALU_SLT:   result = ($signed(operand_a) < $signed(operand_b)) ? 32'b1 : 32'b0;
-        `ALU_SLTU:  result = (operand_a < operand_b) ? 32'b1 : 32'b0;
-        `ALU_PASSB: result = operand_b;                                 // LUI (pass imm)
-        default:    result = 32'b0;
+    case (alu_ctrl_i)
+        `ALU_ADD:   result_o = operand_a_i + operand_b_i;
+        `ALU_SUB:   result_o = operand_a_i - operand_b_i;
+        `ALU_AND:   result_o = operand_a_i & operand_b_i;
+        `ALU_OR:    result_o = operand_a_i | operand_b_i;
+        `ALU_XOR:   result_o = operand_a_i ^ operand_b_i;
+        `ALU_SLL:   result_o = operand_a_i << operand_b_i[4:0];
+        `ALU_SRL:   result_o = operand_a_i >> operand_b_i[4:0];
+        `ALU_SRA:   result_o = $signed(operand_a_i) >>> operand_b_i[4:0];
+        `ALU_SLT:   result_o = ($signed(operand_a_i) < $signed(operand_b_i)) ? 32'b1 : 32'b0;
+        `ALU_SLTU:  result_o = (operand_a_i < operand_b_i) ? 32'b1 : 32'b0;
+        `ALU_PASSB: result_o = operand_b_i;                                 // LUI (pass imm)
+        default:    result_o = 32'b0;
     endcase
 end
 
