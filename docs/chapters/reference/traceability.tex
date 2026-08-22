@@ -135,11 +135,11 @@ D-SPUR & Spurious detected at claim; logged; claim still pushed & PIC & \file{pi
 D-DDL & Per-source deadline counter; jump / bump / multi escalation & PIC & \file{pic.v} & Escalation flips the offer and preempts an active source & Implemented \\
 D-SW & Keyed software triggers, \texttt{0xA5A5} & PIC & \file{pic.v} & Keyed trigger accepted, unkeyed write ignored & Implemented \\
 D-AXI & Shared slave; byte strobes; SLVERR elsewhere & PIC, Timer & \file{axi\_lite\_slave.v} & Monitors and SVA on both slave ports & Implemented \\
-D28 & Every flop reset; no flop leaves reset holding X & All &
+D28 & Every register holds a defined value out of reset, so no bus output and
+  no architectural read can return \texttt{X} & All &
   all of \file{hdl/} & \file{tb\_pic\_reset}, \file{tb\_mtimer\_regs},
   \file{tb\_csr\_ro} and \file{tb\_bp}: reset values, X-freedom, and an
-  asynchronous reset from a loaded state. Supersedes the earlier
-  ``payload unreset'' half of D1 & Implemented \\
+  asynchronous reset asserted from a loaded state & Implemented \\
 D-RST & The PIC leaves reset fully disarmed, and only \reg{BAND\_CONFIG} and
   \reg{NEST\_MAX} reset non-zero & PIC & \file{pic.v} &
   \file{tb\_pic\_reset} step 6: a source held high with no configuration is
@@ -249,9 +249,9 @@ Simultaneous stall and flush & Flush wins, and a trap cannot leave S2 with a
 Stalled S2 not causing a wrong fetch & One-entry holding register; no new AR
   until it drains; discard flag for a redirect over an in-flight read &
   Ch.~\ref{ch:fetch} & Mispredict recovery; \sig{WFI} bus-quiet check \\
-Pipeline register definition and reset & Valid bit plus payload; the valid bit
-  makes a bubble safe. The payload is now also reset (D28), which the original
-  decision did not require & Ch.~\ref{ch:pipectl}, Ch.~\ref{ch:reset} &
+Pipeline register definition and reset & Valid bit plus payload; a bubble is
+  \sig{valid}~=~0, and the payload resets to a NOP and \sig{RESET\_PC} so the
+  idle datapath is defined & Ch.~\ref{ch:pipectl} &
   \file{tb\_bp} 1; X-hygiene assertions \\
 \midrule
 \multicolumn{4}{@{}l@{}}{\emph{Custom priority grouping}} \\

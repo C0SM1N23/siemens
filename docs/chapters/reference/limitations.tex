@@ -92,9 +92,7 @@ generates its own decode errors, arrive with the real interconnect.
 \section{Area, timing and power}
 
 No synthesis has been run, so this document contains no area, frequency or power
-figure for any block. Two design choices are known to have a cost that only
-synthesis can quantify, and both are recorded where they are made rather than
-estimated here: the single decode-and-execute stage produces a long
-combinational path (Chapter~\ref{ch:cpuarch}), and the delivery-wide reset
-policy puts roughly 7.2\,kbit of predictor state on the reset tree
-(Section~\ref{sec:resetcost}).
+figure for any block. One design choice is known to carry a cost that only
+synthesis can quantify: the single decode-and-execute stage produces a long
+combinational path (Chapter~\ref{ch:cpuarch}), which would set the achievable
+clock frequency on a real target.

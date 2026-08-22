@@ -93,14 +93,9 @@ receives bubbles while S2 stalls; and AXI requires a stable payload while
 \sig{VALID} waits for \sig{READY}. During the start cycle the channels are driven
 combinationally, and from the registers thereafter.
 
-Correctness does not require the latch to be reset: it is read only while a
-transaction is active, and each new transaction overwrites it before the first
-read. It is reset anyway, under the delivery-wide rule of
-Chapter~\ref{ch:reset}, because \sig{AWADDR}, \sig{ARADDR}, \sig{WDATA} and
-\sig{WSTRB} are driven from it continuously. Without the reset those four bus
-outputs read \texttt{X} whenever the LSU is idle --- legal AXI, since the payload
-need only be stable while \sig{VALID} is asserted, but indistinguishable from a
-real defect in a waveform and in a monitor's sampling window.
+\sig{AWADDR}, \sig{ARADDR}, \sig{WDATA} and \sig{WSTRB} are driven from the
+latch continuously, so it resets to zero and those four outputs carry a defined
+value whenever the LSU is idle.
 
 \section{Byte strobes and load extraction}
 

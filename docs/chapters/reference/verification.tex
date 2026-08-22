@@ -65,7 +65,7 @@ supports.
   register-level benches drive the slave the same way and a change to the protocol handling
   happens once. \\
 \file{sim/rtl.f} & The RTL source list, ordered bottom-up by dependency level and shared by
-  both flows; see Chapter~\ref{ch:buildorder}. \\
+  both flows; see Appendix~\ref{app:modules}. \\
 \file{sim/asm.py} & Two-pass RV32I assembler with range-checked immediates and a symbol
   table the bench includes, so checks do not break when a label moves. \\
 \file{sva/} (5 files) & \file{axi\_lite\_sva.sv} (the AXI4-Lite contract as concurrent
@@ -78,43 +78,32 @@ supports.
 \section{Method}
 \label{sec:method}
 
-Seven properties of the method matter more than any individual test.
-
-\paragraph{The program uses the features rather than poking signals.} Traps are
-verified by taking them: handlers dispatch on \reg{mcause}, repair \reg{mepc} and
-return, and execution continues.
+Four properties of the method decide how much a passing run is worth.
 
 \paragraph{Counts are exact, not approximate.} The direct-mode synchronous
 handler counts every entry and must reach exactly 17; a register accumulates one
-bit per cause and must equal \texttt{0x1FF}; and \reg{mhpmcounter6} independently
+bit per cause and must equal \texttt{0x1FF}; \reg{mhpmcounter6} independently
 counts every trap entry of any kind and must equal exactly 26 (17 direct, 1
-vectored, 8 interrupts). A missing, doubled or spurious trap cannot cancel out
+vectored, 8 interrupts). A missing, doubled or spurious trap cannot cancel
 against another.
-
-\paragraph{Protocol legality is checked, not assumed.} The monitors run on every
-link on every run, and the assertion layer re-states the same contract as
-concurrent properties.
-
-\paragraph{Configurations are swept.} The same suite runs under different bus
-timing, so a result that depends on latency is exposed rather than hidden. Each
-run echoes its parameters read back from the elaborated design, because a
-silently ignored override looks exactly like a pass.
-
-\paragraph{Coverage is measured and gated.} Required bins must be hit or the run
-fails.
 
 \paragraph{Negative properties get a witness, and a paired positive.} ``No
 transaction was issued'' and ``the interrupt was never taken'' cannot be observed
 directly, so the benches count what did happen --- AXI handshakes, acknowledge
-pulses, handler entries --- and require the count to be zero. A count is
-falsifiable; an absence of output is not. And every such check is followed by the
-step that removes the suppressing condition and requires the thing to happen,
-which is what separates masking from a dead path.
+pulses, handler entries --- and require the count to be zero. Every such check is
+then followed by the step that removes the suppressing condition and requires the
+thing to happen, which is what separates masking from a dead path.
 
-\paragraph{A test of a read-only register is only as good as its precondition.}
-Writing zero to a register that already reads zero and then observing zero proves
-nothing. Every read-only register is driven to a known non-zero value by real
-hardware activity before the write is attempted.
+\paragraph{A read-only check is only as good as its precondition.} Writing zero
+to a register that already reads zero and then observing zero proves nothing.
+Every read-only register is driven to a known non-zero value by real hardware
+activity before the write is attempted.
+
+\paragraph{Configurations are swept, and coverage is gated.} The suite runs under
+four bus-timing configurations, so a result that depends on latency is exposed
+rather than hidden, and each run echoes its parameters read back from the
+elaborated design --- a silently ignored override otherwise looks exactly like a
+pass. Required coverage bins must be hit or the run fails.
 
 \section{Regression results}
 
@@ -433,14 +422,13 @@ has a check in the regression that fails against the uncorrected design.
 \endfoot
 \bottomrule
 \endlastfoot
-RTL & Two AXI response-code flags (\sig{bresp\_err\_q}, \sig{rresp\_err\_q}) in the shared slave
-  were unreset. \sig{BRESP} and \sig{RRESP} are combinational functions of them and are driven
-  whether or not the corresponding \sig{VALID} is high, so both peripherals presented X on their
-  response codes from time zero until their first transaction. A monitor cannot distinguish that
-  from a real protocol violation. Fixed by resetting them, and by extending the reset policy to
-  every flop in the delivery (Chapter~\ref{ch:reset}). & Reset bench, X-freedom checks \\
-RTL & The interrupt controller's nesting-stack arrays were unreset, and are read by
-  \reg{NEST\_STATUS.TOP\_ID} and \reg{ACTIVE\_VEC.ID}. Fixed by the same policy change. &
+RTL & Both peripherals drove \texttt{X} on \sig{BRESP} and \sig{RRESP} from time zero until
+  their first transaction: the response codes are combinational functions of stored error flags,
+  which were unreset, and are driven whether or not the corresponding \sig{VALID} is high. A
+  monitor cannot distinguish that from a real protocol violation. Fixed by resetting the flags. &
+  Reset bench, X-freedom checks \\
+RTL & \reg{NEST\_STATUS.TOP\_ID} and \reg{ACTIVE\_VEC.ID} could read \texttt{X}: they are driven
+  from the interrupt controller's nesting-stack array, which was unreset. Fixed by resetting it. &
   Reset bench, direct probe of state with no register view \\
 RTL & The bit positions the register map describes as reserved in \reg{SRCx\_CONFIG} ([15:8],
   [3]) and \reg{ESCALATION\_CFG} ([7:5], [3:2]) were stored and read back rather than hardwired

@@ -81,8 +81,12 @@ since revision 1.0; the trap-cause table, which listed the causes in numeric
 rather than evaluation order; what the decoder does with an illegal encoding;
 the PIC register count, 56 and not 59; every check count, now read from the
 regression log.
-\emph{Removed:} the file inventory duplicated in Appendix~\ref{app:modules}, and
-the compile-order rationale, cut to what a maintainer needs. \\
+\emph{Removed:} the reset-architecture and sequential-control chapters, the
+compile-order rationale and the port-naming rationale --- internal engineering
+decisions rather than delivered behaviour. The register reset values they
+restated are in each block's register map and in Appendix~\ref{app:regmap}; the
+build order and the CPU trap-flag diagram moved to
+Appendix~\ref{app:modules} and Chapter~\ref{ch:csr}. 115 pages to 105. \\
 \bottomrule
 \end{tabular}
 
@@ -152,10 +156,7 @@ with it.
 \input{chapters/reference/verif_plan}
 
 \part{Engineering reference}\label{part:reference}
-\input{chapters/reference/reset}
-\input{chapters/reference/fsm_summary}
 \input{chapters/reference/traceability}
-\input{chapters/reference/build_order}
 \input{chapters/reference/limitations}
 
 \appendix

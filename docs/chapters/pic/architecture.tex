@@ -321,11 +321,9 @@ reg [4:0] depth;
 \end{center}
 
 \sig{depth} is the stack pointer; the top is \sig{top\_idx} = \sig{depth} $-$ 1,
-valid whenever \sig{depth} is non-zero. Entries at or above \sig{depth} are never
-read, so only the pointer needs a reset for correctness. All three are reset all
-the same, because \reg{NEST\_STATUS.TOP\_ID} and \reg{ACTIVE\_VEC.ID} read
-\sig{stack\_id} out to software (Chapter~\ref{ch:reset}); the entries are probed
-directly in the reset bench, Section~\ref{sec:vp-picreset}.
+valid whenever \sig{depth} is non-zero. All three reset to zero, so
+\reg{NEST\_STATUS} and \reg{ACTIVE\_VEC} read their documented reset values on
+the first access after release.
 
 Storing the key, not just the id, is what makes the preemption threshold stable:
 reconfiguring a source's band while it is in service cannot corrupt nesting,

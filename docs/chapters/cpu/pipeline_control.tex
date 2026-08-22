@@ -15,23 +15,10 @@ decoder to interpret them --- more hardware and more ways to be wrong. The
 payload is loaded only when a real instruction moves, so bubbles and stalls
 leave those flops quiet.
 
-The payload is nonetheless reset (Chapter~\ref{ch:reset}). That is a second,
-independent decision, and the two are worth keeping apart: \sig{valid} makes the
-payload \emph{irrelevant} downstream, while the reset makes it \emph{defined} on
-the nets that read it combinationally. Three of those nets decide the point:
-\sig{ifdx\_instr\_q} feeds the decoder, whose \sig{MemRead}, \sig{MemWrite} and
-\sig{illegal} outputs reach the AXI \sig{VALID} signals; \sig{ifdx\_pc\_q} feeds
-the PC+4 adder, the branch-target adder and the predictor update port;
-\sig{dxwb\_result\_q} feeds the writeback multiplexer and the S3$\to$S2
-forwarding path. The reset values are chosen so that the idle datapath is not
-merely defined but harmless --- the canonical NOP \texttt{0x0000\_0013} for the
-instruction word, \sig{RESET\_PC} for program addresses, zero elsewhere.
-
-The rule is applied across the whole delivery rather than only where a net is
-read combinationally, because ``the valid bit makes the X harmless'' is a claim
-about every consumer of every unreset bit. Applied to the shared slave's
-response-code flags, that same reasoning put \texttt{X} on a bus output
-(Chapter~\ref{ch:reset}). The cost is stated in Section~\ref{sec:resetcost}.
+Out of reset the payload holds a defined idle state --- the canonical NOP
+\texttt{0x0000\_0013} in the instruction word and \sig{RESET\_PC} in the
+program-address fields --- so the decoder outputs that reach the AXI
+\sig{VALID} signals are defined from the first clock.
 
 \section{The hazard unit}
 

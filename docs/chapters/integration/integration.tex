@@ -95,16 +95,11 @@ address is accepted only when no response is pending. On the AR handshake the
 peripheral's combinational read data and its \sig{rd\_ok} qualifier are captured
 into \sig{RDATA} and \sig{RRESP}.
 
-Every flop in this module is reset, and two of them are the reason the whole
-delivery adopted that rule. \sig{BRESP} and \sig{RRESP} are combinational
-functions of \sig{bresp\_err\_q} and \sig{rresp\_err\_q}, and they are driven
-\emph{whether or not} the corresponding \sig{VALID} is asserted. An earlier
-revision left both flags unreset on the argument that they are only meaningful
-while \sig{VALID} is high --- true of the protocol, and irrelevant to what the
-pins actually carry, which was \texttt{X} from time zero until the first
-transaction of each direction completed. \sig{s\_axi\_rdata\_o} is reset for the
-same reason. Chapter~\ref{ch:reset} states the resulting policy; the reset bench
-checks all three signals while reset is still asserted
+\sig{BRESP} and \sig{RRESP} are combinational functions of stored error flags
+and are driven whether or not the corresponding \sig{VALID} is asserted, so both
+flags and \sig{s\_axi\_rdata\_o} reset to zero: the response pins read
+\texttt{OKAY} and \texttt{0x0000\_0000} from time zero rather than \texttt{X}.
+The reset bench checks all three while reset is still asserted
 (Section~\ref{sec:vp-picreset}, step 1).
 
 \begin{figure}[H]

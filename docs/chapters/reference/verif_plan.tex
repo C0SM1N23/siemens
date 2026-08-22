@@ -110,7 +110,8 @@ than the shared generator's, because the procedure asserts it a second time.
   \item Release \sig{rst\_n\_i} between clock edges.
   \item Read all 16 \reg{SRCx\_CONFIG}, all 16 \reg{SRCx\_SW\_TRIG}, all 16
         \reg{SRCx\_STATUS} and the 8 global registers --- the complete 56-word
-        map --- and compare each against Table~\ref{tab:picreset}.
+        map --- and compare each against the reset column of
+        Table~\ref{tab:picmap}.
 \end{enumerate}
 All 16 instances of each per-source register are read, not a sample. A register
 that resets correctly at index 0 and not at index 11 is exactly what a spot
@@ -497,7 +498,7 @@ Absent & everything else, including \reg{mcountinhibit} & \textbf{Must trap} on
 
 \begin{enumerate}[leftmargin=*,itemsep=3pt]
 \item[\textbf{1}] \textbf{Reset value of every implemented CSR}, against
-Table~\ref{tab:csrreset}. \reg{mstatus} is the one that is not zero, because MPP
+Table~\ref{tab:csrmap}. \reg{mstatus} is the one that is not zero, because MPP
 is hardwired to \texttt{11}.
 
 \item[\textbf{2}] \textbf{Read-only CSRs.} \reg{mip} is first driven non-zero by
@@ -762,15 +763,12 @@ entries a program touches, and the three return-address-stack boundaries ---
 overflow, underflow, and the both-link \sig{JALR} that replaces the top of
 stack.
 
-\paragraph{Why it was added.} This bench closes a gap identified while checking
-this document against the RTL. Chapter~\ref{ch:reset} states that every
-predictor array is reset and that nothing in the block holds X after release;
-nothing in the regression looked at CPU-internal reset values at all.
-Chapter~\ref{ch:fetch} documents the RAS overflow, underflow and
-replace-top behaviours and the \sig{RAS\_DEPTH}~=~0 tie-off; the directed
-program never nests calls deeper than three, so none of the four was exercised
-anywhere. The behaviour was implemented and documented but not validated, which
-is a different thing from being wrong.
+\paragraph{Why it was added.} Chapter~\ref{ch:fetch} documents the RAS
+overflow, underflow and replace-top behaviours and the \sig{RAS\_DEPTH}~=~0
+tie-off. The directed program never nests calls deeper than three, so none of
+the four was exercised anywhere in the regression, and no run looked at the
+predictor's state out of reset. The behaviour was implemented and documented but
+not validated, which is a different thing from being wrong.
 
 \paragraph{Setup.} Two instances of \file{branch\_predictor.v} driven from the
 same stimulus: one at the delivered defaults (\sig{ENTRIES} = 128,
