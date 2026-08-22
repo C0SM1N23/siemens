@@ -17,37 +17,26 @@ controller's nesting-stack arrays.
 
 \section{Why the rule is absolute}
 
-The narrower rule --- reset only what correctness requires --- is a defensible
-one, and it is what an earlier revision of this design followed. It was
-tightened for four reasons, in descending order of how much they matter.
+The narrower rule --- reset only what correctness requires --- would be
+defensible. Two findings in this design argue against it.
 
-\paragraph{1. An unreset flop can reach a bus output.} This is not
-hypothetical; it was present in the delivered design and is the finding that
-motivated the change. In the shared AXI4-Lite slave, \sig{BRESP} and
-\sig{RRESP} are combinational functions of a stored error flag, and they are
-driven \emph{whether or not} the corresponding \sig{VALID} is asserted. With
-those flags unreset, the slave presented X on its response codes from time zero
-until its first transaction completed. A protocol monitor cannot distinguish
-that from a real violation, and neither can a reviewer reading a waveform.
+\paragraph{An unreset flop can reach a bus output.} In the shared AXI4-Lite
+slave, \sig{BRESP} and \sig{RRESP} are combinational functions of a stored error
+flag and are driven \emph{whether or not} the corresponding \sig{VALID} is
+asserted. With those flags unreset, both peripherals presented X on their
+response codes from time zero until their first transaction completed. This was
+present in the delivered design, and is the finding that motivated the change.
 
-\paragraph{2. Two-state and four-state simulation must agree.} A design with
-unreset state behaves differently under a four-state simulator, which propagates
-X, and a two-state simulator or synthesis-derived netlist, which does not. Any
-argument of the form ``the valid bit prevents the X from mattering'' has to hold
-for every consumer of every unreset bit, and it has to keep holding after the
-next change. Removing the X removes the argument.
-
-\paragraph{3. Waveforms are evidence.} Verification here rests on reading
-waveforms and on protocol monitors that sample real signals. A fetch stage whose
-program counter reads X until the first instruction arrives is an unreadable
-waveform in exactly the window --- the first cycles after release --- where
-reset behaviour is being reviewed.
-
-\paragraph{4. Any register may become architecturally visible.} The interrupt
+\paragraph{Any register may become architecturally visible.} The interrupt
 controller's nesting stack was internal until \reg{NEST\_STATUS.TOP\_ID} and
 \reg{ACTIVE\_VEC.ID} were added, at which point unreset entries became a value
-software could read. The rule removes the need to re-audit that question every
-time a status register grows a field.
+software could read.
+
+Behind both is one point. ``The valid bit makes the X harmless'' is a claim about
+every consumer of every unreset bit, and it has to stay true after the next
+change; it also holds only in a four-state simulation, since a two-state model or
+a synthesised netlist resolves the X silently and the two then disagree.
+Resetting the flop retires the claim.
 
 \subsection*{What it costs}
 \label{sec:resetcost}
@@ -56,33 +45,10 @@ The cost is real and is stated rather than hidden:
 the branch predictor's payload arrays and the return-address stack move onto the
 reset tree, roughly 7.2\,kbit at the default configuration of 128 entries and a
 depth-8 stack. No synthesis was run for this delivery, so no area or timing
-figure is quoted. If a future target cannot afford it, the payload
-\texttt{always} blocks in \file{branch\_predictor.v} are the only places to
-change, and the design remains functionally identical --- the predictor is never
-believed before its valid bit is set.
-
-\paragraph{Packed, not arrays.} The branch predictor's five state elements are
-declared as packed vectors rather than unpacked arrays, and are addressed with
-an indexed part-select. That is the same hardware, but it lets each one reset in
-a \emph{single} assignment instead of a loop over 128 entries. The distinction
-is not cosmetic: a non-blocking assignment to an unpacked array inside a
-\texttt{for} loop is only accepted by a tool that can unroll that loop, and the
-unroll budget is a version-dependent default --- 128 entries is past the value
-older Verilator releases use. Writing the reset without a loop removes the
-dependency altogether. The local Verilator flow additionally pins
-\texttt{-{}-unroll-count 64} so that a future loop which would exceed the
-budget fails on the developer's machine rather than in CI.
-
-\section{One block, one owner}
-
-A second rule sits alongside the first and is what makes the reset values
-readable at all:
-
-\begin{rtlnote}
-\textbf{Exactly one \texttt{always} block drives each register or memory.} A
-register's reset value and every rule that updates it are therefore always found
-together, in one place, and no register can be assigned from two processes.
-\end{rtlnote}
+figure is quoted. Removing it again is confined to the predictor's
+payload registers in \file{branch\_predictor.v}, and leaves the design
+functionally identical --- the predictor is never believed before its valid bit
+is set.
 
 \section{Reset values, block by block}
 
@@ -289,8 +255,8 @@ One output is gated combinationally rather than only registered:
 \sig{ibus\_arvalid\_o} is qualified with \sig{rst\_n\_i}, because the fetch-issue
 decision is combinational and would otherwise request the reset vector while
 reset was still asserted. AXI4-Lite forbids \sig{VALID} during reset, and a
-slave holding \sig{READY} high in reset would have accepted a phantom address.
-This was a real defect, found by the assertion layer on its first run.
+slave holding \sig{READY} high in reset would have accepted a phantom
+address.
 
 \section{How the rule is verified}
 

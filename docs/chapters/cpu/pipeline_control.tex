@@ -27,17 +27,11 @@ forwarding path. The reset values are chosen so that the idle datapath is not
 merely defined but harmless --- the canonical NOP \texttt{0x0000\_0013} for the
 instruction word, \sig{RESET\_PC} for program addresses, zero elsewhere.
 
-\begin{rtlnote}
-This was changed in revision 2.0 of the delivery. The earlier revision reset only
-the valid bits, on the argument that a valid bit makes the payload
-unobservable. That argument holds inside the pipeline and fails at the block
-boundary: the same reasoning had been applied to the two AXI response-code flags
-in the shared slave, where it was wrong --- \sig{BRESP} and \sig{RRESP} are driven
-whether or not the corresponding \sig{VALID} is high, so both peripherals
-presented \texttt{X} on the bus from time zero. Rather than audit the argument
-flop by flop, the rule was made absolute. The cost is stated in
-Section~\ref{sec:resetcost}.
-\end{rtlnote}
+The rule is applied across the whole delivery rather than only where a net is
+read combinationally, because ``the valid bit makes the X harmless'' is a claim
+about every consumer of every unreset bit. Applied to the shared slave's
+response-code flags, that same reasoning put \texttt{X} on a bus output
+(Chapter~\ref{ch:reset}). The cost is stated in Section~\ref{sec:resetcost}.
 
 \section{The hazard unit}
 
@@ -48,11 +42,11 @@ manages its own progress. The entire control is five equations
 \begin{center}
 \begin{minipage}{0.72\linewidth}
 \ttfamily\small
-s2\_advance   = \textasciitilde lsu\_busy \& \textasciitilde wfi\_wait;\\
-redirect      = (trap\_take | mret\_exec | mispredict) \& s2\_advance;\\
-if\_dx\_we     = s2\_advance;\\
-if\_dx\_bubble = redirect | \textasciitilde fetch\_valid;\\
-dx\_squash     = trap\_take;
+s2\_advance\_o   = \textasciitilde lsu\_busy\_i \& \textasciitilde wfi\_wait\_i;\\
+redirect\_o      = (trap\_take\_i | mret\_exec\_i | mispredict\_i) \& s2\_advance\_o;\\
+if\_dx\_we\_o     = s2\_advance\_o;\\
+if\_dx\_bubble\_o = redirect\_o | \textasciitilde fetch\_valid\_i;\\
+dx\_squash\_o     = trap\_take\_i;
 \end{minipage}
 \end{center}
 

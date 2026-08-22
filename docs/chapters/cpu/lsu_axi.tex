@@ -14,37 +14,37 @@ localparam S\_IDLE = 2'd0, S\_RD = 2'd1, S\_WR = 2'd2;
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
-  \node[stst] (idle) at (0,0)   {\scriptsize S\_IDLE};
-  \node[st]   (rd)   at (56,20) {\scriptsize S\_RD};
-  \node[st]   (wr)   at (56,-20){\scriptsize S\_WR};
+  \node[stbi] (idle) at (0,0)    {S\_IDLE};
+  \node[stb]  (rd)   at (72,26)  {S\_RD};
+  \node[stb]  (wr)   at (72,-26) {S\_WR};
 
-  % idle -> rd -> idle
-  \draw[->,draw=accent] (idle) to[bend left=16]
-      node[lbl,pos=0.5,above left=-1mm and -3mm,align=center]
-      {start \&\ !we\\\scriptsize (load)} (rd);
-  \draw[->,draw=accent] (rd) to[bend left=16]
-      node[lbl,pos=0.3,above=0.5mm,align=center]
+  % --- read leg: the two arcs carry their labels at opposite ends -----
+  \draw[->,draw=accent] (idle) to[bend left=17]
+      node[lbl,pos=0.30,above left=0mm and -4mm,align=center]
+      {start \&\ !we\_i\\\scriptsize (load)} (rd);
+  \draw[->,draw=accent] (rd) to[bend left=17]
+      node[lbl,pos=0.30,below right=0mm and -4mm,align=center]
       {rd\_done\\\scriptsize RREADY \&\ RVALID} (idle);
 
-  % idle -> wr -> idle
-  \draw[->,draw=accent] (idle) to[bend right=16]
-      node[lbl,pos=0.5,below left=-1mm and -3mm,align=center]
-      {start \&\ we\\\scriptsize (store)} (wr);
-  \draw[->,draw=accent] (wr) to[bend right=16]
-      node[lbl,pos=0.3,below=0.5mm,align=center]
+  % --- write leg -----------------------------------------------------
+  \draw[->,draw=accent] (idle) to[bend right=17]
+      node[lbl,pos=0.30,below left=0mm and -4mm,align=center]
+      {start \&\ we\_i\\\scriptsize (store)} (wr);
+  \draw[->,draw=accent] (wr) to[bend right=17]
+      node[lbl,pos=0.30,above right=0mm and -4mm,align=center]
       {wr\_done\\\scriptsize BREADY \&\ BVALID} (idle);
 
-  \draw[->,draw=accent] (rd) to[out=40,in=-40,looseness=5]
+  \draw[->,draw=accent] (rd) to[out=35,in=-35,looseness=6]
       node[lbl,right=1mm]{\scriptsize waiting for R} (rd);
-  \draw[->,draw=accent] (wr) to[out=40,in=-40,looseness=5]
+  \draw[->,draw=accent] (wr) to[out=35,in=-35,looseness=6]
       node[lbl,right=1mm]{\scriptsize waiting for AW / W / B} (wr);
 
   \node[align=left,font=\scriptsize,anchor=north west,
-        draw=rulegrey,fill=boxbg,inner sep=4pt] at (-14,-34)
-    {\textbf{Reset state:} \texttt{S\_IDLE}\\
-     \texttt{start\ = req \&\& (state\_q == S\_IDLE)}\\
-     \texttt{active = (state\_q != S\_IDLE)}\\
-     \texttt{busy\ \ = (start || active) \&\& !done}};
+        draw=rulegrey,fill=boxbg,inner sep=5pt] at (-16,-44)
+    {\textbf{Reset state:} \texttt{S\_IDLE}\\[1pt]
+     \texttt{start\ \ \ \ = req\_i \&\& (state\_q == S\_IDLE)}\\
+     \texttt{active\_o = (state\_q != S\_IDLE)}\\
+     \texttt{busy\_o\ \ = (start || active\_o) \&\& !done\_o}};
 \end{tikzpicture}
 \caption{LSU state machine, \file{hdl/lsu.v}. One transaction is outstanding at a
 time; the state returns to idle only when the response handshake completes.}
@@ -80,8 +80,8 @@ Response acceptance is gated on the address phase being complete:
 
 \begin{center}
 \ttfamily\small
-assign dbus\_rready = (state\_q == S\_RD) \&\& ar\_sent\_q;\\
-assign dbus\_bready = (state\_q == S\_WR) \&\& aw\_sent\_q \&\& w\_sent\_q;
+assign dbus\_rready\_o = (state\_q == S\_RD) \&\& ar\_sent\_q;\\
+assign dbus\_bready\_o = (state\_q == S\_WR) \&\& aw\_sent\_q \&\& w\_sent\_q;
 \end{center}
 
 \section{Command latch}

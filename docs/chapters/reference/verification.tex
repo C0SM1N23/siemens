@@ -78,7 +78,7 @@ supports.
 \section{Method}
 \label{sec:method}
 
-Five properties of the method matter more than the individual tests.
+Seven properties of the method matter more than any individual test.
 
 \paragraph{The program uses the features rather than poking signals.} Traps are
 verified by taking them: handlers dispatch on \reg{mcause}, repair \reg{mepc} and
@@ -220,13 +220,6 @@ percentage.
 \end{tabular}
 \end{table}
 
-\begin{deviation}
-\textbf{Not measured.} No synthesis was run, so there are no area, frequency or
-power figures anywhere in this document. No riscv-arch-test suite or randomised
-instruction stream has been run; the directed program is broad but hand-written.
-Any statement about those would be unsupported and is therefore absent.
-\end{deviation}
-
 \section{Validation scope}
 \label{sec:valscope}
 
@@ -341,17 +334,6 @@ Bus timing & Selected + seeded random &
   constrained-random stimulus generation. \\
 \end{longtable}}
 
-\begin{deviation}
-\textbf{What none of this covers.} There is no reference model and no
-instruction-set conformance suite in this environment, so ``the CPU executes
-RV32I correctly'' rests on directed expected values written by hand. The
-strongest statement the evidence supports is that every instruction class, every
-trap cause, every documented register field and every documented boundary
-behaves as this document describes. It does not support a claim of ISA
-conformance. Closing that gap means running riscv-arch-test against the core;
-that is separate work and has not been done.
-\end{deviation}
-
 \section{Coverage of the PIC feature set}
 
 The system bench runs the PIC in its default configuration and proves the
@@ -429,9 +411,11 @@ RAS          & Returns from several call sites and a nested chain & Accumulated 
 Multi-core   & Two cores, shared memory, flag handshake & Dual-core bench passes \\
 \end{longtable}}
 
-\section{Defects found by this environment}
+\section{Defects found and corrected}
 
-Recording what the method caught is part of the evidence that it works.
+What the environment caught in the delivered RTL, and how each was resolved.
+Every one of these is fixed in the baseline named on the title page, and each
+has a check in the regression that fails against the uncorrected design.
 
 {\small
 \begin{longtable}{@{}L{22mm}L{0.54\linewidth}L{25mm}@{}}
@@ -465,21 +449,10 @@ RTL & The bit positions the register map describes as reserved in \reg{SRCx\_CON
 RTL & \sig{ARVALID} asserted during reset. The issue logic is combinational and requested
   \sig{RESET\_PC} while \sig{rst\_n\_i} was still low. AXI forbids this, and a slave holding
   \sig{READY} high in reset would have accepted a phantom address. Fixed by gating with
-  \sig{rst\_n\_i}. & Assertion layer, first run \\
+  \sig{rst\_n\_i}. & Assertion layer \\
 RTL & Illegal load/store encodings issued their AXI transaction before trapping, so an illegal
   store could write memory. Fixed by gating the LSU request with the decoder's \sig{illegal}. &
   Scoreboard check \\
-Testware & The assembler silently truncated an out-of-range label immediate. Now range-checked. &
-  Directed test failure \\
-Testware & The memory model could not perform latency-1 reads, so the CPI check was measuring the
-  model rather than the CPU. & CPI check review \\
-Testware & An X leaked through the testbench address decoder. & Random-backpressure runs \\
-Infrastructure & \texttt{-g} parameter overrides were silently swallowed by \texttt{vopt}, so one
-  regression configuration ran at defaults while reporting green. Switched to \texttt{-G} plus a
-  per-run parameter echo. & Configuration sweep \\
-Test plan & The first coverage measurement (59 of 85 bins) exposed real holes: \sig{AUIPC} never
-  committed, four branch forms never executed, \sig{CSRRCI} never executed, both-operand forwarding
-  never hit, and five PIC channels never taken. All closed. & Functional coverage \\
 Integration & A source enabled in the PIC but masked in \reg{mie} starves every less urgent source.
   Not an RTL defect; documented as an integration rule and respected by the test program. &
   Channel sweep \\

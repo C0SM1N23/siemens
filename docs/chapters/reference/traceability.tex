@@ -135,7 +135,7 @@ D-SPUR & Spurious detected at claim; logged; claim still pushed & PIC & \file{pi
 D-DDL & Per-source deadline counter; jump / bump / multi escalation & PIC & \file{pic.v} & Escalation flips the offer and preempts an active source & Implemented \\
 D-SW & Keyed software triggers, \texttt{0xA5A5} & PIC & \file{pic.v} & Keyed trigger accepted, unkeyed write ignored & Implemented \\
 D-AXI & Shared slave; byte strobes; SLVERR elsewhere & PIC, Timer & \file{axi\_lite\_slave.v} & Monitors and SVA on both slave ports & Implemented \\
-D28 & Every flop reset; no flop leaves reset holding X; one \texttt{always} block per register & All &
+D28 & Every flop reset; no flop leaves reset holding X & All &
   all of \file{hdl/} & \file{tb\_pic\_reset}, \file{tb\_mtimer\_regs},
   \file{tb\_csr\_ro} and \file{tb\_bp}: reset values, X-freedom, and an
   asynchronous reset from a loaded state. Supersedes the earlier

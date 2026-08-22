@@ -62,9 +62,9 @@ PIC were designed to meet.
 
   % --- CPU <-> PIC handshake, in a channel to the left of every block -----
   \draw[flow] (-11,6) -- (-20,6) -- (-20,50) -- (8,50);
-  \node[lbl,rotate=90,align=center] at (-23,30) {cpu\_irq,\\cpu\_irq\_vec};
+  \node[lbl,rotate=90,align=center] at (-23,30) {cpu\_irq\_o,\\cpu\_irq\_vec\_o};
   \draw[flow] (8,45) -- (-15,45) -- (-15,2) -- (-11,2);
-  \node[lbl,rotate=90] at (-17.5,26) {ack / eoi};
+  \node[lbl,rotate=90] at (-17.5,26) {ack\_o / eoi\_o};
 \end{tikzpicture}
 \caption{Delivered blocks (solid outline) and their environment. Addresses are the
 values used by the verification environment, not a fixed system memory map.}

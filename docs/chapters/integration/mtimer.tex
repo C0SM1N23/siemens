@@ -50,8 +50,8 @@ the increment, so the counter never loses a tick.
 
 \begin{center}
 \ttfamily\small
-mtime\_q[31:0] <= wr\_time\_lo ? lane\_merge(mtime\_inc[31:0], wdata, wstrb)\\
-\hspace*{6.2em}: mtime\_inc[31:0];
+mtime\_q[31:0] <= wr\_time\_lo ? lane\_merge(mtime\_inc[31:0], reg\_wdata, reg\_wstrb)\\
+\hspace*{7.4em}: mtime\_inc[31:0];
 \end{center}
 
 The upper half is written the same way, so the two halves always advance as a

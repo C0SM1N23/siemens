@@ -360,20 +360,28 @@ a sequence rather than as six independent facts.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[node distance=17mm]
-  \node[st] (idle) {IDLE};
-  \node[st,right=of idle] (pend) {PENDING};
-  \node[st,right=of pend] (svc)  {IN\\SERVICE};
-  \node[st,right=of svc]  (done) {SERVICED};
-  \draw[flow] (idle) -- node[lbl,above]{line high} (pend);
-  \draw[flow] (pend) -- node[lbl,above]{claim} (svc);
-  \draw[flow] (svc)  -- node[lbl,above]{handler} node[lbl,below]{clears source} (done);
-  \draw[flow] (done.south) .. controls +(0,-11mm) and +(0,-11mm) ..
-     node[lbl,below]{end of interrupt} (idle.south);
-  \node[below=6mm of idle,font=\scriptsize,align=center] {all 0\\timer 0};
-  \node[below=6mm of pend,font=\scriptsize,align=center] {PEND=1\\timer running};
-  \node[below=6mm of svc,font=\scriptsize,align=center]  {PEND=1 ACTIVE=1\\timer cleared};
-  \node[below=6mm of done,font=\scriptsize,align=center] {ACTIVE=1\\timer 0};
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (idle) at (0,0)   {IDLE};
+  \node[stb]  (pend) at (38,0)  {PENDING};
+  \node[stb]  (svc)  at (81,0)  {IN SERVICE};
+  \node[stb]  (done) at (128,0) {SERVICED};
+
+  \draw[->,draw=accent] (idle) -- node[lbl,above]{line high} (pend);
+  \draw[->,draw=accent] (pend) -- node[lbl,above]{claim} (svc);
+  \draw[->,draw=accent] (svc)  -- node[lbl,above,align=center]
+        {handler clears\\\scriptsize the source} (done);
+
+  % what the register reads in each state, directly under its own box
+  \node[font=\scriptsize,align=center,anchor=north] at (0,-8)   {all 0\\timer 0};
+  \node[font=\scriptsize,align=center,anchor=north] at (38,-8)  {PEND=1\\timer running};
+  \node[font=\scriptsize,align=center,anchor=north] at (81,-8)  {PEND=1 ACTIVE=1\\timer cleared};
+  \node[font=\scriptsize,align=center,anchor=north] at (128,-8) {ACTIVE=1\\timer 0};
+
+  % the return leg leaves and re-enters from the sides, so its verticals stay
+  % clear of the annotation column under each state
+  \draw[->,draw=accent] (done.east) -- (144,0) -- (144,-26) -- (-14,-26)
+        -- (-14,0) -- (idle.west);
+  \node[lbl,above=0.5mm] at (65,-26) {end of interrupt};
 \end{tikzpicture}
 \caption{\reg{SRCx\_STATUS} life cycle. The bench reads the register at each of
 the four states and after the return, and compares the whole six-bit state

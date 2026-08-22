@@ -52,10 +52,10 @@ paid, so the trade was taken deliberately.
         {branch\_predictor\\\scriptsize BTB/BHT + RAS};
 
   % --- pipeline registers ------------------------------------------------
-  \node[draw=rulegrey,fill=white,minimum width=4,minimum height=68,inner sep=0] (ifdx) at (24,-28) {};
-  \node[rotate=90,font=\scriptsize] at (24,-28) {IF/DX};
-  \node[draw=rulegrey,fill=white,minimum width=4,minimum height=68,inner sep=0] (dxwb) at (130,-28) {};
-  \node[rotate=90,font=\scriptsize] at (130,-28) {DX/WB};
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=68,inner sep=0] (ifdx) at (24,-28) {};
+  \node[rotate=90,font=\tiny] at (24,-28) {IF/DX};
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=68,inner sep=0] (dxwb) at (130,-28) {};
+  \node[rotate=90,font=\tiny] at (130,-28) {DX/WB};
 
   % --- S2 datapath, left to right ----------------------------------------
   \node[blk,minimum width=24,minimum height=12] (dec) at (42,-6)

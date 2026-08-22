@@ -92,4 +92,10 @@
   lbl/.style={font=\scriptsize,inner sep=1.5pt,fill=white},
   st/.style={draw=accent,circle,fill=white,minimum size=13mm,font=\small,inner sep=1pt,align=center},
   stst/.style={st,double,double distance=0.6pt},
+  % Box state: grows to fit its name, so a long state name is never clipped by
+  % a fixed-radius circle. stbi marks the reset state.
+  stb/.style={draw=accent,fill=white,rounded corners=2pt,align=center,
+              font=\small,inner xsep=5pt,inner ysep=4pt,
+              minimum height=8mm,minimum width=19mm},
+  stbi/.style={stb,double,double distance=0.6pt},
 }

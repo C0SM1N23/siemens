@@ -40,13 +40,11 @@ only what the controller itself needs.
 
 The CPU signals completion with the dedicated \sig{cpu\_irq\_eoi} pulse.
 
-\begin{rtlnote}
-This wire exists because the first version of the block used the CPU's single
-\sig{cpu\_in\_trap} level to release the serviced source. That works for one
-level and cannot express \emph{which} nesting level has finished. Adding a
-distinct pop event was the change that made real nesting possible;
-\sig{cpu\_in\_trap} is still driven, but the PIC does not use it.
-\end{rtlnote}
+A dedicated pulse is what makes nesting possible. The CPU's \sig{cpu\_in\_trap}
+level says only that a trap is in progress; it cannot express \emph{which}
+nesting level has finished, so one pulse per interrupt-returning \sig{MRET} is
+required to pop exactly one. \sig{cpu\_in\_trap} is still driven, for
+observability, but the PIC does not use it.
 
 A preemption blocked by the depth limit is visible rather than silent:
 \reg{INT\_STATUS.OVF} and \reg{NEST\_STATUS.OVF} are set. Nothing is lost --- the
@@ -127,18 +125,17 @@ waiting episode. With \sig{MULTI} = 1 the counter re-arms after each escalation,
 so a source that keeps waiting keeps climbing; combined with bump mode this gives
 a source that ages upward one band per deadline period.
 
-After the interrupt is acknowledged and the source returns to idle the escalated
-priority is dropped: the effective band reverts to the configured band and the
-counter resets, so escalation never accumulates across events. Each request
-starts from the priority software actually programmed.
+The escalated priority is dropped at the claim: from the cycle the source goes
+into service it is no longer a pending request awaiting service, so the
+effective band reverts to the configured band and the deadline counter resets.
+Escalation therefore never accumulates across events --- each request starts
+from the priority software actually programmed.
 \reg{SRCx\_STATUS.ESC} clears with it, while the global \reg{INT\_STATUS.ESC}
 stays sticky so the event itself is not lost.
 
-\begin{rtlnote}
-The effective-band update orders the escalation branch \emph{before} the
-track-configuration branch, so on the cycle a deadline is missed the escalation
-wins --- \sig{escalated[s]} only rises on the following cycle.
-\end{rtlnote}
+The promotion takes effect on the cycle the deadline is missed, not on the one
+after it: the escalated band is already in the priority key the resolver
+evaluates on that same cycle.
 
 \section{Software-triggered interrupts}
 

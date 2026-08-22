@@ -11,7 +11,7 @@ sustains one instruction per cycle.
 \subsection{Outstanding-transaction state}
 
 The fetch unit has no state register. Its behaviour is encoded in four
-independent flags, each with its own always block:
+independent flags:
 
 \begin{table}[H]
 \centering
@@ -34,34 +34,50 @@ independent flags, each with its own always block:
 \end{table}
 
 Although the flags are independent, the AXI slot they describe moves through a
-well-defined cycle. Figure~\ref{fig:fetchfsm} draws that cycle as it follows from
-the four always blocks; it is a description of the encoded behaviour, not of a
-state register that exists in the source.
+well-defined cycle. Figure~\ref{fig:fetchfsm} draws that cycle as the four flags
+produce it. It describes behaviour; no corresponding state register exists.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[node distance=30mm,>={Stealth[length=2.4mm]},semithick]
-  \node[stst] (idle) {\scriptsize IDLE};
-  \node[st,right=34mm of idle] (arp) {\scriptsize AR\_PEND};
-  \node[st,below=26mm of arp] (infl) {\scriptsize IN\_FLIGHT};
-  \node[st,left=34mm of infl] (disc) {\scriptsize DISCARD};
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  % ---- the AXI read slot: three states -------------------------------
+  \node[font=\scriptsize\itshape,anchor=west,color=accent] at (-14,16)
+        {the AXI read slot};
+  \node[stbi] (idle) at (0,0)    {IDLE};
+  \node[stb]  (arp)  at (58,0)   {AR\_PEND};
+  \node[stb]  (infl) at (29,-32) {IN\_FLIGHT};
 
-  \draw[->,draw=accent] (idle) to[bend left=12] node[lbl,above,align=center]
-      {issue\_now\\\scriptsize \&\ !ARREADY} (arp);
-  \draw[->,draw=accent] (idle) to[bend right=42] node[lbl,left,align=center,pos=0.5]
-      {issue\_now \&\ ARREADY} (infl);
-  \draw[->,draw=accent] (arp) to node[lbl,right,align=center]{ARREADY} (infl);
-  \draw[->,draw=accent] (infl) to[bend left=12] node[lbl,below,align=center]
-      {RVALID\\\scriptsize beat consumed} (idle.south east);
-  \draw[->,draw=accent] (infl) to node[lbl,above,align=center]
-      {redirect while\\\scriptsize slot busy} (disc);
-  \draw[->,draw=accent] (disc) to[bend left=32] node[lbl,left,align=center]
-      {RVALID\\\scriptsize beat dropped} (idle);
-  \draw[->,draw=accent,loop above] (arp) to node[lbl,above]{!ARREADY} (arp);
+  \draw[->,draw=accent] (idle) to[bend left=13]
+      node[lbl,above,align=center,pos=0.5]
+      {issue\_now \&\ !ARREADY} (arp);
+  \draw[->,draw=accent,loop above,looseness=7,out=65,in=115] (arp) to
+      node[lbl,above]{!ARREADY} (arp);
+  \draw[->,draw=accent] (arp) to[bend left=13]
+      node[lbl,right=1mm,align=left,pos=0.45]{ARREADY} (infl);
+  \draw[->,draw=accent] (infl) to[bend left=13]
+      node[lbl,left=1.5mm,align=right,pos=0.80]
+      {RVALID\\\scriptsize beat consumed} (idle);
+  \draw[->,draw=accent] (idle) to[bend left=13]
+      node[lbl,right=1.5mm,align=left,pos=0.74]
+      {issue\_now\\\scriptsize \&\ ARREADY} (infl);
+
+  % ---- discard_q: a flag, not a fourth state -------------------------
+  \node[font=\scriptsize\itshape,anchor=west,color=accent] at (-14,-50)
+        {\sig{discard\_q}, orthogonal to the slot above};
+  \node[stbi] (dc) at (6,-64)  {\sig{discard\_q} = 0};
+  \node[stb]  (ds) at (62,-64) {\sig{discard\_q} = 1};
+
+  \draw[->,draw=accent] (dc) to[bend left=17]
+      node[lbl,above,align=center]{redirect\_i while the slot is busy} (ds);
+  \draw[->,draw=accent] (ds) to[bend left=17]
+      node[lbl,below,align=center]{RVALID --- the stale beat is swallowed} (dc);
 \end{tikzpicture}
-\caption{Instruction-fetch slot behaviour, derived from \sig{ar\_pending\_q},
-\sig{inflight\_q} and \sig{discard\_q}. The double circle is the reset condition
-(all flags clear). No corresponding state register exists in the RTL.}
+\caption{Instruction-fetch behaviour, derived from \sig{ar\_pending\_q},
+\sig{inflight\_q} and \sig{discard\_q}. Double outlines mark the reset
+condition. \sig{discard\_q} is drawn separately because it is exactly that in
+the RTL: an independent flag, armed by a redirect from \emph{either} busy state,
+because a read cannot be cancelled once \sig{ARVALID} is up. Neither machine
+exists as a state register.}
 \label{fig:fetchfsm}
 \end{figure}
 
@@ -92,16 +108,14 @@ therefore flushed silently, which is the intended behaviour.
 
 \begin{center}
 \ttfamily\small
-assign ibus\_arvalid = rst\_n \& (ar\_pending\_q | issue\_now);
+assign ibus\_arvalid\_o = rst\_n\_i \& (ar\_pending\_q | issue\_now);
 \end{center}
 
 \begin{rtlnote}
 The gate is not cosmetic. \sig{issue\_now} is combinational free-slot logic, so
 without it the fetch unit requests \sig{RESET\_PC} while reset is still asserted.
-AXI forbids \sig{VALID} during reset, and a slave holding \sig{READY} high in
-reset would accept a phantom address. This was found by the assertion layer on
-its first run; the procedural monitor could not see it because it only arms after
-reset.
+AXI4-Lite forbids \sig{VALID} during reset, and a slave holding \sig{READY}
+high in reset would accept a phantom address.
 \end{rtlnote}
 
 \section{Branch predictor}

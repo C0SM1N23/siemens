@@ -66,44 +66,36 @@ They are separate because they answer different questions.
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[>={Stealth[length=2.4mm]},semithick]
-  \node[stst] (run) {\scriptsize RUNNING};
-  \node[st,right=40mm of run] (exc) {\scriptsize IN\_TRAP};
-  \node[st,below=24mm of exc] (irq) {\scriptsize IN\_TRAP\\[-2pt]\scriptsize + IN\_IRQ};
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (run) at (0,0)    {RUNNING};
+  \node[stb]  (exc) at (78,20)  {IN\_TRAP};
+  \node[stb]  (irq) at (78,-24) {IN\_TRAP + IN\_IRQ};
 
-  \draw[->,draw=accent] (run) to[bend left=12]
-    node[lbl,above,align=center]{synchronous exception\\\scriptsize trap\_take \& !irq\_take} (exc);
-  \draw[->,draw=accent] (run) to[bend right=22]
-    node[lbl,left,align=center,pos=0.45]{interrupt taken\\\scriptsize irq\_take \& s2\_advance} (irq);
-  \draw[->,draw=accent] (exc) to[bend left=12]
-    node[lbl,below,align=center]{MRET\\\scriptsize no eoi pulse} (run);
-  \draw[->,draw=accent] (irq) to[bend right=22]
-    node[lbl,right,align=center,pos=0.55]{MRET\\\scriptsize emits cpu\_irq\_eoi} (run);
-  \draw[->,draw=accent,loop right] (exc) to
-    node[lbl,right,align=center]{nested synchronous\\\scriptsize trap: stays high} (exc);
+  % synchronous exception leg
+  \draw[->,draw=accent] (run) to[bend left=13]
+    node[lbl,pos=0.42,above left=0mm and -6mm,align=center]
+    {synchronous exception\\
+     \scriptsize trap\_take \&\ !irq\_take \&\ s2\_advance} (exc);
+  \draw[->,draw=accent] (exc) to[bend left=13]
+    node[lbl,pos=0.35,below right=0mm and -5mm,align=center]
+    {MRET\\\scriptsize no eoi pulse} (run);
+
+  % interrupt leg
+  \draw[->,draw=accent] (run) to[bend right=13]
+    node[lbl,pos=0.42,below left=0mm and -6mm,align=center]
+    {interrupt taken\\\scriptsize irq\_take \&\ s2\_advance} (irq);
+  \draw[->,draw=accent] (irq) to[bend right=13]
+    node[lbl,pos=0.35,above right=0mm and -5mm,align=center]
+    {MRET\\\scriptsize emits cpu\_irq\_eoi\_o} (run);
+
+  \draw[->,draw=accent,loop right,looseness=7,out=35,in=-35] (exc) to
+    node[lbl,right=1mm,align=left]{nested synchronous\\\scriptsize trap: stays high} (exc);
+  \draw[->,draw=accent,loop right,looseness=7,out=35,in=-35] (irq) to
+    node[lbl,right=1mm,align=left]{nested synchronous\\\scriptsize trap: both stay high} (irq);
 \end{tikzpicture}
-\caption{CPU trap tracking. The distinction exists so that exactly one
-end-of-interrupt pulse is emitted per interrupt and none for exceptions.}
+\caption{CPU trap tracking. Only \sig{in\_irq} gates the end-of-interrupt
+pulse, so exactly one is emitted per interrupt and none for an exception. Both
+flags are cleared by the same \sig{MRET}, and a synchronous trap taken inside
+either handler leaves them where they are.}
 \label{fig:trapfsm}
 \end{figure}
-
-\section{Why so little sequential control}
-
-The design pushes work into combinational logic qualified by a valid bit rather
-than into state machines. Three consequences follow, and they are visible
-throughout the earlier chapters:
-
-\begin{itemize}[nosep]
-  \item The hazard unit needs no states because every decision is a function of
-        the current cycle, gated by \sig{s2\_advance}.
-  \item The PIC resolver needs no states because priority resolution is a pure
-        function of the request vector, the configuration and the stack top.
-  \item The AXI slave needs no explicit state because ``what has arrived so far''
-        is exactly two flags.
-\end{itemize}
-
-The one place a real state machine earns its keep is the LSU, where a write has
-three independent channels and the response must not be accepted before the
-address phase completes. Even there the state register only distinguishes read
-from write; per-channel progress is tracked separately, which is what keeps a
-future AXI4-Full extension additive.

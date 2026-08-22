@@ -38,7 +38,7 @@ transaction commits.
 
 \begin{center}
 \ttfamily\small
-wr\_commit = aw\_got\_q \&\& w\_got\_q \&\& !s\_axi\_bvalid;
+wr\_commit = aw\_got\_q \&\& w\_got\_q \&\& !s\_axi\_bvalid\_o;
 \end{center}
 
 Readiness is derived directly from those flags, so the slave stops accepting a
@@ -47,33 +47,44 @@ response is pending:
 
 \begin{center}
 \ttfamily\small
-s\_axi\_awready = !aw\_got\_q \&\& !s\_axi\_bvalid;\\
-s\_axi\_wready  = !w\_got\_q  \&\& !s\_axi\_bvalid;
+s\_axi\_awready\_o = !aw\_got\_q \&\& !s\_axi\_bvalid\_o;\\
+s\_axi\_wready\_o\ \ = !w\_got\_q\ \ \&\& !s\_axi\_bvalid\_o;
 \end{center}
 
 \begin{figure}[H]
 \centering
-\begin{tikzpicture}[>={Stealth[length=2.4mm]},semithick]
-  \node[stst] (idle) {\scriptsize IDLE};
-  \node[st,above right=13mm and 30mm of idle] (gotaw) {\scriptsize GOT\_AW};
-  \node[st,below right=13mm and 30mm of idle] (gotw)  {\scriptsize GOT\_W};
-  \node[st,right=30mm of idle,xshift=30mm] (resp) {\scriptsize RESP};
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (idle)  at (0,0)    {IDLE};
+  \node[stb]  (gotaw) at (46,20)  {GOT\_AW};
+  \node[stb]  (gotw)  at (46,-20) {GOT\_W};
+  \node[stb]  (both)  at (92,0)   {BOTH};
+  \node[stb]  (resp)  at (137,0)  {RESP};
 
-  \draw[->,draw=accent] (idle) to[bend left=10] node[lbl,above left=0mm and -2mm]{AW hs} (gotaw);
-  \draw[->,draw=accent] (idle) to[bend right=10] node[lbl,below left=0mm and -2mm]{W hs} (gotw);
-  \draw[->,draw=accent] (gotaw) to[bend left=10] node[lbl,above right=0mm and -2mm]{W hs} (resp);
-  \draw[->,draw=accent] (gotw) to[bend right=10] node[lbl,below right=0mm and -2mm]{AW hs} (resp);
-  \draw[->,draw=accent] (idle) to node[lbl,above,align=center]{AW + W\\\scriptsize same cycle} (resp);
-  \draw[->,draw=accent] (resp) to[bend left=52]
-      node[lbl,below,align=center,pos=0.5]{BREADY --- BVALID drops, flags clear} (idle);
-  \node[align=left,font=\scriptsize,below=15mm of idle,text width=64mm]
-    {\textbf{Reset:} both flags clear, \texttt{BVALID} low.\\
-     \texttt{wr\_en} pulses for one cycle on entry to RESP.\\
-     \texttt{BRESP} = \texttt{wr\_ok} ? OKAY : SLVERR, captured at commit.};
+  \draw[->,draw=accent] (idle)  -- node[lbl,pos=0.5,above left=-1mm and -3mm]{AW hs} (gotaw);
+  \draw[->,draw=accent] (idle)  -- node[lbl,pos=0.5,below left=-1mm and -3mm]{W hs}  (gotw);
+  \draw[->,draw=accent] (gotaw) -- node[lbl,pos=0.5,above right=-1mm and -3mm]{W hs} (both);
+  \draw[->,draw=accent] (gotw)  -- node[lbl,pos=0.5,below right=-1mm and -3mm]{AW hs}(both);
+  \draw[->,draw=accent] (idle)  -- node[lbl,pos=0.5,above,align=center]
+        {AW + W\\\scriptsize same cycle} (both);
+  \draw[->,draw=accent] (both)  -- node[lbl,pos=0.5,above,align=center]
+        {\texttt{wr\_commit}\\\scriptsize \texttt{wr\_en\_o} pulses} (resp);
+
+  % return leg routed below every node, clear of GOT_W
+  \draw[->,draw=accent] (resp.south) -- (137,-38) -- (0,-38) -- (idle.south);
+  \node[lbl,above=0.5mm] at (68,-38) {BREADY --- BVALID drops, flags clear};
+
+  \node[align=left,font=\scriptsize,anchor=north west,
+        draw=rulegrey,fill=boxbg,inner sep=5pt,text width=118mm] at (0,-48)
+    {\textbf{Reset:} both flags clear, \texttt{BVALID} low.
+     \texttt{BOTH} lasts exactly one cycle --- the got bits are registered and
+     \texttt{wr\_commit} is combinational from them, so the commit is always the
+     cycle \emph{after} the second handshake, including when AW and W arrive
+     together. \texttt{BRESP} = \texttt{wr\_ok\_i}\,?\,OKAY\,:\,SLVERR, captured
+     at commit.};
 \end{tikzpicture}
 \caption{Write handshake of \file{axi\_lite\_slave.v}, encoded in
-\sig{aw\_got\_q}, \sig{w\_got\_q} and \sig{s\_axi\_bvalid} rather than in a state
-register.}
+\sig{aw\_got\_q}, \sig{w\_got\_q} and \sig{s\_axi\_bvalid\_o} rather than in a
+state register.}
 \label{fig:slavewr}
 \end{figure}
 

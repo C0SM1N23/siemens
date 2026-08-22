@@ -138,9 +138,9 @@ needs no key.
 \midrule
 {[0]}       & \sig{PEND}      & 0 & The source has an enabled request. Does not imply it is the one being offered. \\
 {[1]}     & \sig{ACTIVE}    & 0 & In service, on the nesting stack. Cannot be offered again until its end-of-interrupt. \\
-{[2]}     & \sig{ESC}       & 0 & Missed its deadline and was escalated. Clears when the source returns to idle. \\
+{[2]}     & \sig{ESC}       & 0 & Missed its deadline and was escalated. Clears at the claim, together with \sig{EFF\_BAND} and \sig{DDL\_TIMER}; the sticky \reg{INT\_STATUS.ESC} does not. \\
 {[3]}     & \sig{SPUR}      & 0 & The current claim was spurious. Clears on the return; the sticky \reg{SPURIOUS\_LOG} bit does not. \\
-{[5:4]}   & \sig{EFF\_BAND} & 00 & The band actually in use now; differs from \sig{BAND} after an escalation. \\
+{[5:4]}   & \sig{EFF\_BAND} & 00 & The band actually in use now; differs from \sig{BAND} between an escalation and the claim that ends it. \\
 {[15:6]}  & ---             & 0 & Reserved, hardwired to zero. \\
 {[31:16]} & \sig{DDL\_TIMER}& 0 & Cycles elapsed on the deadline counter. Runs while pending and unserviced; cleared on claim and on return to idle. \\
 \bottomrule
