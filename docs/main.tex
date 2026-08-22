@@ -37,11 +37,9 @@ Deliverables    & \file{hdl/}, \file{debug/} (testbenches, SVA, coverage) \\
 
 \begin{minipage}{0.86\linewidth}
 \small
-This document describes the RTL as implemented on the source baseline named above.
-Every register address, bit field, reset value and state transition in it was read
-back from the source files or from the elaborated design; where the feature
-specifications and the delivered RTL differ, the difference is stated rather than
-smoothed over.
+The RTL implementation of an RV32I processor core, a programmable interrupt
+controller and a machine timer: architecture, register interfaces, control
+behaviour, SoC integration, and the verification performed on them.
 \end{minipage}
 
 \vspace{18mm}
@@ -102,20 +100,14 @@ self-contained IP block with its own register interface and is documented as one
 interconnect are \emph{not} part of this delivery, and appear only where the CPU
 or the PIC has to interoperate with them.
 
-\paragraph{How statements are backed.} Requirements and design intent come from
-the two feature specifications and the project's requirement tags
-(\texttt{REQ1}--\texttt{REQ12}, \texttt{D1}--\texttt{D28}, and the PIC's
-\texttt{D-*} tags), which also appear as comments in the source. Behaviour comes
-from the RTL, and the file it was read from is named. Verification results are
-quoted only where a run produced them.
-
-\paragraph{Implemented and validated are separate claims.} Parts~\ref{part:cpu}
-to \ref{part:integration} describe what was built, read from the source of the
-baseline named on the title page. Part~\ref{part:verif} describes what was
-demonstrated, and Section~\ref{sec:valscope} states how far each demonstration
-reached: which value spaces were swept exhaustively, which were sampled at their
-boundaries, and which saw only the values the directed program happened to use.
-Where the evidence is thinner than for its neighbours, the text says so.
+\paragraph{Organisation.} Parts~\ref{part:cpu} to \ref{part:integration}
+describe the implementation block by block: architecture, register interfaces,
+control behaviour and the integration surface. Part~\ref{part:verif} covers the
+verification --- the environment, the procedure run for each block, and the
+results --- with Section~\ref{sec:valscope} giving the scope of each area, value
+space by value space. Part~\ref{part:reference} carries the requirement and
+design-decision matrix and the known limitations. The register maps of all three
+blocks are collected in Appendix~\ref{app:regmap}.
 
 \paragraph{Assumed background.} RV32I and normal RTL practice are assumed; the
 base instruction set is not re-explained. AXI4-Lite \emph{is} explained, in
