@@ -17,7 +17,7 @@ peripheral supplies four things:
 \centering
 \caption{Peripheral-side hooks of \file{axi\_lite\_slave.v}}
 \label{tab:slavehooks}
-\begin{tabular}{@{}llL{0.52\linewidth}@{}}
+\begin{tabular}{@{}L{0.22\linewidth}lL{0.46\linewidth}@{}}
 \toprule
 \textbf{Hook} & \textbf{Direction} & \textbf{Meaning} \\
 \midrule
@@ -84,10 +84,17 @@ address is accepted only when no response is pending. On the AR handshake the
 peripheral's combinational read data and its \sig{rd\_ok} qualifier are captured
 into \sig{RDATA} and \sig{RRESP}.
 
-\sig{s\_axi\_rdata} resets to zero, so the port reads as zero rather than
-\texttt{X} before its first transaction. The two response-error flags
-(\sig{rresp\_err\_q}, \sig{bresp\_err\_q}) are not reset; they are only meaningful
-while the corresponding \sig{VALID} is high, which is low out of reset.
+Every flop in this module is reset, and two of them are the reason the whole
+delivery adopted that rule. \sig{BRESP} and \sig{RRESP} are combinational
+functions of \sig{bresp\_err\_q} and \sig{rresp\_err\_q}, and they are driven
+\emph{whether or not} the corresponding \sig{VALID} is asserted. An earlier
+revision left both flags unreset on the argument that they are only meaningful
+while \sig{VALID} is high --- true of the protocol, and irrelevant to what the
+pins actually carry, which was \texttt{X} from time zero until the first
+transaction of each direction completed. \sig{s\_axi\_rdata\_o} is reset for the
+same reason. Chapter~\ref{ch:reset} states the resulting policy; the reset bench
+checks all three signals while reset is still asserted
+(Section~\ref{sec:vp-picreset}, step 1).
 
 \begin{figure}[H]
 \centering
@@ -114,11 +121,13 @@ CPU's one-outstanding master exactly. Nothing in the system requires more.
 
 \section{Interconnect in the verification environment}
 
-The testbench builds the interconnect from two cascaded 1-to-2 address decoders
-(\file{debug/hdl/axi\_lite\_dec2.v}). The first splits the \texttt{0x3xxx\_xxxx}
-window from everything else; the second splits that window into the PIC and the
-machine timer. Anything outside a mapped region returns DECERR from the memory
-model, which the CPU turns into a precise access fault.
+\begin{sloppypar}
+The testbench builds the interconnect from two cascaded 1-to-2 address decoders,
+\file{axi\_lite\_dec2.v}. The first splits the \texttt{0x3xxx\_xxxx} window from
+everything else; the second splits that window into the PIC and the machine
+timer. Anything outside a mapped region returns DECERR from the memory model,
+which the CPU turns into a precise access fault.
+\end{sloppypar}
 
 This is testbench infrastructure, not part of the delivery. The real system will
 supply its own fabric; the CPU requires nothing from it beyond conformant

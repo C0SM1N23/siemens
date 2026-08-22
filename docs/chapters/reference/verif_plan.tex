@@ -26,42 +26,28 @@ X'', ``raise line Y'') or an observation with its expected value. \\
 \end{tabular}
 \end{table}
 
-Three conventions are used throughout and are worth stating once, because they
-are what makes the difference between a procedure and a demonstration.
-
-\paragraph{Every step is self-checking.} Observations are compared in the bench
-with the \verb|===| operator, so an X never passes as a match. A mismatch prints
-a \texttt{FAIL:} line and increments an error counter; the run ends on a
-pass/fail banner that names the bench.
-
-\paragraph{Negative properties get a witness.} ``No transaction was issued'' and
-``the interrupt was never taken'' cannot be observed directly, so the benches
-count what \emph{did} happen --- AXI handshakes, acknowledge pulses, handler
-entries --- and require the count to be zero. A count is falsifiable; an absence
-of output is not.
-
-\paragraph{Every negative is paired with a positive.} A test that shows nothing
-happened is worthless if nothing could have happened. Wherever a procedure
-proves that something was correctly suppressed, the next step removes the
-suppressing condition and requires the thing to happen. That is what
-distinguishes masking from a dead path, and it is called out explicitly in each
-procedure below.
+The three conventions that shape every procedure --- each step self-checking
+with \verb|===| so an X never passes as a match, every negative property given a
+countable witness, and every negative followed by the positive that shows it was
+masking rather than a dead path --- are stated in Section~\ref{sec:method} and
+are not repeated here. Where a procedure below says \emph{the paired positive},
+that is the convention being applied.
 
 \section{Regression composition}
 
 \begin{table}[H]
 \centering
-\caption{The twelve regression runs, from one compile}
+\caption{The fourteen regression runs, from one compile}
 \label{tab:reg12}
-\begin{tabular}{@{}clL{0.40\linewidth}rl@{}}
+\begin{tabular}{@{}clL{0.38\linewidth}rl@{}}
 \toprule
 \textbf{\#} & \textbf{Bench} & \textbf{Scope} & \textbf{Checks} & \textbf{Result} \\
 \midrule
-1  & \file{tb\_cpu\_axi}    & System, default latencies (CPI check active here) & 90 & Pass \\
-2  & \file{tb\_cpu\_axi}    & System, high fixed AXI latencies & 90 & Pass \\
-3  & \file{tb\_cpu\_axi}    & System, random backpressure, seeds 101/202 & 90 & Pass \\
-4  & \file{tb\_cpu\_axi}    & System, random backpressure, seeds 777/888 & 90 & Pass \\
-5  & \file{tb\_dual\_core}  & Two cores, shared memory, 2:1 arbiter & --- & Pass \\
+1  & \file{tb\_cpu\_axi}    & System, default latencies (CPI check active here) & 97 & Pass \\
+2  & \file{tb\_cpu\_axi}    & System, high fixed AXI latencies & 95 & Pass \\
+3  & \file{tb\_cpu\_axi}    & System, random backpressure, seeds 101/202 & 95 & Pass \\
+4  & \file{tb\_cpu\_axi}    & System, random backpressure, seeds 777/888 & 95 & Pass \\
+5  & \file{tb\_dual\_core}  & Two cores, shared memory, 2:1 arbiter & 5 & Pass \\
 6  & \file{tb\_pic}         & PIC feature bench & 139 & Pass \\
 7  & \file{tb\_pic\_reset}  & PIC reset values, X-freedom, async reset & 350 & Pass \\
 8  & \file{tb\_pic\_ro}     & PIC read-only registers and reserved bits & 478 & Pass \\
@@ -69,8 +55,10 @@ procedure below.
 10 & \file{tb\_mtimer\_regs}& Machine-timer registers and access rules & 224 & Pass \\
 11 & \file{tb\_csr\_ro}     & CSR read-only / WARL / tied-off / absent & 282 & Pass \\
 12 & \file{tb\_traps}       & One directed test per trap cause & 111 & Pass \\
+13 & \file{tb\_bp}          & Branch predictor tables, RAS boundaries, reset & 68 & Pass \\
+14 & \file{tb\_alu}         & ALU decode and operand boundaries & 57 & Pass \\
 \midrule
-   & \textbf{Total}         & & \textbf{2\,278} & \textbf{12/12} \\
+   & \textbf{Total}         & & \textbf{2\,520} & \textbf{14/14} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -121,8 +109,8 @@ than the shared generator's, because the procedure asserts it a second time.
 \begin{enumerate}[label=2.\arabic*,leftmargin=12mm,itemsep=1pt]
   \item Release \sig{rst\_n\_i} between clock edges.
   \item Read all 16 \reg{SRCx\_CONFIG}, all 16 \reg{SRCx\_SW\_TRIG}, all 16
-        \reg{SRCx\_STATUS} and the 11 global registers --- 59 registers --- and
-        compare each against Table~\ref{tab:picreset}.
+        \reg{SRCx\_STATUS} and the 8 global registers --- the complete 56-word
+        map --- and compare each against Table~\ref{tab:picreset}.
 \end{enumerate}
 All 16 instances of each per-source register are read, not a sample. A register
 that resets correctly at index 0 and not at index 11 is exactly what a spot
@@ -151,7 +139,7 @@ bit covers it'' argument would leave unreset, and they are read by
   \item Assert \sig{rst\_n\_i} = 0 \emph{off a clock edge}. \sig{cpu\_irq} must
         drop before the next edge.
   \item Hold three cycles, release between edges.
-  \item Repeat the full 59-register read-back of step 2, and the stack probe of
+  \item Repeat the full 56-register read-back of step 2, and the stack probe of
         step 4.
 \end{enumerate}
 
@@ -168,7 +156,7 @@ bit covers it'' argument would leave unreset, and they are read by
 \end{enumerate}
 
 \paragraph{Pass criterion.} 350 checks, zero failures. Step 5 must produce the
-same 59 values as step 2.
+same 56 values as step 2.
 
 \paragraph{Result.} Pass. Run against the previous revision of the RTL, step
 1.2 fails on \sig{BRESP} and \sig{RRESP}, and step 4 fails on all 32
@@ -752,3 +740,217 @@ entry must be \texttt{H} --- vectoring applies to interrupts only.
 
 \paragraph{Pass criterion.} 111 checks, zero failures; every case must reach its
 trap inside the 2\,000-cycle limit.
+
+% ===========================================================================
+\section{Branch predictor verification}
+\label{sec:vp-bp}
+
+\textbf{Bench:} \file{debug/hdl/tb\_bp.v} --- 68 checks.
+
+\paragraph{Objective.} Prove the three groups of predictor behaviour that a
+program running on the core cannot reach: the reset state of the tables, the
+index and tag behaviour over the \emph{whole} table rather than the handful of
+entries a program touches, and the three return-address-stack boundaries ---
+overflow, underflow, and the both-link \sig{JALR} that replaces the top of
+stack.
+
+\paragraph{Why it was added.} This bench closes a gap identified while checking
+this document against the RTL. Chapter~\ref{ch:reset} states that every
+predictor array is reset and that nothing in the block holds X after release;
+nothing in the regression looked at CPU-internal reset values at all.
+Chapter~\ref{ch:fetch} documents the RAS overflow, underflow and
+replace-top behaviours and the \sig{RAS\_DEPTH}~=~0 tie-off; the directed
+program never nests calls deeper than three, so none of the four was exercised
+anywhere. The behaviour was implemented and documented but not validated, which
+is a different thing from being wrong.
+
+\paragraph{Setup.} Two instances of \file{branch\_predictor.v} driven from the
+same stimulus: one at the delivered defaults (\sig{ENTRIES} = 128,
+\sig{RAS\_DEPTH} = 8) and one with \sig{RAS\_DEPTH} = 0. Driving both from one
+stimulus means any difference between them can only be the parameter. The read
+port is combinational, so a lookup is an assignment and a settle delta; an
+update is one clock edge with \sig{update\_en\_i} high, withdrawn immediately
+after, so each check sees exactly one write.
+
+\paragraph{A note on addresses.} The index is \sig{PC[8:2]}, so two addresses
+512\,bytes apart share an entry. That is the subject of step 5 and a trap
+everywhere else, so each step below works in its own index band; the allocation
+is written down at the top of the bench.
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item[\textbf{1}] \textbf{Reset state.} Hold \sig{rst\_n\_i} = 0 for four
+cycles and probe the five packed arrays (\sig{valid}, \sig{state}, \sig{isret},
+\sig{tag}, \sig{target}) through hierarchical references: each must be
+identically zero, compared with \verb|===| so an X cannot pass. Probe the RAS
+pointer, its counter, and all 8 stack entries.
+
+\item[\textbf{2}] \textbf{Every index misses out of reset.} Release reset, then
+look up all 128 index positions. Each must predict not-taken, and each must
+drive a \sig{pred\_target\_o} that is X-free --- the output is read
+combinationally on every lookup, hit or miss, so a miss must still produce a
+defined value. This is exhaustive over the index space, deliberately: an entry
+that resets at index 0 and not at index 91 is what a spot check misses.
+
+\item[\textbf{3}] \textbf{Learn and re-learn.} Update one entry taken, then
+not-taken, then taken again, reading the prediction after each. The 1-bit state
+must follow the last outcome in \emph{both} directions --- a state stuck at
+taken would pass a one-directional test --- and the stored target must come back
+verbatim, including after it is replaced.
+
+\item[\textbf{4}] \textbf{Indexing is 1:1.} Write all 128 entries with distinct
+recognisable targets, then read all 128 back. Aliasing in either direction shows
+up as a wrong target.
+
+\item[\textbf{5}] \textbf{The tag is full.} Take two addresses that share an
+index and differ in the lowest tag bit --- the bit an off-by-one in the
+index/tag split would move --- and confirm the shared index first. Learn A;
+A must hit and B must miss. Learn B; B must hit with its own target and A must
+now miss. The second half is what distinguishes eviction from a false hit.
+
+\item[\textbf{6}] \textbf{\sig{update\_en\_i} gates the write.} Drive a
+different direction and target on the update port with the enable low for two
+cycles; neither may change.
+
+\item[\textbf{7}] \textbf{RAS ordering.} Tag one entry as a return and give it a
+deliberately wrong stored target, so that any prediction coming from the BTB is
+visible. With an empty stack it must predict that wrong target. Push three
+calls; the prediction must follow the newest link, then the second, then the
+first as the returns pop. An entry that is \emph{not} tagged as a return must
+keep using its BTB target throughout, with the stack non-empty.
+
+\item[\textbf{8}] \textbf{Underflow.} Pop the stack empty, then pop once more.
+The depth must not wrap or go negative, and the prediction must fall back to the
+stored BTB target and stay X-free.
+
+\item[\textbf{9}] \textbf{Overflow.} Push \sig{RAS\_DEPTH}~+~2 = 10 calls with
+links identified by number, checking the depth after every push: it must count
+1--8 and then hold at 8. Then pop the stack out one link at a time and require
+links 10 down to 3 in exactly that order. After eight pops the stack must be
+empty and the prediction back on the BTB target --- links 1 and 2 are gone,
+which is the documented accuracy loss.
+
+\item[\textbf{10}] \textbf{Both-link \sig{JALR}.} With an empty stack, a
+simultaneous call and return must push (depth 0\,$\rightarrow$\,1). With a
+non-empty stack it must leave the depth unchanged and replace the top; the entry
+beneath must still be intact when the next pop reaches it.
+
+\item[\textbf{11}] \textbf{\sig{RAS\_DEPTH} = 0.} The second instance, having
+seen identical stimulus throughout, must predict a return-tagged entry from the
+BTB target, must drive no X, and must still return the direction bit correctly.
+
+\item[\textbf{12}] \textbf{Asynchronous reset from a trained state.} Confirm the
+precondition --- the table holds a learned entry and the stack is not empty ---
+then assert reset off a clock edge. The prediction must drop before the next
+edge. After release, all 128 entries must miss again, the stack pointer and
+counter must be zero, and the target array must be identically zero.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 68 checks, zero failures. Five of those checks are
+loop summaries: three cover all 128 index positions, one the ten pushes of the
+overflow chain, and one the eight pops that walk it back out.
+
+\paragraph{Result.} Pass, on the first run against the delivered RTL. No defect
+was found.
+
+\begin{rtlnote}
+\textbf{The bench was validated by mutation.} A bench that has never failed
+proves nothing about its own sensitivity, and this one found no defect, so its
+teeth were demonstrated instead. Removing the saturation term from the RAS
+occupancy counter --- changing \texttt{else if (push\_only \&\& cnt\_q !=
+RAS\_DEPTH)} to \texttt{else if (push\_only)}, the single most plausible
+overflow defect --- makes the bench report 8 failures, in steps 9, 10 and 12.
+The mutation was then reverted and the run repeated clean.
+\end{rtlnote}
+
+% ===========================================================================
+\section{Arithmetic path verification}
+\label{sec:vp-alu}
+
+\textbf{Bench:} \file{debug/hdl/tb\_alu.v} --- 57 checks.
+
+\paragraph{Objective.} Prove two things the system bench cannot: that every
+combination of \{\sig{ALUOp}, \sig{funct3}, \sig{funct7}, \sig{ALUSrc}\} selects
+the operation it is supposed to, and that each operation is correct at the
+operand values where arithmetic goes wrong.
+
+\paragraph{Why it was added.} The system bench proves that each instruction
+class executes and that the program's expected results appear in the register
+file. It does not reach the sign boundary, the shift-amount boundary, or the
+operand pairs that separate a signed comparison from an unsigned one, because a
+hand-written directed program does not contain those values. The functional
+coverage layer bins instruction \emph{classes}, not operand values, so it
+reports full coverage of a space it is not measuring. This bench supplies the
+operand-value evidence the validation-scope table
+(Section~\ref{sec:valscope}) needs in order to be honest about the ALU.
+
+\paragraph{Setup.} \file{alu\_top.v}, which instantiates \file{alu.v}, driven
+directly on its ports. Both halves of the path are therefore covered in one
+place: the decode from control signals to a concrete operation, and the
+operation itself. The block is purely combinational, so each case is an
+assignment, a settle delta and a compare.
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item[\textbf{1}] \textbf{Operand select.} With distinct values on the register
+port and the immediate port, \sig{ALUSrc\_i} = 0 must produce the register
+result and \sig{ALUSrc\_i} = 1 the immediate result. Every later step drives the
+port it is not using with \texttt{0xDEAD\_BEEF}, so a mux fault shows up as a
+recognisable wrong answer rather than as a plausible one.
+
+\item[\textbf{2}] \textbf{The decode, exhaustively.} Operands \texttt{0x11} and
+\texttt{0x03} are chosen so that all eleven operations give different answers.
+Under \sig{ALUOP\_FUNCT}, all 8 \sig{funct3} values are applied with both
+\sig{funct7} values and both \sig{ALUSrc} values --- 32 cases. Then the three
+other \sig{ALUOp} encodings, and one encoding \file{control.v} never emits,
+which must fall back to ADD rather than to X. \\
+The asymmetry this step exists for: \sig{SUB} is an R-type-only form, so
+\sig{funct7} = \texttt{0100000} with \sig{funct3} = \texttt{000} must subtract
+when \sig{ALUSrc} = 0 and \emph{add} when \sig{ALUSrc} = 1, because bits
+[31:25] of an I-type instruction are part of the immediate and can legitimately
+hold that pattern. Both directions are checked.
+
+\item[\textbf{3}] \textbf{ADD and SUB at the sign boundary.} INT\_MAX\,+\,1
+wrapping to INT\_MIN; $-1$\,+\,1 discarding the carry; INT\_MIN\,+\,INT\_MIN;
+0\,$-$\,1 borrowing; INT\_MIN\,$-$\,1 wrapping to INT\_MAX;
+0\,$-$\,INT\_MIN staying INT\_MIN.
+
+\item[\textbf{4}] \textbf{Shifts, exhaustive over the amount.} Every shift
+amount 0--31 for SLL, SRL and SRA against a pattern with both halves set, so a
+lost or duplicated bit is visible. Then the three cases that separate SRA from
+SRL: SRA of INT\_MIN by 31 is all ones, SRL of the same word by 31 is 1, and
+SRA of a positive value by 31 is 0 --- which is what shows the sign is being
+propagated rather than a constant being shifted in. Finally the \texttt{[4:0]}
+masking: shift amounts of 32, 33 and \texttt{0xFFFF\_FFE0}.
+
+\item[\textbf{5}] \textbf{SLT against SLTU.} The five pairs where they must
+disagree or must agree: $-1$ against 1 both ways round, INT\_MIN against
+INT\_MAX, equal operands, and 0 against 1.
+
+\item[\textbf{6}] \textbf{Bitwise operations.} The full 4$\times$4 matrix of
+\{0, all-ones, \texttt{0xAAAA\_AAAA}, \texttt{0x5555\_5555}\} for AND, OR and
+XOR --- 48 cases, which contains all three identities.
+
+\item[\textbf{7}] \textbf{LUI and AUIPC.} LUI must pass operand B through and
+ignore operand A entirely; AUIPC must add, including with a
+sign-extended negative immediate.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 57 checks, zero failures. Three of those checks are
+loop summaries covering 32 shift amounts each, and two cover 16 decode cases
+and 16 pattern pairs.
+
+\paragraph{Result.} Pass, on the first run against the delivered RTL. No defect
+was found.
+
+\begin{rtlnote}
+\textbf{Validated by mutation, as above.} Changing \sig{ALU\_SRA} from
+\texttt{\$signed(operand\_a\_i) >>> operand\_b\_i[4:0]} to a logical shift ---
+the classic sign-extension defect, and one that a directed program using only
+small positive operands would never expose --- makes the bench report 32
+failures: 31 of the 32 SRA shift amounts (all but a shift of zero, where the two
+forms agree) and the SRA-of-INT\_MIN check. The mutation was reverted and the
+run repeated clean.
+\end{rtlnote}

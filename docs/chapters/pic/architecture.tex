@@ -54,6 +54,7 @@ nesting behaviour.
 
 \begin{figure}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[node distance=6mm]
   \node[blkf,minimum width=30mm,align=left] (slot)
     {\textbf{per slot, $\times$16}\\[2pt]
@@ -100,7 +101,8 @@ nesting behaviour.
   \draw[flow] ($(stack.south)+(0,-1mm)$) ++(0,-4mm) -- (stack.south)
         node[lbl,below=5mm,align=center]{\scriptsize ack / eoi};
   \draw[flow] (slot.west) ++(-9mm,0) -- (slot.west) node[lbl,left=9mm]{\scriptsize irq\_src};
-\end{tikzpicture}
+\end{tikzpicture}}
+
 \caption{PIC internal structure. The resolver is entirely combinational; the only
 registered stage on the request path is the output pair.}
 \label{fig:picblock}
@@ -315,8 +317,12 @@ reg [9:0] stack\_key [0:MAXNEST-1];\\
 reg [4:0] depth;
 \end{center}
 
-\sig{depth} is the stack pointer and the only element that resets. The top is
-\sig{top\_idx} = \sig{depth} $-$ 1, valid whenever \sig{depth} is non-zero.
+\sig{depth} is the stack pointer; the top is \sig{top\_idx} = \sig{depth} $-$ 1,
+valid whenever \sig{depth} is non-zero. Entries at or above \sig{depth} are never
+read, so only the pointer needs a reset for correctness. All three are reset all
+the same, because \reg{NEST\_STATUS.TOP\_ID} and \reg{ACTIVE\_VEC.ID} read
+\sig{stack\_id} out to software (Chapter~\ref{ch:reset}); the entries are probed
+directly in the reset bench, Section~\ref{sec:vp-picreset}.
 
 Storing the key, not just the id, is what makes the preemption threshold stable:
 reconfiguring a source's band while it is in service cannot corrupt nesting,

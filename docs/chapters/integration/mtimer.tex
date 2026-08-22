@@ -84,6 +84,16 @@ cycle later, since it is registered.}
 \label{fig:tmrarm}
 \end{figure}
 
+\subsection{Reading the counter from 32-bit software}
+
+\reg{mtime} is architecturally 64 bits and is read through two 32-bit accesses,
+so a read can tear: the low half can wrap between the two bus transactions. The
+software contract is the standard one --- read \reg{MTIME\_HI}, then
+\reg{MTIME\_LO}, then \reg{MTIME\_HI} again, and retry if the high half moved.
+No hardware shadow register is provided, because at one count per clock the high
+half does not change for roughly $4\times10^{9}$ cycles and the retry costs
+nothing on the path that matters.
+
 \section{Use with \sig{WFI}}
 
 Together with \sig{WFI} the timer gives the system an idle mode: program the DMA,

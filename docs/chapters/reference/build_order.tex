@@ -2,57 +2,28 @@
 \label{ch:buildorder}
 
 This chapter states the order in which the deliverable is compiled, why that
-order is fixed, and what to do when a module is added. It is a short chapter,
-but it documents a real failure mode: a design that compiles today because the
-simulator happened to tolerate the order it was given, and stops compiling on
-the next tool, the next flow, or after the next file is added.
+order is fixed, and what to do when a module is added.
 
-\section{Why the order is fixed at all}
+\section{Why the order is fixed}
 
-Verilog--2005 does not require a module to be compiled after the modules it
-instantiates. Instances are resolved at \emph{elaboration}, not at compile time,
-so a filelist in arbitrary order normally works. That is exactly what makes the
-issue worth documenting rather than ignoring: the flow appears healthy while
-resting on a property of one particular tool.
-
-Two things genuinely are resolved at compile time, in file order.
-
-\begin{enumerate}[leftmargin=*,itemsep=3pt]
-\item \textbf{Macros and includes.} A \verb|`define| is visible only from the
-point it is defined onwards within the compilation unit. Every module in this
-design that uses a shared encoding includes \file{defines.vh} itself, under an
-include guard, and the filelists carry the \texttt{+incdir+} that makes it
-findable. That is what keeps this class of failure away --- not the ordering by
-itself, but the ordering plus the discipline that no file depends on a macro
-another file happened to define earlier.
-
-\item \textbf{Name collisions.} A module defined twice, or a parameter name
-clashing across files, is reported against whichever copy the compiler saw
-first. In an arbitrary order the error points at an arbitrary file.
-\end{enumerate}
-
-Three further reasons are about engineering rather than about the language.
-
-\begin{itemize}[leftmargin=*,itemsep=3pt]
-\item A bottom-up order makes a genuine error legible. If a module is missing
-from the list, the failure is reported at the level that needed it. In an
-arbitrary order the same mistake surfaces as one unresolved instance at the top
-of the hierarchy, with no indication of which level dropped it.
-\item Several downstream tools --- lint, synthesis front-ends, formal
-front-ends --- \emph{do} require definition before use. Keeping the simulation
-filelist in that order means the same list can be handed to them unchanged.
-\item The level a module sits at is a statement about the design. Reading
-\file{rtl.f} tells a reviewer, before opening any source file, that
-\reg{cpu\_top} is the only module with a dependency on anything other than
-leaves.
-\end{itemize}
+Verilog--2005 resolves module instances at \emph{elaboration}, not at compile
+time, so a filelist in arbitrary order normally works --- which is precisely why
+the order is worth pinning down rather than leaving to chance. Four things do
+depend on it. Macro and \verb|`include| visibility is order-dependent within a
+compilation unit. A duplicate module or a clashing parameter name is reported
+against whichever copy the compiler saw first. A module missing from the list is
+reported at the level that needed it under a bottom-up order, and as one
+unresolved instance at the top of the hierarchy under any other. And lint,
+synthesis and formal front-ends do require definition before use, so the same
+list can be handed to them unchanged.
 
 \begin{rtlnote}
-The rule is stated once and enforced in one place. \file{debug/sim/rtl.f} is the
-single source of truth for the RTL source set and its order, and both the
-ModelSim flow (\texttt{vlog -f rtl.f}) and the Verilator flow
-(\texttt{verilator -f rtl.f}) read the same file. A module is added to the
-project in exactly one location.
+The rule is enforced in one place. \file{debug/sim/rtl.f} is the single source of
+truth for the RTL source set \emph{and} its order, and both flows read it ---
+\texttt{vlog -f rtl.f} and \texttt{verilator -f rtl.f}. A module is added to the
+project in exactly one location. Each module also includes \file{defines.vh}
+itself, under an include guard, so no file depends on a macro another file
+happened to define earlier.
 \end{rtlnote}
 
 \section{Dependency levels}
@@ -95,31 +66,8 @@ than \file{alu} and \file{axi\_lite\_slave} \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[node distance=6mm]
-  \node[blk,minimum width=112mm] (l0)
-    {\textbf{L0} --- leaf modules, no submodule instances\\[2pt]
-     \footnotesize alu \quad axi\_lite\_slave \quad branch\_predictor \quad branch\_unit \quad control\\
-     \footnotesize csr\_file \quad decode \quad exception\_unit \quad fetch\_unit \quad hazard\_unit\\
-     \footnotesize imm\_gen \quad lsu \quad regfile \quad writeback\_mux};
-  \node[blkf,below=10mm of l0,minimum width=112mm] (l1)
-    {\textbf{L1} --- depend on L0 only\\[2pt]
-     \footnotesize alu\_top $\rightarrow$ alu \qquad mtimer $\rightarrow$ axi\_lite\_slave
-     \qquad pic $\rightarrow$ axi\_lite\_slave};
-  \node[blk,below=10mm of l1,minimum width=112mm] (l2)
-    {\textbf{L2} --- system top\\[2pt]
-     \footnotesize cpu\_top $\rightarrow$ alu\_top (L1) + twelve L0 modules};
-  \draw[flow] (l0) -- (l1);
-  \draw[flow] (l1) -- (l2);
-  \node[right=3mm of l0.east,font=\scriptsize,align=left,rotate=0] {};
-  \node[font=\scriptsize,left=1mm of $(l0.south)!0.5!(l1.north)$] {compiled first};
-  \node[font=\scriptsize,left=1mm of $(l1.south)!0.5!(l2.north)$] {then};
-\end{tikzpicture}
-\caption{Compile order. Each level is compiled completely before the next one
-begins, so every module is defined before anything instantiates it.}
-\label{fig:compileorder}
-\end{figure}
+Each level is compiled completely before the next begins, so every module is
+defined before anything instantiates it.
 
 \section{Testbench and verification collateral}
 
@@ -139,8 +87,8 @@ that each flow takes only what it can compile.
 \file{tb\_cpu.f} & \file{ck\_rst\_tb}, \file{axi\_lite\_mem\_model},
   \file{axi\_lite\_monitor}, \file{axi\_lite\_dec2}, then \file{tb\_cpu\_axi}
   which instantiates all four & both flows \\
-\file{tb\_block.f} & the seven block-level benches, each of which
-  instantiates exactly one RTL block & ModelSim only \\
+\file{tb\_block.f} & the nine block-level benches, each of which
+  instantiates one RTL block and nothing else & ModelSim only \\
 (in \file{compile.do}) & \file{axi\_lite\_arb2}, then \file{tb\_dual\_core} &
   ModelSim only \\
 (in \file{run\_verilator.sh}) & the SVA and coverage modules, then the
@@ -182,8 +130,8 @@ Nothing else changes: \file{compile.do}, \file{regress.do} and
 \texttt{vsim -c -do "do compile.do; quit -f"} & compile only, in the documented
   order; must report \texttt{Errors: 0, Warnings: 0} \\
 \texttt{vsim -c -do "do sim.do; quit -f"} & one run of the system bench \\
-\texttt{vsim -c -do "do regress.do; quit -f"} & the full twelve-run regression
-  from a single compile \\
+\texttt{vsim -c -do "do regress.do; quit -f"} & the full fourteen-run
+  regression from a single compile \\
 \texttt{make modelsim} & the same regression, with the test programs
   reassembled first \\
 \texttt{make test} & the Verilator assertion and coverage flow \\

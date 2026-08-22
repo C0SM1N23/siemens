@@ -80,17 +80,21 @@ Chapter~\ref{ch:csr}. The performance-counter events are fixed in hardware and
 \section{Verification scope}
 
 No synthesis has been run, so no area, timing or power data exists. No
-riscv-arch-test suite or randomised instruction stream has been run. Functional
-coverage stands at 88 of 92 bins with the four misses explained in
-Chapter~\ref{ch:verif}. The testbench interconnect covers two slaves; richer
-fabrics, including a fabric that generates its own decode errors, arrive with the
-real interconnect.
+riscv-arch-test suite and no randomised instruction stream has been run, and
+there is no reference model: correctness rests on directed expected values.
+Functional coverage stands at 88 of 92 bins, with all four misses accounted for
+individually in Table~\ref{tab:covmiss}. Section~\ref{sec:valscope} states, area
+by area, which value spaces were covered exhaustively and which were sampled;
+the rows marked \emph{selected} are where the delivery is thinnest. The
+testbench interconnect covers two slaves; richer fabrics, including one that
+generates its own decode errors, arrive with the real interconnect.
 
-\section{Simulation artefacts}
+\section{Area, timing and power}
 
-Pipeline and command-latch payload registers are intentionally not reset
-(decision D1). Several idle-bus payload signals therefore read \texttt{X} in
-waveforms until their first transaction. This is legal AXI --- the payload must be
-stable only while \sig{VALID} is asserted --- and the protocol checkers pass, but
-it is worth knowing before a waveform review. \sig{s\_axi\_rdata} in the shared
-slave was given a reset value of zero for exactly this reason.
+No synthesis has been run, so this document contains no area, frequency or power
+figure for any block. Two design choices are known to have a cost that only
+synthesis can quantify, and both are recorded where they are made rather than
+estimated here: the single decode-and-execute stage produces a long
+combinational path (Chapter~\ref{ch:cpuarch}), and the delivery-wide reset
+policy puts roughly 7.2\,kbit of predictor state on the reset tree
+(Section~\ref{sec:resetcost}).

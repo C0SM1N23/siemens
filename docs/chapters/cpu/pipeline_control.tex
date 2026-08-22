@@ -4,29 +4,40 @@
 \section{Pipeline registers}
 
 Both pipeline registers --- IF/DX and DX/WB --- are built the same way: a
-\sig{valid} bit that has a reset, and a payload that does not.
+\sig{valid} bit plus a payload.
 
-Nothing downstream looks at the payload unless \sig{valid} is set, so a bubble is
-simply \sig{valid}~=~0 and a flush or a reset produces a guaranteed no-operation
-whatever the payload happens to hold. The alternative considered was injecting an
-\sig{addi x0,x0,0} encoding, which would have required the flush path to drive 32
-correct bits and every downstream decoder to interpret them --- more hardware and
-more ways to be wrong.
+\sig{valid} is what makes a bubble safe. Nothing downstream looks at the payload
+unless \sig{valid} is set, so a bubble is simply \sig{valid}~=~0 and a flush
+produces a guaranteed no-operation whatever the payload happens to hold. The
+alternative considered was injecting an \sig{addi x0,x0,0} encoding, which would
+have required the flush path to drive 32 correct bits and every downstream
+decoder to interpret them --- more hardware and more ways to be wrong. The
+payload is loaded only when a real instruction moves, so bubbles and stalls
+leave those flops quiet.
 
-Two consequences follow directly. The reset tree stays small, since only the
-valid bits are in it. And the payload flops do not toggle on bubbles, which saves
-switching power.
+The payload is nonetheless reset (Chapter~\ref{ch:reset}). That is a second,
+independent decision, and the two are worth keeping apart: \sig{valid} makes the
+payload \emph{irrelevant} downstream, while the reset makes it \emph{defined} on
+the nets that read it combinationally. Three of those nets decide the point:
+\sig{ifdx\_instr\_q} feeds the decoder, whose \sig{MemRead}, \sig{MemWrite} and
+\sig{illegal} outputs reach the AXI \sig{VALID} signals; \sig{ifdx\_pc\_q} feeds
+the PC+4 adder, the branch-target adder and the predictor update port;
+\sig{dxwb\_result\_q} feeds the writeback multiplexer and the S3$\to$S2
+forwarding path. The reset values are chosen so that the idle datapath is not
+merely defined but harmless --- the canonical NOP \texttt{0x0000\_0013} for the
+instruction word, \sig{RESET\_PC} for program addresses, zero elsewhere.
 
-\begin{deviation}
-\textbf{Accepted side effect.} Because payload registers are not reset, several
-signals derived from them read \texttt{X} in simulation until they are first
-written --- notably the \sig{dbus} address, write data and strobe outputs, which
-come from the LSU command latch, and \sig{RRESP[1]}/\sig{BRESP[1]} on the
-peripheral ports. This is legal AXI: the protocol requires the payload to be
-stable and meaningful only while the corresponding \sig{VALID} is asserted, and
-\sig{VALID} is low throughout. The protocol monitors and the X-hygiene assertions
-pass. It remains visual noise when reviewing waveforms.
-\end{deviation}
+\begin{rtlnote}
+This was changed in revision 2.0 of the delivery. The earlier revision reset only
+the valid bits, on the argument that a valid bit makes the payload
+unobservable. That argument holds inside the pipeline and fails at the block
+boundary: the same reasoning had been applied to the two AXI response-code flags
+in the shared slave, where it was wrong --- \sig{BRESP} and \sig{RRESP} are driven
+whether or not the corresponding \sig{VALID} is high, so both peripherals
+presented \texttt{X} on the bus from time zero. Rather than audit the argument
+flop by flop, the rule was made absolute. The cost is stated in
+Section~\ref{sec:resetcost}.
+\end{rtlnote}
 
 \section{The hazard unit}
 

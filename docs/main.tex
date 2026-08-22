@@ -1,8 +1,8 @@
 \documentclass[11pt,openany]{report}
 
-\newcommand{\docrevision}{2.0}
-\newcommand{\docdate}{20 August 2026}
-\newcommand{\docbaseline}{branch \texttt{RISCV}, on top of \texttt{a964eb2}}
+\newcommand{\docrevision}{3.0}
+\newcommand{\docdate}{22 August 2026}
+\newcommand{\docbaseline}{branch \texttt{RISCV}, at \texttt{d534045}}
 
 \input{preamble}
 
@@ -21,7 +21,7 @@
 
 \vfill
 
-\begin{tabular}{@{}ll@{}}
+\begin{tabular}{@{}lL{0.58\linewidth}@{}}
 \toprule
 Document        & RV32I SoC --- RTL Implementation Documentation \\
 Revision        & \docrevision \\
@@ -55,25 +55,34 @@ smoothed over.
 \addcontentsline{toc}{chapter}{Revision history}
 \markboth{Revision history}{}
 
-\begin{tabular}{@{}llL{0.55\linewidth}@{}}
+\begin{tabular}{@{}lL{0.16\linewidth}L{0.60\linewidth}@{}}
 \toprule
 \textbf{Rev.} & \textbf{Date} & \textbf{Change} \\
 \midrule
-1.0 & 17 August 2026 & First issue. Covers the CPU, PIC and machine timer as
-delivered on baseline \texttt{95d1e29}, including the requirement and
-design-decision traceability matrix and the verification evidence available at
-that baseline. \\
+1.0 & 17 August 2026 & First issue. The CPU, PIC and machine timer as delivered
+on baseline \texttt{95d1e29}, with the traceability matrix and the verification
+evidence available then. \\
 \addlinespace
-2.0 & \docdate & Second issue. Adds Chapter~\ref{ch:buildorder} (build and
-compile order, with the dependency levelling of the source list),
-Chapter~\ref{ch:reset} (reset architecture, with the reset value of every
-register in the delivery) and Chapter~\ref{ch:verifplan} (the step-by-step
-verification procedures and their results). Records the two RTL changes made in
-this revision: every flop is now reset, and the reserved bits of
-\reg{SRCx\_CONFIG} and \reg{ESCALATION\_CFG} are now hardwired to zero as the
-register map always specified. The regression grew from six runs to twelve with
-the addition of six block-level benches covering reset values, read-only
-enforcement, individual status fields and one isolated test per trap cause. \\
+2.0 & 20 August 2026 & Two RTL changes: every flop is now reset, and the
+reserved bits of \reg{SRCx\_CONFIG} and \reg{ESCALATION\_CFG} are now hardwired
+to zero, as the register map had always said. New chapters on the compile order,
+on the reset architecture with every register's reset value, and on the
+verification procedures step by step. Regression: six runs to twelve. \\
+\addlinespace
+3.0 & \docdate & No hardware change.
+\emph{Added:} Part~\ref{part:verif}, verification and validation, with
+Section~\ref{sec:valscope} stating how much of each value space each area
+covers; two block benches, \file{tb\_bp} for the branch predictor and
+\file{tb\_alu} for the arithmetic path, taking the regression to fourteen runs
+and 2\,520 checks; Section~\ref{sec:delegated}, the matrix of design questions
+the two briefs delegated.
+\emph{Corrected:} the pipeline and command-latch payloads, described as unreset
+since revision 1.0; the trap-cause table, which listed the causes in numeric
+rather than evaluation order; what the decoder does with an illegal encoding;
+the PIC register count, 56 and not 59; every check count, now read from the
+regression log.
+\emph{Removed:} the file inventory duplicated in Appendix~\ref{app:modules}, and
+the compile-order rationale, cut to what a maintainer needs. \\
 \bottomrule
 \end{tabular}
 
@@ -100,20 +109,27 @@ comes from the RTL. Where a section states what the hardware does, the file it w
 read from is named in the margin or in the text. Verification results come from
 the two simulation flows and are quoted only where a run produced them.
 
-\paragraph{What changed in revision 2.0.} Two behavioural changes were made to
-the RTL, both of which close a gap between the delivered hardware and this
-document rather than adding a feature. First, every sequential element in the
-delivery is now reset; previously a small number of flops --- two AXI
-response-code flags, the interrupt controller's nesting-stack arrays, and
-several pipeline and command payloads --- were left unreset on the argument that
-a valid bit made them unobservable. The response-code flags were in fact
-observable, on the bus, as X. Chapter~\ref{ch:reset} states the new policy, its
-cost, and the reset value of every register. Second, the bit positions this
-document has always described as reserved in \reg{SRCx\_CONFIG} and
-\reg{ESCALATION\_CFG} were being stored and read back rather than hardwired to
-zero; they are now masked on write. Both changes were found by the verification
-work described in Chapter~\ref{ch:verifplan}, and both are covered by tests that
-have been shown to fail against the previous revision.
+\paragraph{Implemented, and validated, are separate claims.} This document keeps
+them apart deliberately. Chapters~\ref{ch:cpuarch} to \ref{ch:mtimer} describe
+what was built and were checked line by line against the source of the baseline
+named on the title page. Part~\ref{part:verif} describes what was demonstrated,
+and Section~\ref{sec:valscope} states how much of each value space that
+demonstration actually reached --- which spaces were swept exhaustively, which
+were sampled at their boundaries, and which were exercised only by whatever
+values the directed program happened to use. Where the evidence for a behaviour
+is thinner than for its neighbours, the row or paragraph says so.
+
+\paragraph{What changed in revision 3.0.} No hardware changed. The document was
+reviewed against the RTL and against the regression log, and the statements that
+no longer matched were corrected; the largest of those was the description of
+pipeline and command-latch payloads as unreset, which stopped being true when
+revision 2.0 made the reset policy absolute. Two behaviours that were
+implemented and documented but never directly exercised --- the branch
+predictor's reset state and its return-address-stack boundaries, and the ALU's
+decode and operand boundaries --- were closed with two new benches rather than
+left described as though they had been verified. Both are recorded in
+Sections~\ref{sec:vp-bp} and \ref{sec:vp-alu}, together with the mutation that
+was used to show each bench can fail.
 
 \paragraph{Assumed background.} The reader is expected to know RV32I and normal
 RTL practice; the base instruction set is not re-explained here. AXI4-Lite
@@ -150,13 +166,15 @@ as far as is needed to follow what this implementation does with it.
 \input{chapters/integration/integration}
 \input{chapters/integration/mtimer}
 
+\part{Verification and validation}\label{part:verif}
+\input{chapters/reference/verification}
+\input{chapters/reference/verif_plan}
+
 \part{Engineering reference}\label{part:reference}
-\input{chapters/reference/build_order}
 \input{chapters/reference/reset}
 \input{chapters/reference/fsm_summary}
 \input{chapters/reference/traceability}
-\input{chapters/reference/verification}
-\input{chapters/reference/verif_plan}
+\input{chapters/reference/build_order}
 \input{chapters/reference/limitations}
 
 \appendix

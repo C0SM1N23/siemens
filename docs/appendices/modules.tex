@@ -3,7 +3,7 @@
 
 \section{Delivered RTL}
 
-\begin{longtable}{@{}L{34mm}L{0.30\linewidth}L{0.28\linewidth}@{}}
+\begin{longtable}{@{}L{38mm}L{0.30\linewidth}L{0.24\linewidth}@{}}
 \caption{Modules in \file{hdl/}}\label{tab:apmods}\\
 \toprule
 \textbf{File} & \textbf{Function} & \textbf{Tags} \\
@@ -38,54 +38,42 @@
 
 \section{Verification collateral}
 
-\begin{longtable}{@{}L{40mm}L{0.52\linewidth}@{}}
-\caption{Files in \file{debug/}}\label{tab:apdebug}\\
+The testbenches, models, assertion files and shared includes are listed with
+their roles in Table~\ref{tab:collateral}, and are not repeated here. What
+follows is only the build and stimulus collateral around them.
+
+\begin{table}[H]
+\centering
+\caption{Build and stimulus files in \file{debug/sim/}}
+\label{tab:apdebug}
+\begin{tabular}{@{}L{0.34\linewidth}L{0.52\linewidth}@{}}
 \toprule
 \textbf{File} & \textbf{Role} \\
 \midrule
-\endfirsthead
-\toprule
-\textbf{File} & \textbf{Role} \\
-\midrule
-\endhead
+\file{program\_axi.s} & Directed self-checking test program \\
+\file{program\_dual.s} & Dual-core handshake program \\
+\file{asm.py} & Two-pass RV32I assembler; emits the hex image and the label-address include \\
+\file{rtl.f}, \file{tb\_cpu.f} & Shared file lists used by both flows \\
+\file{tb\_block.f} & The nine block-level benches, ModelSim only \\
+\file{compile.do} & Single canonical compile, in the documented order \\
+\file{sim.do}, \file{regress.do} & Single run, and the fourteen-run regression \\
+\file{run\_verilator.sh}, \file{run\_verilator.ps1} & Assertion and coverage flow \\
+\file{soc\_map.vh} & Testbench address map \\
+\file{wave.do} & AXI-grouped waveform set \\
+\file{verif\_gui.py} & Graphical launcher for both flows \\
 \bottomrule
-\endfoot
-\file{hdl/tb\_cpu\_axi.v} & System testbench \\
-\file{hdl/tb\_pic.v} & PIC feature testbench \\
-\file{hdl/tb\_dual\_core.v} & Dual-core testbench \\
-\file{hdl/axi\_lite\_monitor.v} & Passive AXI4-Lite protocol checker \\
-\file{hdl/axi\_lite\_mem\_model.v} & Behavioural slave with latency and backpressure controls \\
-\file{hdl/axi\_lite\_dec2.v} & 1-to-2 address decoder \\
-\file{hdl/axi\_lite\_arb2.v} & 2-to-1 arbiter, dual-core bench only \\
-\file{hdl/ck\_rst\_tb.v} & Clock and reset generator \\
-\file{hdl/tb\_check.vh} & Shared self-check task \\
-\file{hdl/axi\_lite\_macros.vh} & Bare AXI read/write helper macros \\
-\file{sva/axi\_lite\_sva.sv} & AXI4-Lite contract as concurrent properties, one instance per port \\
-\file{sva/cpu\_core\_sva.sv} & Pipeline invariants \\
-\file{sva/pic\_sva.sv} & PIC contract: offer registration, strict preemption, depth bounds \\
-\file{sva/cpu\_func\_cov.sv} & Functional coverage counters and the end-of-run report \\
-\file{sva/bind\_sva.sv} & All \sig{bind} statements \\
-\file{sim/program\_axi.s} & Directed self-checking test program \\
-\file{sim/program\_dual.s} & Dual-core handshake program \\
-\file{sim/asm.py} & RV32I assembler \\
-\file{sim/rtl.f}, \file{sim/tb\_cpu.f} & Shared file lists used by both flows \\
-\file{sim/compile.do} & Single canonical compile \\
-\file{sim/sim.do}, \file{sim/regress.do} & Single run and six-run regression \\
-\file{sim/run\_verilator.sh}, \file{sim/run\_verilator.ps1} & Assertion and coverage flow \\
-\file{sim/soc\_map.vh} & Testbench address map \\
-\file{sim/wave.do} & AXI-grouped waveform set \\
-\file{sim/verif\_gui.py} & Graphical launcher for both flows \\
-\end{longtable}
+\end{tabular}
+\end{table}
 
 \section{Build and run}
 
 \begin{table}[H]
 \centering
-\begin{tabular}{@{}L{0.46\linewidth}L{0.44\linewidth}@{}}
+\begin{tabular}{@{}L{0.44\linewidth}L{0.44\linewidth}@{}}
 \toprule
 \textbf{Command} & \textbf{Effect} \\
 \midrule
-\texttt{vsim -c -do "do regress.do; quit -f"} & Full six-run regression \\
+\texttt{vsim -c -do "do regress.do; quit -f"} & Full fourteen-run regression \\
 \texttt{vsim -c -do "do sim.do; quit -f"} & Single system run \\
 \texttt{bash run\_verilator.sh} & Assertions plus functional coverage \\
 \texttt{py asm.py program\_axi.s program\_axi.hex} & Reassemble after editing the test program \\

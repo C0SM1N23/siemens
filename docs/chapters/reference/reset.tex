@@ -49,7 +49,10 @@ controller's nesting stack was internal until \reg{NEST\_STATUS.TOP\_ID} and
 software could read. The rule removes the need to re-audit that question every
 time a status register grows a field.
 
-\paragraph{What it costs.} The cost is real and is stated rather than hidden:
+\subsection*{What it costs}
+\label{sec:resetcost}
+
+The cost is real and is stated rather than hidden:
 the branch predictor's payload arrays and the return-address stack move onto the
 reset tree, roughly 7.2\,kbit at the default configuration of 128 entries and a
 depth-8 stack. No synthesis was run for this delivery, so no area or timing
@@ -291,21 +294,58 @@ This was a real defect, found by the assertion layer on its first run.
 
 \section{How the rule is verified}
 
-The reset policy is not asserted in this document; it is measured. The evidence
-is in Chapter~\ref{ch:verifplan}, sections \ref{sec:vp-picreset},
-\ref{sec:vp-mtimer} and \ref{sec:vp-csr}. In outline, three properties are
-checked for each block:
+Most of the policy is measured rather than asserted, and the part that is not
+is marked as such below.
 
-\begin{enumerate}[leftmargin=*,itemsep=2pt]
-\item every mapped register reads back the value listed in the tables above, on
-its first access after release;
-\item nothing in the block --- including state with no register view, probed
-directly through hierarchical references --- holds X after release;
-\item a reset asserted \emph{off a clock edge} from a fully configured, actively
-nested state returns every one of those registers to the same value, which is
-what distinguishes a real asynchronous reset from a simulation initial value.
-\end{enumerate}
+Four benches carry the evidence, and each checks the same three properties for
+its block: that every register reads back the value listed above on its first
+access after release; that nothing in the block holds X after release, including
+state with no register view, probed directly through hierarchical references;
+and that a reset asserted \emph{off a clock edge} from a fully configured,
+actively used state returns every one of those registers to the same value ---
+which is what distinguishes a real asynchronous reset from a simulation initial
+value.
 
-The check has been confirmed to have teeth: run against the previous revision of
-the RTL, it fails on precisely the flops that revision left unreset --- the two
-AXI response-code flags and the interrupt controller's nesting-stack arrays.
+\begin{table}[H]
+\centering
+\caption{Which reset values are demonstrated, and by what}
+\label{tab:resetevidence}
+\begin{tabular}{@{}L{0.32\linewidth}L{0.28\linewidth}L{0.28\linewidth}@{}}
+\toprule
+\textbf{Table} & \textbf{Demonstrated by} & \textbf{Coverage} \\
+\midrule
+Interrupt controller, Table~\ref{tab:picreset} &
+  \file{tb\_pic\_reset}, \S\ref{sec:vp-picreset} &
+  All 56 mapped words, twice; the nesting stack probed directly \\
+Machine timer and shared slave, Table~\ref{tab:tmrreset} &
+  \file{tb\_mtimer\_regs}, \S\ref{sec:vp-mtimer} &
+  All four registers; the slave's response codes and \sig{RDATA} sampled during
+  reset \\
+CSR file, Table~\ref{tab:csrreset} &
+  \file{tb\_csr\_ro}, \S\ref{sec:vp-csr} &
+  Every implemented CSR, before and after a second reset \\
+Branch predictor rows of Table~\ref{tab:cpureset} &
+  \file{tb\_bp}, \S\ref{sec:vp-bp} &
+  All five arrays probed directly; all 128 index positions; the RAS pointer,
+  counter and entries \\
+\midrule
+Pipeline registers, fetch stage and LSU command latch, remaining rows of
+  Table~\ref{tab:cpureset} &
+  \textbf{Read from the source; not observed by a directed check} &
+  Covered indirectly: the X-hygiene assertions would fire on an X reaching a bus
+  output, and every run starts from reset \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The last row is the honest limit of the evidence. Those flops have no register
+interface, and no bench probes them; what the regression does show is that
+nothing derived from them reaches a bus output as X, on every run of every
+configuration. A bench that probes them directly, in the style of
+\file{tb\_bp}'s first section, would close it.
+
+\paragraph{The check has teeth.} Run against the previous revision of the RTL,
+the reset bench fails on precisely the flops that revision left unreset --- the
+two AXI response-code flags and the interrupt controller's nesting-stack arrays.
+That is the evidence that it detects the defect it was written for, rather than
+passing because nothing is being looked at.

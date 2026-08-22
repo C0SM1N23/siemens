@@ -195,6 +195,8 @@ debug/hdl/
   tb_mtimer_regs.v     machine-timer registers, reset and access rules
   tb_csr_ro.v          CSR file: read-only, WARL, tied-off, absent
   tb_traps.v           one directed test per trap cause, at CPU level
+  tb_bp.v              branch predictor: tables, RAS boundaries, reset
+  tb_alu.v             ALU operation decode and operand boundaries
   tb_check.vh          shared self-check task (=== compare, PASS/FAIL per check)
   tb_axil_master.vh    shared AXI4-Lite master driver tasks for the block benches
   axi_lite_macros.vh   bare AXI read/write helper macros shared by the benches
@@ -207,7 +209,7 @@ debug/sim/
   tb_block.f           filelist for the block-level benches
   compile.do           the single canonical vlog compile both .do scripts use
   soc_map.vh           TB address map (PIC / mtimer / dmem bases) in one place
-  sim.do               quick single run     regress.do  full 12-run regression
+  sim.do               quick single run     regress.do  full 14-run regression
   wave.do              AXI-grouped waveform set for the ModelSim GUI
   run_verilator.sh     SVA + functional coverage run (Verilator, free)
   run_verilator.ps1    same, one command from Windows (via WSL)
@@ -219,9 +221,9 @@ debug/sim/
 
 ```
 cd debug/sim
-vsim -c -do "do regress.do; quit -f"      # full regression (12 runs: 4 single-core
-                                          # configs + dual-core + tb_pic + the six
-                                          # block-level reset/read-only/trap benches)
+vsim -c -do "do regress.do; quit -f"      # full regression (14 runs: 4 single-core
+                                          # configs + dual-core + tb_pic + the eight
+                                          # block-level benches)
 vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
 
 .\run_verilator.ps1                       # SVA + functional coverage —
@@ -253,15 +255,19 @@ latency-1 memory, protocol monitors on all four AXI ports, seeded random
 backpressure, the dual-core handshake. The standalone `tb_pic.v` then drives the
 PIC's advanced features directly — priority bands, preemptive nesting, spurious
 detection, deadline escalation, keyed software triggers, AXI error responses.
-Six block-level benches then cover what a system run cannot isolate: every
+Eight block-level benches then cover what a system run cannot isolate: every
 register's reset value and X-freedom (`tb_pic_reset`, `tb_mtimer_regs`,
 `tb_csr_ro`), read-only and reserved-bit enforcement on every read-only object
 in each map (`tb_pic_ro`, `tb_csr_ro`), every `SRCx_STATUS` field on its own
-(`tb_pic_status`), and one isolated directed test per trap cause with its
-mcause / mepc / mtval / handler address checked individually (`tb_traps`).
+(`tb_pic_status`), one isolated directed test per trap cause with its
+mcause / mepc / mtval / handler address checked individually (`tb_traps`), the
+branch predictor's reset state and its RAS overflow / underflow / replace-top
+boundaries (`tb_bp`), and the ALU's decode space and operand boundaries
+(`tb_alu`). Total 2520 self-checks, 14/14 runs passing.
 Functional coverage: 88/92 bins hit; the four misses are the two intentional ch5
-negatives and the two backpressure bins the regression configs cover instead of
-the default run.
+negatives, plus two AR-backpressure bins that only the ModelSim configs
+stimulate — coverage is instrumented in the Verilator flow only, so those two
+are unmeasured rather than unreachable.
 
 ## Open points (system level)
 

@@ -72,9 +72,13 @@ Everything interesting is in S2 on purpose: decode+execute+memory in one stage
 means an instruction either completes fully or not at all — that's what makes
 the traps precise (REQ1).
 
-Pipeline registers (D1): each a `valid` bit plus a payload. Only the valid bit
-has a reset; the payload is ignored when valid=0, so a flush or reset produces
-a safe bubble no matter what the payload holds.
+Pipeline registers (D1): each a `valid` bit plus a payload. The valid bit is
+what makes a bubble safe — the payload is ignored when valid=0, so a flush
+produces a safe no-op no matter what the payload holds. The payload is reset
+too, under the delivery-wide rule (D28): `ifdx_instr_q` resets to the canonical
+NOP and `ifdx_pc_q` / `ifdx_ptg_q` to `RESET_PC`, because the decoder and the
+S2 adders read them combinationally and an X there reaches the AXI VALID
+signals and every waveform of the first cycles after release.
 
 ### Timing of the common cases
 
@@ -172,8 +176,12 @@ update (S2 commit): PC, taken, real target, is_ret, push/pop
 
 `decode` slices the fixed RV32I fields, `imm_gen` builds the immediate for
 the 5 encoding formats, `control` turns the opcode into S2's control
-lines. Anything unknown sets `illegal` and forces every other control line
-inactive, so an illegal instruction has no side effects — it traps.
+lines. An unknown opcode leaves every control line at its inactive default; a
+known opcode with a bad `funct` field keeps the lines its opcode implies and
+only adds `illegal`. Either way the instruction has no side effect, but by two
+later gates rather than by the decoder: `lsu_req` is ANDed with `!illegal` so
+nothing reaches the bus, and the trap squashes the instruction into DX/WB so
+nothing is written back.
 
 - FENCE = NOP: single hart, in-order, blocking memory, nothing to order.
 - SYSTEM decodes exact encodings only: ECALL, EBREAK, MRET, WFI

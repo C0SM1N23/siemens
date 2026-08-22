@@ -10,7 +10,7 @@ register.
 \centering
 \caption{Sequential control across the delivery}
 \label{tab:fsminv}
-\begin{tabular}{@{}llL{0.40\linewidth}l@{}}
+\begin{tabular}{@{}L{0.24\linewidth}L{0.14\linewidth}L{0.40\linewidth}c@{}}
 \toprule
 \textbf{Module} & \textbf{Kind} & \textbf{State elements} & \textbf{Figure} \\
 \midrule
@@ -32,10 +32,13 @@ register.
 \end{tabular}
 \end{table}
 
+\begin{sloppypar}
 The remaining modules --- \file{decode.v}, \file{imm\_gen.v}, \file{control.v},
 \file{alu.v}, \file{alu\_top.v}, \file{branch\_unit.v},
-\file{writeback\_mux.v}, \file{exception\_unit.v}, \file{hazard\_unit.v} --- are
-purely combinational and contain no state at all. In particular the hazard unit,
+\file{writeback\_mux.v}, \file{exception\_unit.v} and \file{hazard\_unit.v} ---
+are purely combinational and contain no state at all.
+\end{sloppypar}
+\noindent In particular the hazard unit,
 which in many designs is a state machine, is five combinational equations here.
 
 \section{CPU trap state}

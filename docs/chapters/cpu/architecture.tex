@@ -33,6 +33,7 @@ paid, so the trade was taken deliberately.
 
 \begin{figure}[H]
 \centering
+\resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[x=1mm,y=1mm,font=\small]
   % --- stage bands -------------------------------------------------------
   \begin{scope}[on background layer]
@@ -112,7 +113,8 @@ paid, so the trade was taken deliberately.
   % --- writeback value back into the forwarding mux ----------------------
   \draw[flow] (wb.south) -- (150,-31) -- (61,-31) -- (61,-24) -- (fwd.west);
   \node[lbl,below=0.5mm] at (78,-31) {S3$\to$S2 forwarding};
-\end{tikzpicture}
+\end{tikzpicture}}
+
 \caption{CPU block structure. Each box is a module in \file{hdl/}.}
 \label{fig:cpu}
 \end{figure}
@@ -154,9 +156,14 @@ since the CPU is one block among several in a system being built in parallel.
 \file{decode.v}  & Slices the fixed RV32I fields out of the instruction word: opcode, \sig{rd},
                    \sig{rs1}, \sig{rs2}, \sig{funct3}, \sig{funct7}. Pure wiring. \\
 \file{imm\_gen.v} & Rebuilds the immediate for the five encoding formats from the same bits. \\
-\file{control.v} & Turns the opcode into the S2 control lines. Any unrecognised encoding sets
-                   \sig{illegal} and forces every other control line inactive, so an illegal
-                   instruction has no side effects at all --- it only traps. \\
+\file{control.v} & Turns the opcode into the S2 control lines, and flags any encoding it does
+                   not recognise. An unknown opcode leaves every line at its inactive default;
+                   a \emph{known} opcode with a bad \sig{funct} field keeps the lines its opcode
+                   implies and only adds \sig{illegal}. Either way the instruction has no side
+                   effect, but by two later gates rather than by the decoder: the LSU request is
+                   ANDed with \sig{!illegal}, so no transaction is issued, and the trap squashes
+                   the instruction on its way into DX/WB, so no register is written. Both are
+                   checked in \file{tb\_traps}. \\
 \file{alu\_top.v} & Selects the operands (register or immediate, PC for \sig{AUIPC}) and derives
                    the ALU operation from \sig{funct3}/\sig{funct7}. \\
 \file{alu.v}     & The arithmetic and logic itself. \\
@@ -180,7 +187,8 @@ rather than by the base arithmetic:
 \begin{itemize}[nosep]
   \item \sig{FENCE} decodes as a no-operation. The core is a single hart, in-order,
         with blocking memory operations and no store buffer, so there is nothing
-        to order.
+        to order. Only \sig{funct3} = \texttt{000} is accepted; \sig{FENCE.I}
+        belongs to Zifencei, is not implemented, and decodes as illegal.
   \item The \sig{SYSTEM} opcode decodes only exact encodings: \sig{ECALL},
         \sig{EBREAK}, \sig{MRET}, \sig{WFI} (\sig{imm12} = \texttt{0x105}) and the
         six CSR forms. \sig{funct3} = \texttt{100} is reserved and decodes as
