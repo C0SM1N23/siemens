@@ -44,46 +44,46 @@ module tb_dp_sram_top;
     wire irq;
 
     dp_sram_top dut (
-        .clk(clk), 
-        .rst_n(rst_n),
-        .a_awaddr(a_awaddr), 
-        .a_awvalid(a_awvalid), 
-        .a_awready(a_awready),
-        .a_wdata(a_wdata), 
-        .a_wstrb(a_wstrb), 
-        .a_wvalid(a_wvalid), 
-        .a_wready(a_wready),
-        .a_bresp(a_bresp), 
-        .a_bvalid(a_bvalid), 
-        .a_bready(a_bready),
-        .a_araddr(a_araddr), 
-        .a_arvalid(a_arvalid), 
-        .a_arready(a_arready),
-        .a_rdata(a_rdata), 
-        .a_rresp(a_rresp), 
-        .a_rvalid(a_rvalid), 
-        .a_rready(a_rready),
-        .b_awaddr(b_awaddr), 
-        .b_awvalid(b_awvalid), 
-        .b_awready(b_awready),
-        .b_wdata(b_wdata), 
-        .b_wstrb(b_wstrb), 
-        .b_wvalid(b_wvalid), 
-        .b_wready(b_wready),
-        .b_bresp(b_bresp), 
-        .b_bvalid(b_bvalid), 
-        .b_bready(b_bready),
-        .b_araddr(b_araddr), 
-        .b_arvalid(b_arvalid), 
-        .b_arready(b_arready),
-        .b_rdata(b_rdata), 
-        .b_rresp(b_rresp), 
-        .b_rvalid(b_rvalid), 
-        .b_rready(b_rready),
-        .irq(irq)
+        .clk_i(clk), 
+        .rst_n_i(rst_n),
+        .a_awaddr_i(a_awaddr), 
+        .a_awvalid_i(a_awvalid), 
+        .a_awready_o(a_awready),
+        .a_wdata_i(a_wdata), 
+        .a_wstrb_i(a_wstrb), 
+        .a_wvalid_i(a_wvalid), 
+        .a_wready_o(a_wready),
+        .a_bresp_o(a_bresp), 
+        .a_bvalid_o(a_bvalid), 
+        .a_bready_i(a_bready),
+        .a_araddr_i(a_araddr), 
+        .a_arvalid_i(a_arvalid), 
+        .a_arready_o(a_arready),
+        .a_rdata_o(a_rdata), 
+        .a_rresp_o(a_rresp), 
+        .a_rvalid_o(a_rvalid), 
+        .a_rready_i(a_rready),
+        .b_awaddr_i(b_awaddr), 
+        .b_awvalid_i(b_awvalid), 
+        .b_awready_o(b_awready),
+        .b_wdata_i(b_wdata), 
+        .b_wstrb_i(b_wstrb), 
+        .b_wvalid_i(b_wvalid), 
+        .b_wready_o(b_wready),
+        .b_bresp_o(b_bresp), 
+        .b_bvalid_o(b_bvalid), 
+        .b_bready_i(b_bready),
+        .b_araddr_i(b_araddr), 
+        .b_arvalid_i(b_arvalid), 
+        .b_arready_o(b_arready),
+        .b_rdata_o(b_rdata), 
+        .b_rresp_o(b_rresp), 
+        .b_rvalid_o(b_rvalid), 
+        .b_rready_i(b_rready),
+        .irq_o(irq)
     );
 
-   //10ns perioada
+   //10ns period
     always #5 clk = ~clk;
 
     integer pass_count;
@@ -393,12 +393,12 @@ module tb_dp_sram_top;
                 scan_count = $sscanf(line, "%s %s %s %s %s", cmd, arg1, arg2, arg3, arg4);
 
                 if (scan_count < 1) begin
-                    //linie goala
+                    //empty line
                 end
                 else begin
                     @(posedge clk);
                     if (cmd == "REM") begin
-                        // comentariu
+                        // comment
                     end
                     else if (cmd == "RESET") begin
                         do_reset;

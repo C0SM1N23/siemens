@@ -1,168 +1,177 @@
 // =============================================================================
-
-// FSM AXI4-Lite slave, trebuie instantiat de 2 ori pentru cele 2 porturi top lvl
-// Cate o tranzactie odata
-// Semnalul de stall vine din modulul de arbitrare coliziuni si blocheaza tranzactiile (tine semnalele ready si valid la 0)
-// Prioritate citire fata de scriere
-
+//
+// AXI4-Lite slave FSM, must be instantiated twice for the two top-level ports
+// One transaction at a time
+// The stall signal comes from the collision arbitration module and blocks
+// transactions (holds the ready signals low)
+// Read has priority over write
+//
 // =============================================================================
 
 module axi4lite_slave_fsm #(
-    parameter ADDR_W = 10   // latime adresa
+    parameter ADDR_W = 10   // address width
 ) (
+    // clock and reset
+    input  wire              clk_i,
+    input  wire              rst_n_i,
 
-    input  wire              clk,      // ceas
-    input  wire              rst_n,    // reset sincron
+    // write address
+    input  wire [ADDR_W-1:0] awaddr_i,   // write address
+    input  wire               awvalid_i, // address is valid
+    output wire               awready_o, // can accept the address
 
-    //Write Address
-    input  wire [ADDR_W-1:0] awaddr,   // adresa de scriere
-    input  wire               awvalid, // adresa data e valid
-    output wire               awready, // poate accepta adresa
+    // write data
+    input  wire [31:0]        wdata_i,   // data to write
+    input  wire [3:0]         wstrb_i,   // which byte
+    input  wire                wvalid_i, // write data received is valid
+    output wire                wready_o, // can accept data
 
-    //Write Data
-    input  wire [31:0]        wdata,   // datele de scris
-    input  wire [3:0]         wstrb,   // care byte
-    input  wire                wvalid, // datele de scriere primite sunt valide
-    output wire                wready, // pot accepta date
+    // write response
+    output wire [1:0]         bresp_o,
+    output wire                bvalid_o,
+    input  wire                bready_i, // response can be taken
 
-    //Write Response
-    output wire [1:0]         bresp,   // OKAY/ SLVERR
-    output wire                bvalid, // bresp e valid
-    input  wire                bready, // raspunsul poate fi preluat
+    // read address
+    input  wire [ADDR_W-1:0]  araddr_i,  // read address
+    input  wire                arvalid_i,// araddr is valid
+    output wire                arready_o,// can accept araddr
 
-    //Read Address
-    input  wire [ADDR_W-1:0]  araddr,  // adresa de citire
-    input  wire                arvalid,// araddr e valid
-    output wire                arready,// pot accepta araddr
+    // read data
+    output wire [31:0]        rdata_o,   // data read
+    output wire [1:0]         rresp_o,
+    output wire                rvalid_o, // rdata/rresp are valid
+    input  wire                rready_i, // master is ready to take the data
 
-    //Read Data
-    output wire [31:0]        rdata,   // datele citite
-    output wire [1:0]         rresp,   // OKAY/ SLVERR
-    output wire                rvalid, // rdata/rresp sunt valide
-    input  wire                rready, // master e gata sa preia datele
-
-    //Backend (arbitru coliziuni si mem)
-    output wire [ADDR_W-1:0]  mem_addr,  // adresa cererii pt backend
-    output wire                mem_write, // 1-scriere 0-citire
-    output wire [31:0]        mem_wdata, // date de scris pt backend
-    output wire [3:0]         mem_wstrb, // care byte
-    output wire                mem_valid, // 1-exista o cerere activa
-    input  wire                mem_error, // 1-SLVERR 0-OKAY
-    input  wire [31:0]        mem_rdata,  // date citite
-    input  wire                stall_i    // semnalul de stall
+    // Backend (collision arbiter and memory)
+    output wire [ADDR_W-1:0]  mem_addr_o,  // request address for backend
+    output wire                mem_write_o, // 1-write 0-read
+    output wire [31:0]        mem_wdata_o, // write data for backend
+    output wire [3:0]         mem_wstrb_o,
+    output wire                mem_valid_o, // 1-there is an active request
+    input  wire                mem_error_i, // 1-SLVERR 0-OKAY
+    input  wire [31:0]        mem_rdata_i, // data read
+    input  wire                stall_i      // stall signal
 );
 
     localparam [1:0] RESP_OKAY   = 2'b00;
     localparam [1:0] RESP_SLVERR = 2'b10;
 
-    //stari fsm
+    // fsm states
     localparam [1:0] S_IDLE    = 2'd0;
     localparam [1:0] S_WR_RESP = 2'd1;
     localparam [1:0] S_RD_RESP = 2'd2;
 
-    reg [1:0] state;     
-    reg [1:0] next_state; 
+    reg [1:0] state;
+    reg [1:0] next_state;
 
-    reg [ADDR_W-1:0] awaddr_reg; // registru adresa de scris
-    reg [31:0]       wdata_reg;  // registru date de scris
-    reg [3:0]        wstrb_reg;  // registru care byte
-    reg [ADDR_W-1:0] araddr_reg; // registru adresa de citit
-    reg aw_have;
-    reg w_have;
+    reg aw_have; // write address register available
+    reg w_have;  // write data available
 
-    wire aw_done = aw_have || awready; // adresa disponibila
-    wire w_done  = w_have  || wready;  // datele disponibile
-    
-    //logica de tranzitie
-    always @(*)
+    reg [ADDR_W-1:0] awaddr_reg;
+    reg [31:0]       wdata_reg;
+    reg [3:0]        wstrb_reg;
+    reg [ADDR_W-1:0] araddr_reg;
+
+    wire aw_done = aw_have | awready_o;
+    wire w_done  = w_have  | wready_o;
+
+    // transition logic
+    always @(*) begin
         case (state)
-
-            S_IDLE:
+            S_IDLE: begin
                 if (stall_i)
-                    next_state = S_IDLE;            
-                else if (arvalid && ~aw_have && ~w_have)
-                    next_state = S_RD_RESP;          // citire ceruta
+                    next_state = S_IDLE;
                 else if (aw_done && w_done)
-                    next_state = S_WR_RESP;          // scriere ceruta
+                    next_state = S_WR_RESP; // write requested
+                else if (arvalid_i && !aw_have && !w_have)
+                    next_state = S_RD_RESP; // read requested
                 else
-                    next_state = S_IDLE;             
-
-            S_WR_RESP: next_state = bready ? S_IDLE : S_WR_RESP;
-
-            S_RD_RESP: next_state = rready ? S_IDLE : S_RD_RESP;
-           
-            default: next_state = S_IDLE;
-
+                    next_state = S_IDLE;
+            end
+            S_WR_RESP: begin
+                next_state = bready_i ? S_IDLE : S_WR_RESP;
+            end
+            S_RD_RESP: begin
+                next_state = rready_i ? S_IDLE : S_RD_RESP;
+            end
+            default: begin
+                next_state = S_IDLE;
+            end
         endcase
+    end
 
-
-    //trecem la starea urmatoare
-    always @(posedge clk or negedge rst_n)
-        if (~rst_n)
+    // advance to next state
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             state <= S_IDLE;
         else
             state <= next_state;
+    end
 
-    //adaugam valori in awaddr_reg
-    always @(posedge clk or negedge rst_n)
-        if (~rst_n )
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
+            aw_have <= 1'b0;
+        else if (state == S_WR_RESP && bready_i)
+            aw_have <= 1'b0;
+        else if (awready_o)
+            aw_have <= 1'b1;
+    end
+
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
+            w_have <= 1'b0;
+        else if (state == S_WR_RESP && bready_i)
+            w_have <= 1'b0;
+        else if (wready_o)
+            w_have <= 1'b1;
+    end
+
+    // latch address value
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             awaddr_reg <= {ADDR_W{1'b0}};
-        else if (awready)
-            awaddr_reg <= awaddr;
+        else if (awready_o)
+            awaddr_reg <= awaddr_i;
+    end
 
-    //adaugam valori in wdata_reg
-    always @(posedge clk or negedge rst_n)
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             wdata_reg <= 32'd0;
-        else if (wready)
-            wdata_reg <= wdata;
+        else if (wready_o)
+            wdata_reg <= wdata_i;
+    end
 
-    //adaugam valori in wstrb_reg
-    always @(posedge clk or negedge rst_n)
-        if (~rst_n)
-            wstrb_reg <= 4'd0; 
-        else if (wready)
-            wstrb_reg <= wstrb;
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
+            wstrb_reg <= 4'd0;
+        else if (wready_o)
+            wstrb_reg <= wstrb_i;
+    end
 
-    //adaugam valori in araddr_reg
-    always @(posedge clk or negedge rst_n)
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i)
             araddr_reg <= {ADDR_W{1'b0}};
-        else if (arready)
-            araddr_reg <= araddr;
+        else if (state == S_IDLE && arvalid_i && !aw_have && !w_have && !stall_i)
+            araddr_reg <= araddr_i;
+    end
 
+    // handshake signals
+    assign awready_o = (state == S_IDLE) && awvalid_i && !aw_have && !stall_i;
+    assign wready_o  = (state == S_IDLE) && wvalid_i  && !w_have  && !stall_i;
+    assign arready_o = (state == S_IDLE) && arvalid_i && !aw_have && !w_have && !stall_i;
 
-    always @(posedge clk or negedge rst_n)
-    if (~rst_n)
-        aw_have <= 1'b0;
-    else if (state == S_WR_RESP && bready)
-        aw_have <= 1'b0;   
-    else if (awready)
-        aw_have <= 1'b1;   
+    assign bvalid_o  = (state == S_WR_RESP);
+    assign bresp_o   = mem_error_i ? RESP_SLVERR : RESP_OKAY;
 
-    always @(posedge clk or negedge rst_n)
-    if (~rst_n)
-        w_have <= 1'b0;
-    else if (state == S_WR_RESP && bready)
-        w_have <= 1'b0;
-    else if (wready)
-        w_have <= 1'b1;
+    assign rvalid_o  = (state == S_RD_RESP);
+    assign rdata_o   = mem_rdata_i;
+    assign rresp_o   = mem_error_i ? RESP_SLVERR : RESP_OKAY;
 
-    //semnale de handshake
-    assign awready = (state == S_IDLE) && awvalid && ~aw_have && ~stall_i;
-    assign wready  = (state == S_IDLE) && wvalid  && ~w_have  && ~stall_i;
-    assign arready = (state == S_IDLE) && arvalid && ~aw_have && ~w_have && ~stall_i;
-    assign bvalid  = (state == S_WR_RESP); 
-    assign bresp   = mem_error ? RESP_SLVERR : RESP_OKAY;
-    assign rvalid  = (state == S_RD_RESP);
-    assign rdata   = mem_rdata;
-    assign rresp   = mem_error ? RESP_SLVERR : RESP_OKAY;
-
-    //semnale pentru arbitru de coliziuni si mem
-    assign mem_valid = (state == S_WR_RESP) || (state == S_RD_RESP);
-    assign mem_write = (state == S_WR_RESP);
-    assign mem_addr  = (state == S_RD_RESP) ? araddr_reg : awaddr_reg;
-    assign mem_wdata = wdata_reg; 
-    assign mem_wstrb = wstrb_reg;
+    // signals for collision arbiter and memory
+    assign mem_valid_o = (state == S_WR_RESP) || (state == S_RD_RESP);
+    assign mem_write_o = (state == S_WR_RESP);
+    assign mem_addr_o  = (state == S_RD_RESP) ? araddr_reg : awaddr_reg;
+    assign mem_wdata_o = wdata_reg;
+    assign mem_wstrb_o = wstrb_reg;
 
 endmodule
