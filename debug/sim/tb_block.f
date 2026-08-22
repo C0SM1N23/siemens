@@ -14,9 +14,11 @@
 //   tb_mtimer_regs  machine-timer registers, reset and access rules
 //   tb_csr_ro       CSR file: read-only, WARL, tied-off, absent
 //   tb_traps        one directed test per trap cause, at CPU level
+//   tb_bp           branch predictor: BTB/BHT, RAS boundaries, reset
+//   tb_alu          arithmetic path: the ALUOp decode and every operation
 //
-// The incdir resolves tb_check.vh / tb_axil_master.vh, and tb_traps also needs
-// the RTL include path for defines.vh.
+// The incdir resolves tb_check.vh / tb_axil_master.vh; tb_traps and tb_alu
+// also need the RTL include path for defines.vh.
 // ---------------------------------------------------------------------------
 +incdir+../hdl
 +incdir+../../hdl
@@ -28,3 +30,5 @@
 ../hdl/tb_mtimer_regs.v
 ../hdl/tb_csr_ro.v
 ../hdl/tb_traps.v
+../hdl/tb_bp.v
+../hdl/tb_alu.v

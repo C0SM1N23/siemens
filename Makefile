@@ -2,7 +2,7 @@
 # this just wires them up for one-command runs and for CI.
 #
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
-#   make modelsim   full 12-run ModelSim regression (needs vsim; local/Windows)
+#   make modelsim   full 14-run ModelSim regression (needs vsim; local/Windows)
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
 
@@ -25,7 +25,7 @@ verilator: asm
 
 test: verilator
 
-# Full regression on ModelSim, 12 runs from one compile:
+# Full regression on ModelSim, 14 runs from one compile:
 #   1-4  single-core system bench under four bus-timing configurations
 #   5    dual-core shared memory
 #   6    PIC feature bench
@@ -33,6 +33,8 @@ test: verilator
 #   10   machine-timer registers
 #   11   CSR read-only, WARL and reset
 #   12   one directed test per trap cause
+#   13   branch predictor: BTB/BHT, RAS boundaries, reset
+#   14   ALU operation decode and operand boundaries
 modelsim: asm
 	cd $(SIM) && vsim -c -do "do regress.do; quit -f"
 

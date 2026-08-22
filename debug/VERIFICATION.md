@@ -52,21 +52,22 @@ py asm.py program_dual.s program_dual.hex
 
 ```
 vsim -c -do "do sim.do;     quit -f"     # quick single run (tb_cpu_axi)
-vsim -c -do "do regress.do; quit -f"     # full regression, 12 runs off one compile
+vsim -c -do "do regress.do; quit -f"     # full regression, 14 runs off one compile
 ```
 
-The twelve regression runs. Runs 1-6 are the system and feature regression;
-runs 7-12 are block-level benches that isolate the properties a system run
-cannot — reset values, read-only enforcement, individual status fields and one
-trap cause at a time.
+The fourteen regression runs. Runs 1-6 are the system and feature regression;
+runs 7-14 are block-level benches that isolate the properties a system run
+cannot — reset values, read-only enforcement, individual status fields, one
+trap cause at a time, and the two CPU submodules whose boundary behaviour a
+program cannot reach. Check counts are the PASS lines counted in the log.
 
 | # | Bench | Configuration / scope | Checks |
 |---|---|---|---|
-| 1 | `tb_cpu_axi` | default latencies (the CPI check is active only here) | 90 |
-| 2 | `tb_cpu_axi` | high fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) | 90 |
-| 3 | `tb_cpu_axi` | random READY backpressure, seeds 101/202 | 90 |
-| 4 | `tb_cpu_axi` | random READY backpressure, seeds 777/888 | 90 |
-| 5 | `tb_dual_core` | 2 cores + shared memory behind a 2:1 arbiter | — |
+| 1 | `tb_cpu_axi` | default latencies (CPI + mcycle timing checks active only here) | 97 |
+| 2 | `tb_cpu_axi` | high fixed AXI latencies (imem RL=2, dmem RL=3 / WL=2) | 95 |
+| 3 | `tb_cpu_axi` | random READY backpressure, seeds 101/202 | 95 |
+| 4 | `tb_cpu_axi` | random READY backpressure, seeds 777/888 | 95 |
+| 5 | `tb_dual_core` | 2 cores + shared memory behind a 2:1 arbiter | 5 |
 | 6 | `tb_pic` | standalone PIC feature bench | 139 |
 | 7 | `tb_pic_reset` | PIC reset values, X-freedom, asynchronous reset | 350 |
 | 8 | `tb_pic_ro` | PIC read-only registers and reserved bits | 478 |
@@ -74,6 +75,9 @@ trap cause at a time.
 | 10 | `tb_mtimer_regs` | machine-timer registers, reset and access rules | 224 |
 | 11 | `tb_csr_ro` | CSR file: read-only / WARL / tied-off / absent | 282 |
 | 12 | `tb_traps` | one directed test per trap cause | 111 |
+| 13 | `tb_bp` | branch predictor: tables, RAS boundaries, reset | 68 |
+| 14 | `tb_alu` | ALU decode and operand boundaries | 57 |
+| | **total** | | **2520** |
 
 `-c` is console mode. Every run ends in its own banner (`ALL TESTS PASSED`,
 `DUAL-CORE TEST PASSED`, `PIC RESET TESTBENCH: ALL TESTS PASSED`, and so on),
@@ -95,7 +99,7 @@ is written out in the header of `rtl.f`.
 
 To run just one bench (compile once, then elaborate it alone) — substitute any
 of `tb_pic`, `tb_pic_reset`, `tb_pic_ro`, `tb_pic_status`, `tb_mtimer_regs`,
-`tb_csr_ro`, `tb_traps`, `tb_dual_core`:
+`tb_csr_ro`, `tb_traps`, `tb_bp`, `tb_alu`, `tb_dual_core`:
 
 ```
 vsim -c -do "do compile.do; vsim -onfinish stop work.tb_pic; run -all; quit -f"

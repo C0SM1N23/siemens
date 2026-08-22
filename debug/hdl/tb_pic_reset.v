@@ -127,7 +127,7 @@ function [31:0] STA; input [31:0] k; STA = STA0 + (k << 2); endfunction
 // Used twice: once out of power-on reset, once out of a mid-operation reset.
 task check_full_reset_map(input [511:0] tag);
     begin
-        $display("  reading back all 59 mapped registers (%0s)", tag);
+        $display("  reading back all 56 mapped registers (%0s)", tag);
         for (i = 0; i < 16; i = i + 1) begin
             axil_read(CFG(i), RESP_OKAY); check(RST_CFG, rd, "  SRCx_CONFIG   reset value");
             axil_read(SWT(i), RESP_OKAY); check(RST_SWT, rd, "  SRCx_SW_TRIG  reset value");
@@ -179,7 +179,7 @@ initial begin
     @(posedge clk) #1 rst_n = 1'b1;
     axil_step(2);
     $display("   step 2: read all 16 SRCx_CONFIG, 16 SRCx_SW_TRIG, 16 SRCx_STATUS");
-    $display("           and the 11 global registers, comparing each to its reset value");
+    $display("           and the 8 global registers, comparing each to its reset value");
     check_full_reset_map("power-on reset");
 
     // ===== 3. CPU-side outputs after reset =================================
