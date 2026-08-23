@@ -78,13 +78,16 @@ The full map, including the interrupt source assignment, is in
 Needs ModelSim (`vsim` on `PATH`) and Python 3.
 
 ```
-make soc         # SoC regression: burst bridge + full system test
+make soc         # SoC regression, 9 runs over four bus timings (ModelSim)
+make soc-sva     # SoC lint + SVA assertion run (Verilator)
 make modelsim    # CPU regression, 14 runs
-make test        # Verilator SVA + coverage flow (what CI runs)
+make test        # CPU Verilator SVA + coverage flow (what CI runs)
 make asm         # rebuild the test program images
 ```
 
-`make soc` runs three benches from one compile:
+`make soc` runs three benches from one compile, the two system-level ones under
+four bus timings each (nominal, high fixed latency, and two seeds of random
+READY backpressure):
 
 1. **[tb_full2lite](soc/debug/hdl/tb_full2lite.v)** — the burst bridge on its
    own: 8-beat bursts, single-beat bursts, byte strobes, FIXED bursts,
@@ -105,16 +108,23 @@ make asm         # rebuild the test program images
    collisions, and an unmapped access that must come back `DECERR`. It
    measures each of those and **fails if they did not happen** — a run that
    passes without exercising what it was written for is not a passing run.
-   The 512-byte transfer must come out bit-perfect regardless of the
-   interference.
+   The transfers must come out bit-perfect regardless of the interference.
+
+`make soc-sva` lints the whole SoC with `-Wall` and re-runs every bench with the
+assertion layer in [soc/debug/sva/](soc/debug/sva/) bound live: AXI4-Lite and
+AXI4-Full protocol on every port, plus the fabric's own decisions — disjoint
+address windows, one-hot grants, a grant held until its response beat, a parked
+master that sees nothing, and a burst whose beat counter and `RLAST` agree.
 
 ## Status
 
 | Regression | Result |
 |---|---|
 | CPU, 14 runs | all pass |
-| SoC, 3 runs | all pass |
+| SoC, 9 runs | all pass |
+| SoC lint + SVA (Verilator) | lint clean, all benches pass |
 | DMA block bench | passes |
-| DP-SRAM block bench | passes |
+| DP-SRAM block bench | 67/67 checks pass |
 
-All three blocks compile into a single library with no errors and no warnings.
+All three blocks compile into a single library with no errors and no warnings,
+and the whole SoC lints clean under `verilator -Wall`.

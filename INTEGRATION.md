@@ -9,8 +9,8 @@ was rebased, rewritten or force-pushed. The work happens on `master`, which
 now carries all three blocks plus the interconnect that joins them.
 
 Read this as the answer to "what did you have to change in their code, and
-why?". The short version is four source changes, two per block, none of them
-touching a block's algorithm.
+why?". The short version is five source changes, none of them touching a
+block's algorithm.
 
 | # | Block | Change | Reason |
 |---|---|---|---|
@@ -18,6 +18,7 @@ touching a block's algorithm.
 | [2.2](#22-int_status-and-int_enable-were-connected-to-nothing) | DMA | `irq` driven from `INT_STATUS & INT_ENABLE` | two registers software could write did nothing |
 | [3.1](#31-module-regfile-renamed-to-sram_regfile) | DP-SRAM | module `regfile` renamed `sram_regfile` | name collision with the CPU's register file |
 | [3.2](#32-compile-list-updated-for-the-rename) | DP-SRAM | its `compile.do` follows the rename | the block bench would not compile |
+| [3.3](#33-the-bandwidth-window-width-was-independent-of-its-parameter) | DP-SRAM | `WIN_W` derived from `WINDOW_CYCLES` | a width mismatch Verilator caught; the two could disagree |
 
 ---
 
@@ -204,6 +205,43 @@ vlog -work work ../../hdl/sram_regfile.v
 
 The block's own bench then runs unchanged: **67 checks, 67 pass**.
 
+### 3.3 The bandwidth window width was independent of its parameter
+
+**Symptom.** Verilator lint:
+
+```
+%Warning-WIDTHEXPAND: sram_regfile.v:80: Operator EQ expects 32 or 11 bits on
+the LHS, but LHS's VARREF 'window_cnt' generates 10 bits.
+```
+
+**Cause.** The bandwidth counters run over a window of `WINDOW_CYCLES`, a
+module parameter. The counter's width was a separate literal:
+
+```verilog
+    localparam WIN_W = 10;
+    ...
+    wire window_done = (window_cnt == WINDOW_CYCLES-1);
+```
+
+At the default `WINDOW_CYCLES = 1024` the two agree and the code is correct.
+They are not tied together, though, so raising `WINDOW_CYCLES` past 1024 would
+leave the counter too narrow ever to reach the end of its own window:
+`window_done` would never assert, and the `BANDWIDTH_A` / `BANDWIDTH_B`
+registers would silently stop updating. A parameter that quietly breaks the
+block when changed is worse than one that does not exist.
+
+**Fix.** The width is derived from the parameter, and the comparison is between
+two values of the same width:
+
+```verilog
+    localparam WIN_W = $clog2(WINDOW_CYCLES);
+    localparam WINDOW_LAST = WINDOW_CYCLES - 1;
+    wire window_done = ({{(32-WIN_W){1'b0}}, window_cnt} == WINDOW_LAST);
+```
+
+Behaviour at the default parameter is identical; the block's own bench still
+reports 67 of 67 checks passing.
+
 ---
 
 ## 4. What was deliberately *not* changed
@@ -348,12 +386,13 @@ It was run again after the block was relocated into `cpu/`: **still 14/14**.
 | Regression | Result |
 |---|---|
 | CPU, 14 runs (`make modelsim`) | all pass |
-| SoC, 3 runs (`make soc`) | all pass |
+| SoC, 9 runs (`make soc`) | all pass |
+| SoC lint + SVA on Verilator (`make soc-sva`) | lint clean, all benches pass |
 | DMA block bench (`tb_mc_dma_top`) | passes |
 | DP-SRAM block bench (`tb_dp_sram_top`) | 67/67 checks pass |
 
 All three blocks compile into a single ModelSim library with **0 errors and
-0 warnings**.
+0 warnings**, and the whole SoC lints clean under `verilator -Wall`.
 
 ### What the SoC regression proves
 
@@ -445,7 +484,83 @@ the 512-byte transfer came out bit-perfect regardless.
 
 ---
 
-## 7. Open points
+## 7. The assertion layer
+
+The CPU block already had an SVA layer bound to its own ports. The fabric had
+none, so it grew one: `soc/debug/sva/`, bound to the RTL and never touching it.
+ModelSim ASE cannot compile assertions, so it runs on Verilator, the same split
+the CPU block uses.
+
+`axi_lite_sva.sv` was reused as-is - it is a generic AXI4-Lite port checker -
+and bound to every fabric port the CPU block's own bind file does not reach:
+the bridge's Lite master side, the arbiter's slave side, both memories, the
+DMA's register slave, and both SRAM ports.
+
+Two checkers are new:
+
+**`axi_full_sva.sv`** watches the one port that is not AXI4-Lite: the DMA's
+AXI4-Full master. It shadows the burst - length, beat counter, outstanding
+state - and asserts that `WLAST` lands on beat `AWLEN` and `RLAST` on beat
+`ARLEN`, that neither lands early, and that one burst is outstanding per
+direction. It also asserts the burst is inside the subset the bridge supports,
+under a `CHECK_SUBSET` parameter: that is a contract on the master, so it is on
+for the DMA's port and off where the same checker watches the bridge's slave
+side, because `tb_full2lite` drives a WRAP burst on purpose to prove the bridge
+refuses it. (The assertion fired the first time it was run, on that test,
+correctly - which is how the parameter came to exist.)
+
+**`soc_fabric_sva.sv`** asserts the fabric's *decisions* rather than its
+protocol. A decoder that routes a response to the wrong slave, or an arbiter
+that hands the memory to two masters at once, can be perfectly protocol-legal
+on every individual port. The properties worth naming:
+
+- the address windows are disjoint (`$onehot0` on the hit vector) - the
+  soundness argument for the whole decoder, now checked instead of asserted in
+  a comment on `soc_addr_map.vh`
+- a response is routed to exactly one target, and `DECERR` never comes from a
+  leg that decoded to a real slave
+- the grant is one-hot, is only taken by a master that was requesting, and is
+  held until the response beat that ends its transaction
+- a parked master sees no `READY` and no response at all - what makes waiting
+  for a grant indistinguishable from a slow slave, and so protocol-legal
+- the bridge's beat counter stays inside the burst length, `RLAST` tracks it,
+  an INCR burst advances exactly one word per beat, and an error response is
+  never lost inside a burst
+
+---
+
+## 8. Bus timing
+
+Every system-level bench runs under four bus timings rather than one:
+
+| | IMEM | DMEM |
+|---|---|---|
+| nominal | - | - |
+| high fixed latency | RL=2 | RL=3, WL=2 |
+| random backpressure A | 25% stalls | 35% stalls |
+| random backpressure B | 40% stalls | 20% stalls, RL=1 |
+
+The controls live on `axi_lite_ram` and are surfaced through `soc_top` so the
+regression can set them with `-G` without editing anything. They are inert at
+their defaults: `STALL_PROB = 0` leaves the backpressure generator out of the
+elaborated design entirely (it is inside a `generate`), and with the latencies
+at zero the wait counters are never loaded. The synthesised SoC is the RAM it
+always was.
+
+This matters more than a coverage number. The decoder holds a latched routing
+select across a response, the arbiter holds a grant across it, and the bridge
+holds a beat counter across it. All three are exactly the kind of state that
+only breaks when a slave takes its time, and at one-cycle memory none of it is
+ever held for more than a cycle.
+
+The stress bench's coverage floors are enforced in **all four** timings, not
+only the nominal one. That was not a given - injected latency changes the
+schedule - so it was measured: the arbiter is contended for 161 to 224 cycles
+and at least one real SRAM address conflict occurs in every configuration.
+
+---
+
+## 9. Open points
 
 Things a following iteration should pick up. None of them block the SoC as it
 stands.
@@ -456,14 +571,7 @@ stands.
 - **The DMA's multi-channel paths in the SoC.** The system test drives channel
   0. The other three channels and the round-robin scheduling policy are
   covered by the DMA's own bench, not yet at system level.
-- **Bus timing is fixed in the SoC runs.** The CPU block's regression sweeps
-  four bus-timing configurations including random READY backpressure; the SoC
-  benches run at one fixed timing. The interconnect's behaviour under stalled
-  slaves is therefore less exercised than the CPU's own is.
-- **No assertion layer on the new interconnect.** The CPU block binds an SVA
-  layer to its ports; the decoder, arbiter and bridge are checked by directed
-  benches only.
-- **`make test` (Verilator) does not build the SoC.** The CPU block's CI flow
-  is Verilator-based; the SoC regression is ModelSim-only so far, because that
-  is what is installed locally. The SoC RTL has not been lint-checked against
-  Verilator.
+- **The SoC is not in CI.** `make soc` and `make soc-sva` are run locally.
+  The GitHub workflow still runs only the CPU block's Verilator flow.
+- **No synthesis run.** The design lints clean but has not been through a
+  synthesis tool, so area and timing closure are unknown.
