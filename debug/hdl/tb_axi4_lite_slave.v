@@ -74,9 +74,9 @@ module tb_axi4_lite_slave_advanced;
     // --- Generare Ceas (100 MHz) ---
     always #5 clk = ~clk;
 
-    // ==========================================
+    
     // TASK: Scriere AXI4-Lite (CORECTAT)
-    // ==========================================
+    
     task axi_write;
         input [31:0] addr;
         input [31:0] data;
@@ -86,6 +86,7 @@ module tb_axi4_lite_slave_advanced;
             s_axi_awaddr  = addr;
             s_axi_awvalid = 1;
             s_axi_wdata   = data;
+            
             s_axi_wstrb   = 4'hF;
             s_axi_wvalid  = 1;
             s_axi_bready  = 1;
@@ -110,9 +111,9 @@ module tb_axi4_lite_slave_advanced;
         end
     endtask
 
-    // ==========================================
+    
     // TASK: Citire AXI4-Lite (CORECTAT)
-    // ==========================================
+    
     task axi_read;
         input  [31:0] addr;
         output [31:0] data;
@@ -142,9 +143,9 @@ module tb_axi4_lite_slave_advanced;
                 $display("[TIME %0t] EROARE: Citire eșuată la adresa %h (RESP: %b)", $time, addr, s_axi_rresp);
         end
     endtask
-    // ==========================================
+    
     // SECVENȚA DE TESTARE
-    // ==========================================
+    
     initial begin
         // 1. Inițializare semnale
         clk = 0;

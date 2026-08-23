@@ -111,7 +111,7 @@ module priority_arbiter (
     // 4. Update last_gnt when a request is accepted
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
-            last_gnt <= 2'd0;
+            last_gnt <= 2'd3;
         end else if (master_req_valid && master_req_ready) begin
             if (selected_gnt[0])
                 last_gnt <= 2'd0;

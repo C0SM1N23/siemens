@@ -196,13 +196,39 @@ module dma_channel (
         end
     end
 
+    // ==== FIX: urmarim daca exista o tranzactie DEJA trimisa la master si
+    // inca neterminata (req_pending). Fara acest semnal, req_valid se
+    // reaserta la UN SINGUR ciclu dupa arb_gnt (deoarece conditia
+    // "state==ACTIVE && has_tokens && ~arb_gnt" devine din nou adevarata
+    // imediat ce pulsul de grant de 1 ciclu dispare), MULT INAINTE ca
+    // burst-ul curent (care dureaza multe cicluri: adresa + 8 beat-uri de
+    // date) sa se fi terminat efectiv. Aceasta cerere prematura, "fantoma",
+    // ajunge sa fie acordata chiar in ciclul in care burst-ul CURENT se
+    // termina (deoarece master-ul redevine liber exact atunci), dar cu
+    // parametri (adresa/directie) proaspat recalculati combinational dupa
+    // ce active_is_write a comutat -- ducand la o tranzactie IN PLUS,
+    // nedorita, care "fura" un burst_done ce ajunge sa fie interpretat gresit
+    // de FSM ca finalizarea scrierii, desi scrierea reala nici macar nu a
+    // inceput faza de date. req_pending blocheaza reasertarea lui req_valid
+    // pana cand burst_done confirma ca tranzactia anterioara chiar s-a
+    // incheiat.
+    reg req_pending;
+    always @(posedge clk or negedge rst_n) begin
+        if (~rst_n)
+            req_pending <= 1'b0;
+        else if (arb_gnt)
+            req_pending <= 1'b1;   // Tranzactie trimisa la master, in desfasurare
+        else if (burst_done)
+            req_pending <= 1'b0;   // Tranzactia s-a incheiat cu adevarat
+    end
+
     // 4. Arbiter Request Logic
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             req_valid <= 1'b0;
-        else if (state == STATE_FETCHING && has_tokens && ~arb_gnt)
+        else if (state == STATE_FETCHING && has_tokens && ~arb_gnt && ~req_pending)
             req_valid <= 1'b1;
-        else if (state == STATE_ACTIVE && has_tokens && ~arb_gnt)
+        else if (state == STATE_ACTIVE && has_tokens && ~arb_gnt && ~req_pending)
             req_valid <= 1'b1;
         else if (arb_gnt)
             req_valid <= 1'b0;

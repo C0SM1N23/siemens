@@ -104,7 +104,7 @@ module mc_dma_top (
     wire fetch_data_valid_ch1 = fetch_data_valid && active_master_ch[1];
     wire fetch_data_valid_ch2 = fetch_data_valid && active_master_ch[2];
     wire fetch_data_valid_ch3 = fetch_data_valid && active_master_ch[3];
-    // =========================================================
+    
     
     // Global feedback derived from AXI responses
     wire        global_burst_done = (m_axi_bvalid && m_axi_bready) || 
@@ -121,14 +121,14 @@ module mc_dma_top (
         else if (|ch_gnt) // Când primim un puls de grant de 1 ciclu, memorăm ID-ul
             active_master_ch <= ch_gnt;
     end
-    // ===================================================================
+    
 
     // Connect top-level IRQ port
     assign irq = hw_irq;
 
-    // ==========================================
+    
     // Module Instantiations
-    // ==========================================
+    
 
     // 1. AXI4-Lite Slave (Register File)
     axi4_lite_slave slave_inst (

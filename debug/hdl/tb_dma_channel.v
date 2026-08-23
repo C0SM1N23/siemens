@@ -51,9 +51,9 @@ module tb_dma_channel;
     // --- Generare Ceas (100 MHz) ---
     always #5 clk = ~clk;
 
-    // ==========================================
+    
     // TASK: Simularea aducerii Descriptorului (Fetch Phase)
-    // ==========================================
+    
     task simulate_descriptor_fetch;
         input [31:0] t_src;
         input [31:0] t_dst;
@@ -89,9 +89,9 @@ module tb_dma_channel;
         end
     endtask
 
-    // ==========================================
+    
     // TASK: Simularea unui Burst de Date (Active Phase)
-    // ==========================================
+    
     task simulate_data_burst;
         begin
             // Așteptăm ca modulul să aibă destule token-uri și să ridice request-ul
@@ -116,9 +116,9 @@ module tb_dma_channel;
         end
     endtask
 
-    // ==========================================
+    
     // SECVENȚA DE TESTARE
-    // ==========================================
+    
     initial begin
         // 1. Inițializare Semnale
         clk = 0;

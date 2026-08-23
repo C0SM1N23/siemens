@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-module tb_dma;
+module tb_dma_2;
     localparam ADDR_CH0_DESC_ADDR   = 8'h00;
     localparam ADDR_CH0_CONTROL     = 8'h04;
     localparam ADDR_CH0_BW_CAP      = 8'h08;
@@ -85,10 +85,10 @@ module tb_dma;
     wire        m_axi_bready;
     //===================================
 
-    // Memorie simulata (SRAM) - 16 KB
+    // Memorie simulata (SRAM) - 32 KB
     // AXI e byte-adressable, dar memoria e word-adressable, de ex
     // Adresa AXI 8 -> 8/4=2 -> ram_memory[2]
-    reg [31:0] ram_memory [0:4095];
+    reg [31:0] ram_memory [0:8191];
 
     //====Variabile citire din fisier====
     reg  [31:0] read_val;
@@ -253,54 +253,63 @@ module tb_dma;
     endtask
     //====================================
 
-    //=== TASK PENTRU INITIALIZARE RAM ===
-    task init_ram;
-        input [31:0] v0;
-        input [31:0] v1;
-        input [31:0] v2;
-        input [31:0] v3;
-        input [31:0] v4;
-        input [31:0] v5;
-        input [31:0] v6;
-        input [31:0] v7;
+    //=== TASK PENTRU PREGATIREA TRANSFERULUI IN RAM ===
+    task setup_dma_transfer;
+        input [31:0] desc_addr;
+        input [31:0] src_addr;
+        input [31:0] dst_addr;
+        input [31:0] transf_len;
+        input [31:0] pattern; // Un pattern de baza pentru date (ex: 32'hA1A1A1A1)
         integer k;
-
         begin
-            for (i = 0; i < 4096; i = i + 1) begin
-                ram_memory[i] = 32'h00000000;
+            // 1. Incarcam payload-ul sursa in RAM
+            for (k = 0; k < (transf_len >> 2); k = k + 1) begin
+                backdoor_ram_write(src_addr + (k * 4), pattern + k); 
             end
-            $display("INFO: Memoria RAM a fost initializata cu 0.");
 
-            // Datele sursa de la 0x1000
-            backdoor_ram_write(32'h00001000, v0);
-            backdoor_ram_write(32'h00001004, v1);
-            backdoor_ram_write(32'h00001008, v2);
-            backdoor_ram_write(32'h0000100C, v3);
-            backdoor_ram_write(32'h00001010, v4);
-            backdoor_ram_write(32'h00001014, v5);
-            backdoor_ram_write(32'h00001018, v6);
-            backdoor_ram_write(32'h0000101C, v7);
+            // 2. Setam descriptorul in RAM
+            backdoor_ram_write(desc_addr, src_addr);
+            backdoor_ram_write(desc_addr + 4, dst_addr);
+            backdoor_ram_write(desc_addr + 8, transf_len);
+            backdoor_ram_write(desc_addr + 12, 32'h00000001); // CONTROL = bit 0 (last desc)
+            
+            $display("[%0t] INFO: RAM setat -> Desc: %h, Src: %h, Dst: %h", $time, desc_addr, src_addr, dst_addr);
+        end
+    endtask
+    //====================================
 
-            // Descriptorul de la 0x0100 (sursa, destinatie, lungime, control)
-            // desc_src
-            backdoor_ram_write(32'h00000100, 32'h00001000); 
+    //=== TASK PENTRU PORNIREA UNUI CANAL ===
+    task start_channel;
+        input [31:0] base_reg_addr; // Ex: ADDR_CH0_DESC_ADDR
+        input [31:0] desc_addr;
+        input [31:0] bw_cap;
+        begin
+            // Scriem adresa descriptorului
+            axi_lite_write(base_reg_addr, desc_addr, 0);
+            
+            // Setam latimea de banda (token bucket parameters)
+            axi_lite_write(base_reg_addr + 8, bw_cap, 0); // Offset 8 pt BW_CAP
+            
+            // Dam Enable (bitul 0 din CONTROL)
+            axi_lite_write(base_reg_addr + 4, 32'h00000001, 0); // Offset 4 pt CONTROL
+            
+            $display("[%0t] INFO: Canal lansat la adresa de baza %h", $time, base_reg_addr);
+        end
+    endtask
+    //====================================
 
-            // desc_dst 
-            backdoor_ram_write(32'h00000104, 32'h00002000); 
-
-            // desc_len 
-            backdoor_ram_write(32'h00000108, 32'h00000020); 
-
-            // desc_ctrl 
-            backdoor_ram_write(32'h0000010C, 32'h00000001);
-
-            // padding-ul
-            backdoor_ram_write(32'h00000110, 32'h00000000); 
-            backdoor_ram_write(32'h00000114, 32'h00000000); 
-            backdoor_ram_write(32'h00000118, 32'h00000000); 
-            backdoor_ram_write(32'h0000011C, 32'h00000000); 
-
-            $display("[%0t] INFO: Datele sursa si Descriptorul au fost incarcate.", $time);
+    //=== TASK PENTRU ASTEPTAREA FINALIZARII (POLLING) ===
+    task wait_channel_done;
+        input [31:0] status_reg_addr; // Ex: ADDR_CH0_STATUS
+        reg   [31:0] st;
+        begin
+            st = 32'h0;
+            // Extragem starea FSM din ultimii 3 biti. Asteptam valoarea 4 (STATE_DONE).
+            while ((st & 3'b111) !== 3'd4) begin
+                axi_lite_read(status_reg_addr, st);
+                #(20); // Asteptam putin intre citiri pentru a nu aglomera bus-ul
+            end
+            $display("[%0t] INFO: Canalul cu STATUS reg %h a terminat (STATE_DONE)!", $time, status_reg_addr);
         end
     endtask
     //====================================
@@ -435,82 +444,69 @@ module tb_dma;
 
             //Thread 3: Secventa principala de test
             begin
-                init_ram(
-                    v0, v1, v2, v3,
-                    v4, v5, v6, v7
-                );
-                
+                // 1. Initializare si Reset
+                for (i = 0; i < 8192; i = i + 1) ram_memory[i] = 32'h00000000;
                 apply_reset(27); 
 
-                fd = $fopen("/home/andrei/Documents/practica_siemens/DMA/debug/sim/test_full.txt", "r");
-                if (fd == 0) begin
-                    $display("ERR: Nu exista test_full.txt!");
-                    $finish;
-                end
+                // 2. Pregatim datele in RAM
+                // CH0: Desc la 0x0100, muta 32 bytes de la 0x1000 la 0x2000
+                setup_dma_transfer(32'h00000100, 32'h00001000, 32'h00002000, 32'h20, 32'hAAAA0000);
+                
+                // CH1: Desc la 0x0200, muta 32 bytes de la 0x3000 la 0x4000
+                setup_dma_transfer(32'h00000200, 32'h00003000, 32'h00004000, 32'h20, 32'hBBBB0000);
 
-                while (!$feof(fd)) begin
-                    scan_result = $fscanf(fd, "%s %h %h\n", cmd, addr_arg, data_arg);
-                    if (scan_result > 0) begin
-                        case (cmd)
-                            "W": begin
-                                $display("[%0t] WRITE -> Addr: %h, Data: %h", $time, addr_arg, data_arg);
-                                axi_lite_write(addr_arg, data_arg, 0);
-                            end
+                // CH2: Desc la 0x0300, muta 32 bytes de la 0x5000 la 0x6000
+                setup_dma_transfer(32'h00000300, 32'h00005000, 32'h00006000, 32'h20, 32'hCCCC0000);
 
-                            "R": begin
-                                $display("[%0t] READ  -> Addr: %h", $time, addr_arg);
-                                axi_lite_read(addr_arg, read_val);
-                                $display("      Data citita: %h", read_val);
-                            end
+                // CH3: Desc la 0x0400, muta 32 bytes de la 0x6800 la 0x7000
+                setup_dma_transfer(32'h00000400, 32'h00006800, 32'h00007000, 32'h20, 32'hDDDD0000);
 
-                            "D": begin
-                                $display("[%0t] DELAY -> Astept %0d ns", $time, addr_arg);
-                                #(addr_arg); 
-                            end
 
-                            default: begin
-                                $display("[%0t] NECUNOSCUT: %s. Omit linia.", $time, cmd);
-                            end
-                        endcase
-                    end
-                end
+                // 3. Setam Politica de Arbitrare (ex: 1 = Round Robin)
+                axi_lite_write(ADDR_SCHED_POLICY, 32'h00000001, 0);
 
-                $fclose(fd);
-                $display("S-a executat tot fisierul");
+                // 4. Lansam TOATE cele 4 canale simultan
+                $display("\n--- LANSARE 4 CANALE CONCURENTE ---");
+                start_channel(ADDR_CH0_DESC_ADDR, 32'h00000100, 32'h00200008); 
+                start_channel(ADDR_CH1_DESC_ADDR, 32'h00000200, 32'h00200008);
+                start_channel(ADDR_CH2_DESC_ADDR, 32'h00000300, 32'h00200008);
+                start_channel(ADDR_CH3_DESC_ADDR, 32'h00000400, 32'h00200008);
+
+                // 5. Asteptam finalizarea tuturor
+                wait_channel_done(ADDR_CH0_STATUS);
+                wait_channel_done(ADDR_CH1_STATUS);
+                wait_channel_done(ADDR_CH2_STATUS);
+                wait_channel_done(ADDR_CH3_STATUS);
+                
+                // Opțional: Curățăm bitul de enable
+                axi_lite_write(ADDR_CH0_CONTROL, 32'h0, 0);
+                axi_lite_write(ADDR_CH1_CONTROL, 32'h0, 0);
+                axi_lite_write(ADDR_CH2_CONTROL, 32'h0, 0);
+                axi_lite_write(ADDR_CH3_CONTROL, 32'h0, 0);
 
                 // --- VERIFICARE AUTOMATA (BACKDOOR READ) ---
                 $display("\n===========================================");
-                $display("   VERIFICARE REZULTATE DMA (Dest: 0x2000) ");
+                $display("   VERIFICARE REZULTATE 4 CANALE ");
                 $display("===========================================");
+                
+                // Printam doar prima valoare din fiecare destinatie ca "sanity check" in consola
+                $display("CH0 (Dest: 0x2000) -> Data: 0x%h", ram_memory[(32'h00002000 >> 2)]);
+                $display("CH1 (Dest: 0x4000) -> Data: 0x%h", ram_memory[(32'h00004000 >> 2)]);
+                $display("CH2 (Dest: 0x6000) -> Data: 0x%h", ram_memory[(32'h00006000 >> 2)]);
+                $display("CH3 (Dest: 0x7000) -> Data: 0x%h", ram_memory[(32'h00007000 >> 2)]);
 
-                // Verificam vizual in consola ce s-a scris in primele 8 cuvinte
-                for (i = 0; i < 8; i = i + 1) begin
-                    $display("Adresa AXI: 0x%0h | Data RAM: 0x%h", 
-                             32'h00002000 + (i*4), 
-                             ram_memory[(32'h00002000 >> 2) + i]);
-                end
-
-                // Verificare tip self-checking (Automatizata)
-                if (ram_memory[(32'h00002000 >> 2) + 0] === v0 &&
-                    ram_memory[(32'h00002000 >> 2) + 7] === v7) begin
-                    $display("\n>>> TEST PASSED! Datele au fost mutate corect la destinatie. <<<");
+                // Verificare tip self-checking integrala
+                if (ram_memory[(32'h00002000 >> 2)] === 32'hAAAA0000 &&
+                    ram_memory[(32'h00004000 >> 2)] === 32'hBBBB0000 &&
+                    ram_memory[(32'h00006000 >> 2)] === 32'hCCCC0000 &&
+                    ram_memory[(32'h00007000 >> 2)] === 32'hDDDD0000) begin
+                    $display("\n>>> TEST PASSED! Toate cele 4 canale au supravietuit arbitrajului. <<<");
                 end else begin
-                    $display("\n>>> TEST FAILED! Datele de la destinatie nu corespund. <<<");
+                    $display("\n>>> TEST FAILED! S-au pierdut date in trafic. <<<");
                 end
                 $display("===========================================\n");
 
-            /*
-                //Faza de scriere
-                axi_lite_write(ADDR_CH0_BW_CAP, 32'hA5A5A5A5);
-                $display("[%0t] Am scris valoarea.", $time);
-
-                #20;
-
-                //Faza de citire
-                axi_lite_read(ADDR_CH0_BW_CAP, read_val);
-                $display("[%0t] Am citit data: %h", $time, read_val);
-            */
-                #50;
+                #100;
                 $finish;
             end
         join   

@@ -47,9 +47,9 @@ module tb_priority_arbiter;
     // --- Generare Ceas (100 MHz) ---
     always #5 clk = ~clk;
 
-    // ==========================================
+    
     // TASK 1: Setare Cerere Canal
-    // ==========================================
+    
     task set_request;
         input [1:0]  ch_idx;
         input [31:0] addr;
@@ -68,9 +68,9 @@ module tb_priority_arbiter;
         end
     endtask
 
-    // ==========================================
+    
     // TASK 2: Stergere Cerere Canal
-    // ==========================================
+    
     task clear_request;
         input [1:0] ch_idx;
         begin
@@ -79,9 +79,9 @@ module tb_priority_arbiter;
         end
     endtask
 
-    // ==========================================
+    
     // TASK 3: Master Accepta & Verifica Castigatorul
-    // ==========================================
+    
     task accept_and_verify;
         input [3:0] expected_gnt;
         reg   [3:0] actual_gnt;
@@ -106,9 +106,9 @@ module tb_priority_arbiter;
         end
     endtask
 
-    // ==========================================
+    
     // SECVENȚA DE TESTARE
-    // ==========================================
+    
     initial begin
         // Inițializare semnale
         clk = 0; rst_n = 0; sched_policy = 0;
@@ -122,9 +122,9 @@ module tb_priority_arbiter;
         rst_n = 1; // Ieșire din Reset
         #20;
         
-        // ---------------------------------------------------------
+        
         // TEST 1: Modul FIXED PRIORITY (Canalul 0 = Boss)
-        // ---------------------------------------------------------
+        
         $display("\n--- INCEPERE TEST 1: FIXED PRIORITY ---");
         sched_policy = 32'd0; // Setează Fixed Priority
         
@@ -154,9 +154,9 @@ module tb_priority_arbiter;
         rst_n = 1;
         #20;
         
-        // ---------------------------------------------------------
+        
         // TEST 2: Modul ROUND ROBIN (Rotația Echitabilă)
-        // ---------------------------------------------------------
+        
         $display("\n--- INCEPERE TEST 2: ROUND ROBIN ---");
         sched_policy = 32'd1; // Setează Round Robin
         

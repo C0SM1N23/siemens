@@ -88,9 +88,9 @@ module axi4_lite_slave (
     wire [7:0] write_addr   = s_axi_awaddr[7:0];
     wire [7:0] read_addr    = s_axi_araddr[7:0];
 
-    // ==========================================
+    
     // 1. AXI4-Lite Write Control Signals
-    // ==========================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             s_axi_awready <= 1'b0;
@@ -110,7 +110,7 @@ module axi4_lite_slave (
             s_axi_wready <= 1'b0;
     end
 
-    // s_axi_bvalid
+    // s_axi_bvalid (write response valid to CPU)
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             s_axi_bvalid <= 1'b0;
@@ -120,7 +120,7 @@ module axi4_lite_slave (
             s_axi_bvalid <= 1'b0;
     end
 
-    // s_axi_bresp
+    // s_axi_bresp (write response status to CPU)
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             s_axi_bresp <= 2'b00;
@@ -128,9 +128,11 @@ module axi4_lite_slave (
             s_axi_bresp <= 2'b00;
     end
 
-    // ==========================================
+    
     // 2. Hardware Registers Write Logic 
-    // ==========================================
+    
+
+    // CH0_DESC_ADDR (R/W)
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             ch0_desc_addr <= 32'h0;
@@ -258,9 +260,9 @@ module axi4_lite_slave (
         end
     end
 
-    // ==========================================
+    
     // 3. AXI4-Lite Read Control Signals
-    // ==========================================
+    
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             s_axi_arready <= 1'b0;
@@ -290,9 +292,9 @@ module axi4_lite_slave (
 
     // s_axi_rdata 
     always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) begin
-            s_axi_rdata <= 32'h0;
-        end else if (slv_reg_rden) begin
+        if (~rst_n)
+            s_axi_rdata <= 32'h0; 
+        else if (slv_reg_rden) 
             case (read_addr)
                 ADDR_CH0_DESC_ADDR: s_axi_rdata <= ch0_desc_addr;
                 ADDR_CH0_CONTROL:   s_axi_rdata <= ch0_control;
@@ -320,7 +322,6 @@ module axi4_lite_slave (
                 
                 default:            s_axi_rdata <= 32'h0;
             endcase
-        end
     end
 
 endmodule

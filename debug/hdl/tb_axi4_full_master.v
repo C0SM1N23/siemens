@@ -66,9 +66,9 @@ module tb_axi4_full_master;
     // --- Generare Ceas (100 MHz) ---
     always #5 clk = ~clk;
 
-    // ==========================================
+    
     // TASK 1: Lansare Cerere de la Arbitru
-    // ==========================================
+    
     task issue_master_req;
         input [31:0] addr;
         input [7:0]  len;
@@ -90,9 +90,9 @@ module tb_axi4_full_master;
         end
     endtask
 
-    // ==========================================
+    
     // TASK 2: Simulare Memorie pentru CITIRE (Read)
-    // ==========================================
+    
     task mock_axi_slave_read;
         input [7:0] len;
         integer i;
@@ -121,9 +121,9 @@ module tb_axi4_full_master;
         end
     endtask
 
-    // ==========================================
+    
     // TASK 3: Simulare Memorie pentru SCRIERE (Write)
-    // ==========================================
+    
     task mock_axi_slave_write;
         input [7:0] len;
         integer i;
@@ -159,9 +159,9 @@ module tb_axi4_full_master;
         end
     endtask
 
-    // ==========================================
+    
     // SECVENȚA DE TESTARE PRINCIPALĂ
-    // ==========================================
+    
     initial begin
         // 1. Inițializare sigură a semnalelor pentru a preveni stările 'X'
         clk = 0; rst_n = 0;
@@ -174,9 +174,9 @@ module tb_axi4_full_master;
         rst_n = 1; // Ieșire din Reset
         #30;
 
-        // ---------------------------------------------------------
+        
         // TEST 1: Burst de CITIRE (Simulare Fetch Descriptor)
-        // ---------------------------------------------------------
+        
         $display("\n--- INCEPERE TEST 1: AXI READ BURST (Len = 3) ---");
         // Folosim fork...join pentru ca lansarea comenzii și răspunsul 
         // slave-ului să se execute concurent, exact ca într-un sistem real.
@@ -187,9 +187,9 @@ module tb_axi4_full_master;
         
         #50;
 
-        // ---------------------------------------------------------
+        
         // TEST 2: Burst de SCRIERE (Simulare Writeback Date)
-        // ---------------------------------------------------------
+        
         $display("\n--- INCEPERE TEST 2: AXI WRITE BURST (Len = 3) ---");
         // Modulul tău ar trebui acum să scoată din data_fifo datele citite anterior!
         fork
