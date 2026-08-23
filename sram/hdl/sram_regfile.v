@@ -55,7 +55,13 @@ module sram_regfile #(
     localparam ADDR_COOLDOWN_CYCLES     = 6;
 
 
-    localparam WIN_W = 10;
+    // Derived from WINDOW_CYCLES rather than hardcoded: the two were independent
+    // (WIN_W was a literal 10 while WINDOW_CYCLES is a parameter), so changing
+    // the window length silently left the counter too narrow to ever reach the
+    // end of it, and the bandwidth registers would have stopped updating.
+    localparam WIN_W = $clog2(WINDOW_CYCLES);
+
+    localparam WINDOW_LAST = WINDOW_CYCLES - 1;
 
     
     wire a_writes = a_reg_valid_i & a_reg_write_i;
@@ -77,7 +83,10 @@ module sram_regfile #(
     reg [31:0] bandwidth_a_reg;    // BANDWIDTH_A RO
     reg [31:0] bandwidth_b_reg;    // BANDWIDTH_B RO
 
-    wire window_done = (window_cnt == WINDOW_CYCLES-1);
+    // The counter is zero-extended to the constant's width explicitly. Written
+    // as a bare compare it mixed a WIN_W-wide counter with a 32-bit constant,
+    // which is only harmless as long as the two happen to agree.
+    wire window_done = ({{(32-WIN_W){1'b0}}, window_cnt} == WINDOW_LAST);
 
   
     // int_status_reg (W1C)
