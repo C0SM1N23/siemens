@@ -19,3 +19,4 @@ vlog -f soc_rtl.f
 vlog +incdir+../../../cpu/debug/hdl ../../../cpu/debug/hdl/ck_rst_tb.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/tb_full2lite.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/tb_soc_top.v
+vlog +incdir+../../../cpu/debug/hdl ../hdl/tb_soc_stress.v
