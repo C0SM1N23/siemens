@@ -1,6 +1,6 @@
 // =============================================================================
 //
-// word 0..7   -> register region (regfile.v), 8 registers
+// word 0..7   -> register region (sram_regfile.v), 8 registers
 // word 8..255 -> data region (dpram_array.v), with offset -8
 //
 // =============================================================================
@@ -166,8 +166,8 @@ module dp_sram_top #(
         .b_write_grant_i(b_write_grant), .b_rdata_o(b_mem_rdata_bk)
     );
 
-    // regfile.v -- only sees requests from the register region
-    regfile #(.REG_ADDR_W(3)) u_regfile (
+    // sram_regfile.v -- only sees requests from the register region
+    sram_regfile #(.REG_ADDR_W(3)) u_regfile (
         .clk_i(clk_i), .rst_n_i(rst_n_i),
         .a_reg_valid_i(a_reg_valid_w), .a_reg_addr_i(a_reg_addr_w),
         .a_reg_write_i(a_mem_write), .a_reg_wdata_i(a_mem_wdata), .a_reg_rdata_o(a_reg_rdata_w),

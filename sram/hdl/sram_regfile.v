@@ -6,9 +6,12 @@
 // Port A wins on simultaneous write to the same register
 // Address conversion is done at top level
 //
+// Named sram_regfile, not regfile: the CPU block has a module called regfile
+// (its 32 GPRs) and in the SoC both compile into the same library.
+//
 // =============================================================================
 
-module regfile #(
+module sram_regfile #(
     parameter REG_ADDR_W   = 3,
     parameter WINDOW_CYCLES = 1024
 ) (
