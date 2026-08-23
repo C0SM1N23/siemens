@@ -16,12 +16,34 @@
 // true dual-port block RAM behaves and what lets a read and a write overlap.
 // Each channel holds one transaction at a time - enough for every master in
 // this SoC, all of which are one-outstanding.
+//
+// TIMING CONTROLS - VERIFICATION ONLY
+// READ_LAT, WRITE_LAT, STALL_PROB and SEED exist so the regression can run the
+// same SoC against a slow or stalling memory without touching the design. A
+// fabric that only works when every slave answers in one cycle is a fabric
+// that has not been tested, and these are the cheapest way to find out.
+//
+// They must stay at their defaults for synthesis, and at those defaults this
+// module is exactly the RAM it was before they existed: STALL_PROB = 0 removes
+// the backpressure generator from the elaborated design entirely (it is inside
+// a generate), and with both latencies at 0 the wait counters are never
+// loaded, so they fold away. Nothing on the functional path is conditional on
+// them.
+//
+//   READ_LAT    extra cycles between the AR handshake and RVALID
+//   WRITE_LAT   extra cycles between the write landing and BVALID
+//   STALL_PROB  percent chance per cycle of holding a READY low
+//   SEED        makes a STALL_PROB run repeatable
 
 `timescale 1ns/1ps
 
 module axi_lite_ram #(
-    parameter integer WORDS     = 2048,  // depth in 32-bit words
-    parameter         INIT_FILE = ""     // optional $readmemh image, "" = none
+    parameter integer WORDS      = 2048, // depth in 32-bit words
+    parameter         INIT_FILE  = "",   // optional $readmemh image, "" = none
+    parameter integer READ_LAT   = 0,    // verification only, see the header
+    parameter integer WRITE_LAT  = 0,
+    parameter integer STALL_PROB = 0,
+    parameter integer SEED       = 1
 )(
     input             clk_i,
     input             rst_n_i,
@@ -61,14 +83,52 @@ initial begin
 end
 
 // ---------------------------------------------------------------------------
+// backpressure generator (absent unless STALL_PROB > 0)
+// ---------------------------------------------------------------------------
+wire ar_stall, aw_stall, w_stall;
+
+generate
+if (STALL_PROB > 0) begin : g_backpressure
+    integer rseed;
+    reg     ar_stall_q, aw_stall_q, w_stall_q;
+
+    initial rseed = SEED;
+
+    // one draw per channel per cycle, so the three READYs stall independently
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i) begin
+            ar_stall_q <= 1'b0;
+            aw_stall_q <= 1'b0;
+            w_stall_q  <= 1'b0;
+        end else begin
+            ar_stall_q <= (($random(rseed) & 32'h7FFF_FFFF) % 100) < STALL_PROB;
+            aw_stall_q <= (($random(rseed) & 32'h7FFF_FFFF) % 100) < STALL_PROB;
+            w_stall_q  <= (($random(rseed) & 32'h7FFF_FFFF) % 100) < STALL_PROB;
+        end
+    end
+
+    assign ar_stall = ar_stall_q;
+    assign aw_stall = aw_stall_q;
+    assign w_stall  = w_stall_q;
+end else begin : g_no_backpressure
+    assign ar_stall = 1'b0;
+    assign aw_stall = 1'b0;
+    assign w_stall  = 1'b0;
+end
+endgenerate
+
+// ---------------------------------------------------------------------------
 // write channel
 // ---------------------------------------------------------------------------
 reg        aw_q, w_q, bvalid_q;
 reg [31:0] awaddr_q, wdata_q;
 reg [3:0]  wstrb_q;
 
-assign s_awready_o = ~aw_q & ~bvalid_q;
-assign s_wready_o  = ~w_q  & ~bvalid_q;
+reg [15:0] wr_cnt_q;      // counts out WRITE_LAT before BVALID
+reg        wr_wait_q;
+
+assign s_awready_o = ~aw_q & ~bvalid_q & ~wr_wait_q & ~aw_stall;
+assign s_wready_o  = ~w_q  & ~bvalid_q & ~wr_wait_q & ~w_stall;
 assign s_bvalid_o  = bvalid_q;
 assign s_bresp_o   = RESP_OKAY;   // every address in the window is backed by RAM
 
@@ -109,12 +169,27 @@ always @(posedge clk_i or negedge rst_n_i) begin
 end
 
 always @(posedge clk_i or negedge rst_n_i) begin
-    if (~rst_n_i)
-        bvalid_q <= 1'b0;
-    else if (bvalid_q && s_bready_i)
-        bvalid_q <= 1'b0;
-    else if (do_write)
-        bvalid_q <= 1'b1;
+    if (~rst_n_i) begin
+        bvalid_q  <= 1'b0;
+        wr_wait_q <= 1'b0;
+        wr_cnt_q  <= 16'd0;
+    end else if (bvalid_q) begin
+        if (s_bready_i) bvalid_q <= 1'b0;
+    end else if (wr_wait_q) begin
+        if (wr_cnt_q <= 16'd1) begin
+            wr_wait_q <= 1'b0;
+            bvalid_q  <= 1'b1;
+        end else begin
+            wr_cnt_q <= wr_cnt_q - 16'd1;
+        end
+    end else if (do_write) begin
+        if (WRITE_LAT == 0) begin
+            bvalid_q <= 1'b1;
+        end else begin
+            wr_wait_q <= 1'b1;
+            wr_cnt_q  <= WRITE_LAT[15:0];
+        end
+    end
 end
 
 always @(posedge clk_i) begin
@@ -132,7 +207,10 @@ end
 reg        rvalid_q;
 reg [31:0] rdata_q;
 
-assign s_arready_o = ~rvalid_q;
+reg [15:0] rd_cnt_q;      // counts out READ_LAT before RVALID
+reg        rd_wait_q;
+
+assign s_arready_o = ~rvalid_q & ~rd_wait_q & ~ar_stall;
 assign s_rvalid_o  = rvalid_q;
 assign s_rdata_o   = rdata_q;
 assign s_rresp_o   = RESP_OKAY;
@@ -142,15 +220,29 @@ wire [AW-1:0] rd_idx = s_araddr_i[AW+1:2];
 
 always @(posedge clk_i or negedge rst_n_i) begin
     if (~rst_n_i) begin
-        rvalid_q <= 1'b0;
-        rdata_q  <= 32'h0;
-    end else begin
-        if (ar_hs) begin
-            rdata_q  <= mem[rd_idx];
+        rvalid_q  <= 1'b0;
+        rdata_q   <= 32'h0;
+        rd_wait_q <= 1'b0;
+        rd_cnt_q  <= 16'd0;
+    end else if (ar_hs) begin
+        // the data is captured at the handshake either way; only the moment it
+        // is offered moves
+        rdata_q <= mem[rd_idx];
+        if (READ_LAT == 0) begin
             rvalid_q <= 1'b1;
-        end else if (rvalid_q && s_rready_i) begin
-            rvalid_q <= 1'b0;
+        end else begin
+            rd_wait_q <= 1'b1;
+            rd_cnt_q  <= READ_LAT[15:0];
         end
+    end else if (rd_wait_q) begin
+        if (rd_cnt_q <= 16'd1) begin
+            rd_wait_q <= 1'b0;
+            rvalid_q  <= 1'b1;
+        end else begin
+            rd_cnt_q <= rd_cnt_q - 16'd1;
+        end
+    end else if (rvalid_q && s_rready_i) begin
+        rvalid_q <= 1'b0;
     end
 end
 

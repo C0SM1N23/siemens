@@ -41,7 +41,18 @@ module soc_top #(
     parameter IMEM_INIT  = "",           // $readmemh image for instruction memory
     parameter DMEM_INIT  = "",           // $readmemh image for data memory
     parameter BP_ENTRIES = 128,
-    parameter RAS_DEPTH  = 8
+    parameter RAS_DEPTH  = 8,
+
+    // Memory timing, verification only - see the header of axi_lite_ram.v.
+    // They are surfaced here so the regression can sweep bus timing with -G
+    // without editing anything. All zero is the real hardware.
+    parameter IMEM_READ_LAT   = 0,
+    parameter IMEM_STALL_PROB = 0,
+    parameter IMEM_SEED       = 1,
+    parameter DMEM_READ_LAT   = 0,
+    parameter DMEM_WRITE_LAT  = 0,
+    parameter DMEM_STALL_PROB = 0,
+    parameter DMEM_SEED       = 2
 )(
     input         clk_i,
     input         rst_n_i,
@@ -204,8 +215,11 @@ axi_lite_dec #(
 );
 
 axi_lite_ram #(
-    .WORDS     (`SOC_IMEM_WORDS),
-    .INIT_FILE (IMEM_INIT)
+    .WORDS      (`SOC_IMEM_WORDS),
+    .INIT_FILE  (IMEM_INIT),
+    .READ_LAT   (IMEM_READ_LAT),
+    .STALL_PROB (IMEM_STALL_PROB),
+    .SEED       (IMEM_SEED)
 ) imem_inst (
     .clk_i       (clk_i),
     .rst_n_i     (rst_n_i),
@@ -491,8 +505,12 @@ axi_lite_arb #(.M(2)) arb_dmem (
 );
 
 axi_lite_ram #(
-    .WORDS     (`SOC_DMEM_WORDS),
-    .INIT_FILE (DMEM_INIT)
+    .WORDS      (`SOC_DMEM_WORDS),
+    .INIT_FILE  (DMEM_INIT),
+    .READ_LAT   (DMEM_READ_LAT),
+    .WRITE_LAT  (DMEM_WRITE_LAT),
+    .STALL_PROB (DMEM_STALL_PROB),
+    .SEED       (DMEM_SEED)
 ) dmem_inst (
     .clk_i       (clk_i),
     .rst_n_i     (rst_n_i),
