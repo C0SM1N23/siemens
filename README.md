@@ -38,69 +38,102 @@ Each block keeps its own documentation: [cpu/README.md](cpu/README.md) and
 
 ### Data path
 
-Two masters, one bridge, three decoders, one arbiter, six slaves. Everything
-inside the fabric is AXI4-Lite; the single AXI4-Full port in the design is the
-DMA's master, and the bridge in front of it is the reason the two can be wired
-together at all.
+Three panels, read top to bottom: the masters, the fabric that routes them, the
+slaves. Arrows are drawn only where a path is unambiguous; where a block has
+more than one source, the sources are named inside its box. The exact routing
+table follows below.
 
 ```
-  MASTER            PROTOCOL              FABRIC                     SLAVE
-  ----------------  --------------------  -------------------------  ----------------------
+MASTERS
+  +----------------------------------------------------+        +--------------------------------+
+  |  cpu_top      RV32I, 3 stages, + pic, mtimer       |        |  mc_dma_top                    |
+  |                                                    |        |  4 channels, scatter-gather    |
+  |  ibus : AXI4-Lite, read only                       |        |                                |
+  |  dbus : AXI4-Lite, read + write                    |        |  s_axi : AXI4-Lite slave (regs)|
+  +----------------------------------------------------+        |  m_axi : AXI4-FULL master      |
+        | ibus                        | dbus                    |          INCR, 8 x 32-bit      |
+        |                             |                         +--------------------------------+
+        |                             |                                 | m_axi, bursts
+        |                             |                                 |
+FABRIC   (AXI4-Lite from here down)   |                                 |
+  +----------------------+    +----------------------------+    +--------------------------------+
+  |  dec_i               |    |  dec_d                     |    |  axi_full2lite                 |
+  |  1 -> 1  + DECERR    |    |  1 -> 5  + DECERR          |    |  splits a burst into one Lite  |
+  +----------------------+    +----------------------------+    |  transaction per beat          |
+        |                             | leg 0                   +--------------------------------+
+        |                             |                                 |
+        |                             |                                 |
+        |                             |                         +--------------------------------+
+        |                             |                         |  dec_x                         |
+        |                             |                         |  1 -> 2  + DECERR              |
+        |                             |                         +--------------------------------+
+        |                             |                                 | leg 1
+        |                             |                                 |
+        |                     +----------------------------+            |
+        |                     |  arb_dmem                  |            |
+        |                     |  2 -> 1  round-robin       |            |
+        |                     |  in: dec_d leg 0           |            |
+        |                     |      dec_x leg 0           |            |
+        |                     +----------------------------+            |
+        |                             |                                 |
+        |                             |                                 |
+SLAVES  |                             |                                 |
+  +----------------------+    +----------------------------+    +--------------------------------+
+  |  imem                |    |  dmem                      |    |  dp_sram_top   1 KB            |
+  |  axi_lite_ram 8 KB   |    |  axi_lite_ram 8 KB         |    |  0x1000_0000                   |
+  |  0x0000_0000         |    |  0x0000_2000               |    |                                |
+  |                      |    |                            |    |  port A  <- dec_d leg 1        |
+  |  from ibus           |    |  from dbus and DMA         |    |  port B  <- dec_x leg 1        |
+  +----------------------+    +----------------------------+    +--------------------------------+
 
-  cpu_top
-   |
-   +- ibus -------> AXI4-Lite, read only  dec_i    1 -> 1  --------> imem      8 KB
-   |                                      +DECERR                    0x0000_0000
-   |
-   +- dbus -------> AXI4-Lite, read+wr    dec_d    1 -> 5  --+-----> arb_dmem  2 -> 1 --+
-                                          +DECERR            |       round-robin        |
-                                                             |                          v
-                                                             |                     dmem      8 KB
-                                                             |                     0x0000_2000
-                                                             |
-                                                             +-----> dp_sram  port A
-                                                             |       0x1000_0000  1 KB
-                                                             +-----> pic
-                                                             |       0x3000_0000
-                                                             +-----> mtimer
-                                                             |       0x3001_0000
-                                                             +-----> mc_dma_top  s_axi
-                                                                     0x3002_0000
-
-  mc_dma_top
-   |
-   +- m_axi ------> AXI4-FULL             axi_full2lite               ^
-                    INCR, 8 x 32-bit      one Lite transfer           |
-                    WLAST / RLAST         per burst beat              |
-                          |                                           |
-                          v                                           |
-                       dec_x    1 -> 2  --+---------------------------+  (shares arb_dmem
-                       +DECERR            |                               with the CPU)
-                                          +-----> dp_sram  port B
-                                                  0x1000_0000  1 KB
+                              dec_d legs 2..4, peripherals on the CPU data bus only
+                              +----------------------------+    +--------------------------------+
+                              |  pic     16 sources        |    |  mtimer      0x3001_0000       |
+                              |  0x3000_0000               |    |  dma regs    0x3002_0000       |
+                              +----------------------------+    +--------------------------------+
 ```
 
-The dual-port SRAM is the only slave reached from two masters without an
-arbiter, because it has two physical ports of its own:
+Two paths worth following by hand:
+
+- **CPU load from the SRAM.** `dbus` -> `dec_d` leg 1 -> `dp_sram_top` port A.
+  No arbiter anywhere on that path, because port A belongs to the CPU alone.
+- **DMA moving one 32-byte chunk out of DMEM.** `m_axi` issues a single 8-beat
+  INCR burst -> `axi_full2lite` turns it into eight AXI4-Lite reads -> `dec_x`
+  leg 0 -> `arb_dmem`, where each of those eight queues against whatever the
+  CPU is doing on `dec_d` leg 0 -> `dmem`.
+
+### Inside the dual-port SRAM
+
+It is the only slave two masters reach without an arbiter, because it has two
+physical ports. Stacked boxes below, top to bottom, are the stages a request
+passes through.
 
 ```
-  dp_sram_top      0x1000_0000, 1 KB
-  ------------------------------------------------------------------------------
-
-  CPU dbus    --> port A --> axi4lite_slave_fsm --+
-                                                  +--> collision_det
-  DMA bridge  --> port B --> axi4lite_slave_fsm --+         |
-                                                            |  same word, same cycle,
-                                                            |  at least one write:
-                                                            |  writer wins, reader
-                                                            |  gets SLVERR; over the
-                                                            |  threshold both stall
-                                                            v
-  word 0..7    --> sram_regfile   INT_STATUS, INT_ENABLE, FORCE_PRIORITY,
-                        |         BANDWIDTH_A/B, COLLISION_THRESHOLD, COOLDOWN_CYCLES
-                        +-------> irq_o --> PIC source 4
-
-  word 8..255  --> mem_array      256 x 32, byte enables, offset -8
+                       +---------------------------------------------+
+                       |  dp_sram_top          1 KB                  |
+                       |                       0x1000_0000           |
+                       +---------------------------------------------+
+  CPU dbus   --------->|  port A   axi4lite_slave_fsm                |
+  dec_d leg 1          |           one transaction at a time         |
+                       +---------------------------------------------+
+  DMA bridge --------->|  port B   axi4lite_slave_fsm                |
+  dec_x leg 1          |           one transaction at a time         |
+                       +---------------------------------------------+
+                       |  collision_det                              |
+                       |    same word, same cycle, at least one      |
+                       |    write:  the writer wins, the reader      |
+                       |            gets SLVERR                      |
+                       |    past COLLISION_THRESHOLD: both ports     |
+                       |            stall for COOLDOWN_CYCLES        |
+                       +---------------------------------------------+
+                       |  word 0..7    sram_regfile                  |
+                       |               INT_STATUS, INT_ENABLE,       |
+                       |               FORCE_PRIORITY, BANDWIDTH_A/B |
+                       |               ------> irq_o, PIC source 4   |
+                       +---------------------------------------------+
+                       |  word 8..255  mem_array  256 x 32           |
+                       |               byte enables, offset -8       |
+                       +---------------------------------------------+
 ```
 
 ### Routing table
