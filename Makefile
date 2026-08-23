@@ -3,7 +3,7 @@
 #
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
 #   make modelsim   full 14-run ModelSim CPU regression (needs vsim; local)
-#   make soc        SoC regression: bridge + system + stress runs (needs vsim)
+#   make soc        SoC regression: 9 runs over four bus timings (needs vsim)
 #   make soc-sva    SoC lint + SVA assertion run on Verilator
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
@@ -43,12 +43,13 @@ test: verilator
 modelsim: asm
 	cd $(SIM) && vsim -c -do "do regress.do; quit -f"
 
-# SoC regression, 3 runs from one compile:
-#   1  AXI4-Full to AXI4-Lite burst bridge, block level
-#   2  full system: CPU programs the DMA, sleeps on WFI, DMA fills the
-#      dual-port SRAM, completion comes back as an interrupt through the PIC
-#   3  the same system with the CPU working the bus throughout: arbiter under
-#      contention, both SRAM ports at once, real collisions, DECERR
+# SoC regression, 9 runs from one compile:
+#   1    AXI4-Full to AXI4-Lite burst bridge, block level
+#   2-5  full system under four bus timings: CPU programs the DMA, sleeps on
+#        WFI, DMA fills the dual-port SRAM, completion returns through the PIC
+#   6-9  the same system under the same four timings with the CPU working the
+#        bus throughout: arbiter under contention, both SRAM ports at once,
+#        real collisions, DECERR
 soc: asm
 	cd $(SOCSIM) && vsim -c -do "do regress.do; quit -f"
 
