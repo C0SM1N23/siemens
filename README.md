@@ -84,7 +84,7 @@ make test        # Verilator SVA + coverage flow (what CI runs)
 make asm         # rebuild the test program images
 ```
 
-`make soc` runs two benches from one compile:
+`make soc` runs three benches from one compile:
 
 1. **[tb_full2lite](soc/debug/hdl/tb_full2lite.v)** — the burst bridge on its
    own: 8-beat bursts, single-beat bursts, byte strobes, FIXED bursts,
@@ -96,16 +96,24 @@ make asm         # rebuild the test program images
    [program_soc.s](soc/debug/sim/program_soc.s) running on the CPU, which
    builds a descriptor, programs a DMA channel, sleeps on `WFI`, is woken by
    the DMA's completion interrupt through the PIC, and compares what the DMA
-   moved against what it was asked to move. That covers the decoders, the DMEM
-   arbiter, the burst bridge, both SRAM ports and the whole interrupt chain in
-   one run.
+   moved against what it was asked to move.
+
+3. **[tb_soc_stress](soc/debug/hdl/tb_soc_stress.v)** — the same SoC with the
+   CPU working the bus for the whole transfer instead of sleeping through it.
+   This is the run that reaches the contention logic: the arbiter with both
+   masters asking, both SRAM ports busy in the same cycle, real address
+   collisions, and an unmapped access that must come back `DECERR`. It
+   measures each of those and **fails if they did not happen** — a run that
+   passes without exercising what it was written for is not a passing run.
+   The 512-byte transfer must come out bit-perfect regardless of the
+   interference.
 
 ## Status
 
 | Regression | Result |
 |---|---|
 | CPU, 14 runs | all pass |
-| SoC, 2 runs | all pass |
+| SoC, 3 runs | all pass |
 | DMA block bench | passes |
 | DP-SRAM block bench | passes |
 

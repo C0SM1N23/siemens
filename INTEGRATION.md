@@ -348,7 +348,7 @@ It was run again after the block was relocated into `cpu/`: **still 14/14**.
 | Regression | Result |
 |---|---|
 | CPU, 14 runs (`make modelsim`) | all pass |
-| SoC, 2 runs (`make soc`) | all pass |
+| SoC, 3 runs (`make soc`) | all pass |
 | DMA block bench (`tb_mc_dma_top`) | passes |
 | DP-SRAM block bench (`tb_dp_sram_top`) | 67/67 checks pass |
 
@@ -381,6 +381,68 @@ DMA moved against what it was asked to move. One run covers:
 The bench also reads the SRAM array directly, not only through the CPU, so a
 symmetric addressing error on both the write and the read path could not hide.
 
+**`tb_soc_stress`** exists because of what measuring `tb_soc_top` showed. A
+coverage probe over that run reported:
+
+```
+DMEM arbiter contended cycles : 0
+SRAM both ports active        : 0
+SRAM real conflicts           : 0
+DECERR responses seen         : 0
+```
+
+The system test passed without ever contending the arbiter, ever driving both
+SRAM ports in the same cycle, or ever making an unmapped access. The CPU sleeps
+on `WFI` while the DMA works, so the two never compete. Round-robin arbitration,
+master parking, the SRAM's collision detection and the decoder's error responder
+were all passing by not being tried, which is worse than not being tested,
+because the green run reads like proof.
+
+The stress bench keeps the CPU working the bus for the whole of a 512-byte
+transfer and then asserts the transfer is still bit-perfect. Getting the CPU and
+the DMA to actually touch the same word in the same cycle took three attempts,
+and the failures are recorded in the program's header because they are the
+instructive part:
+
+| attempt | result |
+|---|---|
+| sweep the SRAM independently of the DMA | 3 cycles with both ports busy, no shared address |
+| sweep it densely, 8 loads per pass | 32 cycles with both ports busy, still no shared address |
+| follow the DMA word by word | the CPU trails it, so every word is already written on arrival and it never waits |
+
+The measurement that explained it: port A was busy 162 cycles out of 2781 and
+port B exactly 64, one per word written, and the two were statistically
+independent. Chasing a moving pointer cannot correlate them.
+
+What works is parking the CPU one whole 32-byte burst *ahead* of the word it
+just saw arrive, polling in a two-instruction loop. It is then hammering the
+exact address the DMA's next write burst starts at, for every one of the
+sixteen bursts. That turns a single coincidence into sixteen chances.
+
+Current run:
+
+```
+DMEM arbiter contended cycles : 25
+DMEM grants  CPU / DMA        : 601 / 272
+SRAM port A / port B active   : 341 / 128
+SRAM both ports active        : 10
+SRAM same address, both active: 5
+SRAM real conflicts           : 5
+DECERR responses seen         : 1
+```
+
+Those numbers are checked, not printed. The bench **fails** if the arbiter was
+never contended, if only one master ever used the shared memory, if the SRAM
+never saw both ports at once, if no conflict occurred, or if no DECERR was
+observed. A coverage number nobody checks decays into a comment; this one
+cannot, because the run goes red the moment it stops covering.
+
+The run also confirms the collision behaviour end to end: the SRAM resolves a
+read-versus-write conflict in favour of the writer, so the DMA always wins and
+the CPU's colliding read takes a `SLVERR` and traps. Five collisions were
+raised, delivered to the CPU through PIC source 4, handled and cleared - and
+the 512-byte transfer came out bit-perfect regardless.
+
 ---
 
 ## 7. Open points
@@ -388,17 +450,19 @@ symmetric addressing error on both the write and the read path could not hide.
 Things a following iteration should pick up. None of them block the SoC as it
 stands.
 
-- **A collision-scenario system test.** The dual-port SRAM's collision
-  detection is verified in its own bench and is reachable in the SoC by
-  construction, but no system-level run yet has the CPU and the DMA hitting
-  the same word deliberately to exercise the collision interrupt through the
-  PIC.
 - **`tb_regfile.v` for the SRAM register bank.** Dead since the block renamed
   its ports; the register bank is currently covered only indirectly, through
   `tb_dp_sram_top`.
 - **The DMA's multi-channel paths in the SoC.** The system test drives channel
   0. The other three channels and the round-robin scheduling policy are
   covered by the DMA's own bench, not yet at system level.
+- **Bus timing is fixed in the SoC runs.** The CPU block's regression sweeps
+  four bus-timing configurations including random READY backpressure; the SoC
+  benches run at one fixed timing. The interconnect's behaviour under stalled
+  slaves is therefore less exercised than the CPU's own is.
+- **No assertion layer on the new interconnect.** The CPU block binds an SVA
+  layer to its ports; the decoder, arbiter and bridge are checked by directed
+  benches only.
 - **`make test` (Verilator) does not build the SoC.** The CPU block's CI flow
   is Verilator-based; the SoC regression is ModelSim-only so far, because that
   is what is installed locally. The SoC RTL has not been lint-checked against
