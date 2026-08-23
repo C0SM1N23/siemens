@@ -88,6 +88,19 @@ module mc_dma_top (
     wire [31:0] fetch_data_out;
     wire        fetch_data_valid;
 
+    // active_master_ch remembers which channel owns the transaction the master
+    // is currently running. It is declared here, ahead of the continuous
+    // assignments that read it below: Verilog requires a variable to be
+    // declared before it is referenced, and vlog rejects the other order with
+    // "Undefined variable" followed by "already declared in this scope".
+    reg [3:0] active_master_ch;
+    always @(posedge clk or negedge rst_n) begin
+        if (~rst_n)
+            active_master_ch <= 4'b0000;
+        else if (|ch_gnt) // one-cycle grant pulse: latch the channel id
+            active_master_ch <= ch_gnt;
+    end
+
     // ==== FIX BUG 2: date de fetch calificate per-canal ====
     // fetch_data_out/fetch_data_valid erau transmise nefiltrat (broadcast)
     // catre toate cele 4 instante dma_channel. Fiecare canal le absorbea
@@ -113,15 +126,6 @@ module mc_dma_top (
     wire        global_axi_error  = (m_axi_bvalid && m_axi_bready && m_axi_bresp[1]) || 
                                     (m_axi_rvalid && m_axi_rready && m_axi_rresp[1]);
 
-    // ==== [SOLUȚIE HARDWARE] Registru pentru a memora canalul activ ====
-    reg [3:0] active_master_ch;
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            active_master_ch <= 4'b0000;
-        else if (|ch_gnt) // Când primim un puls de grant de 1 ciclu, memorăm ID-ul
-            active_master_ch <= ch_gnt;
-    end
-    
 
     // Connect top-level IRQ port
     assign irq = hw_irq;
