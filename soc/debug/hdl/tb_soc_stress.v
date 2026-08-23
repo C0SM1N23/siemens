@@ -8,10 +8,12 @@
 //
 // So this bench does two things tb_soc_top does not:
 //
-//   1. It runs a program that keeps the CPU hammering DMEM and the SRAM for the
-//      whole of a 512-byte DMA transfer, and then checks the transfer is still
-//      bit-perfect. Contention is allowed to cost the CPU - a colliding read
-//      gets SLVERR and traps - but it must never corrupt what the DMA moved.
+//   1. It runs a two-phase program over two 256-byte DMA transfers: the CPU
+//      parks on the SRAM for the first (to force address collisions) and
+//      hammers DMEM for the second (to contend the arbiter), then checks both
+//      transfers are still bit-perfect. Contention is allowed to cost the CPU
+//      - a colliding read gets SLVERR and traps - but it must never corrupt
+//      what the DMA moved.
 //
 //   2. It measures whether that actually happened, and FAILS if it did not.
 //      The counters below are not diagnostics: a run in which the arbiter was
@@ -60,10 +62,14 @@ localparam integer SB_F_AFTER   = 261;  // 0x414
 localparam integer SB_SRAM_INT  = 262;  // 0x418
 localparam integer SB_DONE      = 263;  // 0x41C
 localparam integer SB_MCAUSE    = 264;  // 0x420
+localparam integer SB_XFERS     = 265;  // 0x424  DMA transfers completed
 
 localparam [31:0] DONE_MARKER = 32'h5772_E55D;
 localparam integer ST_DONE     = 4;
 localparam integer CAUSE_LOAD_ACCESS = 5;
+
+// How much contention phase B must actually produce for the run to count.
+localparam integer MIN_CONTENDED = 50;
 
 // ---------------------------------------------------------------------------
 // fabric coverage: what the run actually exercised
@@ -144,6 +150,8 @@ initial begin
 
         check(ST_DONE, dut.dmem_inst.mem[SB_STATUS],
               "channel 0 reached STATE_DONE under load");
+        check(32'd2, dut.dmem_inst.mem[SB_XFERS],
+              "both DMA transfers completed");
 
         // -- the DECERR path ------------------------------------------------
         check(dut.dmem_inst.mem[SB_F_BEFORE] + 1, dut.dmem_inst.mem[SB_F_AFTER],
@@ -170,11 +178,17 @@ initial begin
         $display("     SRAM real conflicts           : %0d", sram_conflicts);
         $display("     DECERR responses seen         : %0d\n", decerr_seen);
 
-        if (arb_both_req > 0)
-            $display("PASS: the DMEM arbiter was actually contended");
+        // A floor, not a "greater than zero". One contended cycle would tick
+        // the box while telling you almost nothing about round-robin under
+        // sustained pressure; the number below is what phase B is built to
+        // produce, and dropping under it means the phase stopped working.
+        if (arb_both_req >= MIN_CONTENDED)
+            $display("PASS: the DMEM arbiter was contended for %0d cycles (floor %0d)",
+                     arb_both_req, MIN_CONTENDED);
         else begin
             errors = errors + 1;
-            $display("FAIL: the DMEM arbiter was never contended - this bench proved nothing about it");
+            $display("FAIL: the DMEM arbiter was contended only %0d cycles, floor is %0d",
+                     arb_both_req, MIN_CONTENDED);
         end
 
         if (arb_gnt_cpu > 0 && arb_gnt_dma > 0)
