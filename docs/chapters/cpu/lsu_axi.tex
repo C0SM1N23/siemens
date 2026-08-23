@@ -1,0 +1,262 @@
+\chapter{Load/store unit and the AXI4-Lite masters}
+\label{ch:lsu}
+
+\section{LSU state machine}
+
+\file{hdl/lsu.v} contains the only explicitly coded state machine in the CPU. It
+has a two-bit state register with three used encodings:
+
+\begin{center}
+\ttfamily\small
+localparam S\_IDLE = 2'd0, S\_RD = 2'd1, S\_WR = 2'd2;
+\end{center}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (idle) at (0,0)    {S\_IDLE};
+  \node[stb]  (rd)   at (72,26)  {S\_RD};
+  \node[stb]  (wr)   at (72,-26) {S\_WR};
+
+  % --- read leg: the two arcs carry their labels at opposite ends -----
+  \draw[->,draw=accent] (idle) to[bend left=17]
+      node[lbl,pos=0.30,above left=0mm and -4mm,align=center]
+      {start \&\ !we\_i\\\scriptsize (load)} (rd);
+  \draw[->,draw=accent] (rd) to[bend left=17]
+      node[lbl,pos=0.30,below right=0mm and -4mm,align=center]
+      {rd\_done\\\scriptsize RREADY \&\ RVALID} (idle);
+
+  % --- write leg -----------------------------------------------------
+  \draw[->,draw=accent] (idle) to[bend right=17]
+      node[lbl,pos=0.30,below left=0mm and -4mm,align=center]
+      {start \&\ we\_i\\\scriptsize (store)} (wr);
+  \draw[->,draw=accent] (wr) to[bend right=17]
+      node[lbl,pos=0.30,above right=0mm and -4mm,align=center]
+      {wr\_done\\\scriptsize BREADY \&\ BVALID} (idle);
+
+  \draw[->,draw=accent] (rd) to[out=35,in=-35,looseness=6]
+      node[lbl,right=1mm]{\scriptsize waiting for R} (rd);
+  \draw[->,draw=accent] (wr) to[out=35,in=-35,looseness=6]
+      node[lbl,right=1mm]{\scriptsize waiting for AW / W / B} (wr);
+
+  \node[align=left,font=\scriptsize,anchor=north west,
+        draw=rulegrey,fill=boxbg,inner sep=5pt] at (-16,-44)
+    {\textbf{Reset state:} \texttt{S\_IDLE}\\[1pt]
+     \texttt{start\ \ \ \ = req\_i \&\& (state\_q == S\_IDLE)}\\
+     \texttt{active\_o = (state\_q != S\_IDLE)}\\
+     \texttt{busy\_o\ \ = (start || active\_o) \&\& !done\_o}};
+\end{tikzpicture}
+\caption{LSU state machine, \file{hdl/lsu.v}. One transaction is outstanding at a
+time; the state returns to idle only when the response handshake completes.}
+\label{fig:lsufsm}
+\end{figure}
+
+The state alone does not track how far a transaction has progressed, because a
+write has three independent channels. Three handshake trackers do that:
+
+\begin{table}[H]
+\centering
+\caption{Per-channel handshake trackers}
+\label{tab:lsutrack}
+\begin{tabular}{@{}lL{0.64\linewidth}@{}}
+\toprule
+\textbf{Tracker} & \textbf{Behaviour} \\
+\midrule
+\sig{ar\_sent\_q} & Set when the AR handshake completes. \\
+\sig{aw\_sent\_q} & Set when the AW handshake completes. \\
+\sig{w\_sent\_q}  & Set when the W handshake completes. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All three follow the same pattern: a handshake can land in the very cycle the
+transaction starts, so \sig{start} \emph{captures} the handshake result rather
+than clearing the flag blindly, and \sig{done} re-arms it. Keeping progress per
+channel rather than in the state encoding is what makes a later move to AXI4-Full
+additive --- bursts and IDs extend the trackers instead of restructuring the
+machine.
+
+Response acceptance is gated on the address phase being complete:
+
+\begin{center}
+\ttfamily\small
+assign dbus\_rready\_o = (state\_q == S\_RD) \&\& ar\_sent\_q;\\
+assign dbus\_bready\_o = (state\_q == S\_WR) \&\& aw\_sent\_q \&\& w\_sent\_q;
+\end{center}
+
+\section{Command latch}
+
+Address, write data and byte strobes are latched in the cycle the transaction
+starts. There are two independent reasons, and either alone would justify it:
+forwarded operands are only guaranteed valid in that first cycle, because S3
+receives bubbles while S2 stalls; and AXI requires a stable payload while
+\sig{VALID} waits for \sig{READY}. During the start cycle the channels are driven
+combinationally, and from the registers thereafter.
+
+\sig{AWADDR}, \sig{ARADDR}, \sig{WDATA} and \sig{WSTRB} are driven from the
+latch continuously, so it resets to zero and those four outputs carry a defined
+value whenever the LSU is idle.
+
+\section{Byte strobes and load extraction}
+
+Store data is replicated across lanes and \sig{WSTRB} selects the live bytes:
+
+\begin{table}[H]
+\centering
+\caption{\sig{WSTRB} generation (\file{hdl/lsu.v})}
+\label{tab:wstrb}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Instruction} & \textbf{Lane pattern} & \textbf{\sig{WSTRB}} \\
+\midrule
+\sig{SB} & \texttt{\{4\{st\_data[7:0]\}}\} & \texttt{4'b0001 << addr[1:0]} \\
+\sig{SH} & \texttt{\{2\{st\_data[15:0]\}}\} & \texttt{4'b0011 << addr[1:0]} \\
+\sig{SW} & \texttt{st\_data} & \texttt{4'b1111} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This is the convention the dual-port SRAM expects directly, with no adapter
+between the CPU and the slave.
+
+Loads use a single right shifter for both widths, \sig{dbus\_rdata >>
+\{addr\_q[1:0], 3'b000\}}, followed by sign or zero extension selected by
+\sig{funct3}. A misaligned halfword traps before the bus is touched, so the
+shift always leaves the halfword in bits [15:0] and no second alignment case is
+needed.
+
+\section{Error handling}
+
+\sig{err} is taken from \sig{RRESP[1]} on a read and \sig{BRESP[1]} on a write.
+The exception unit turns it into a load access fault (cause 5) or a store access
+fault (cause 7). The instruction does not commit, and \reg{mepc} and \reg{mtval}
+identify the offending instruction and address exactly.
+
+\section{Transaction timing}
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=2pt,xscale=1.05]
+  clk        & 12{C} \\
+  ARVALID    & 2L 2H 8L \\
+  ARREADY    & 2L 2H 8L \\
+  ARADDR     & 2U 2D{addr} 8U \\
+  RVALID     & 6L 2H 4L \\
+  RREADY     & 4L 4H 4L \\
+  RDATA      & 6U 2D{data} 4U \\
+  busy       & 2L 6H 4L \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,8}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{Load on \sig{dbus} with a two-cycle slave latency. \sig{RREADY} rises
+only after the AR handshake, and \sig{busy} holds S2 stalled until the response
+beat is accepted.}
+\label{fig:lsuread}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=2pt,xscale=1.05]
+  clk        & 12{C} \\
+  AWVALID    & 2L 2H 8L \\
+  AWREADY    & 2L 2H 8L \\
+  WVALID     & 2L 4H 6L \\
+  WREADY     & 4L 2H 6L \\
+  WSTRB      & 2U 4D{strb} 6U \\
+  BVALID     & 8L 2H 2L \\
+  BREADY     & 6L 4H 2L \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,8,10}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{Store on \sig{dbus} where the slave accepts the address before the data.
+\sig{BREADY} rises only once both \sig{aw\_sent\_q} and \sig{w\_sent\_q} are set,
+which is why it lags the AW handshake here.}
+\label{fig:lsuwrite}
+\end{figure}
+
+\section{Instruction bus throughput}
+
+The fetch unit issues one read per cycle and accepts one response per cycle. The
+address advances by four bytes each cycle because RV32I instructions are one
+32-bit word, so consecutive fetches are \texttt{PC}, \texttt{PC+4},
+\texttt{PC+8}, \texttt{PC+12} --- shown below as absolute byte addresses starting
+from a reset vector of \texttt{0x0000\_0000}.
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=3pt,xscale=1.85,
+                        timing/d/text/.style={font=\tiny}]
+  clk       & 12{C} \\
+  ARVALID   & 12H \\
+  ARREADY   & 12H \\
+  ARADDR    & 2D{\tiny 0x00} 2D{\tiny 0x04} 2D{\tiny 0x08} 2D{\tiny 0x0C} 4U \\
+  RVALID    & 2L 10H \\
+  RREADY    & 2L 10H \\
+  RDATA     & 4U 2D{\tiny I@0x00} 2D{\tiny I@0x04} 2D{\tiny I@0x08} 2U \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,8,10}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{Back-to-back instruction fetch on \sig{ibus}. A new address is presented
+every cycle and the response for the previous one arrives in parallel, one cycle
+behind.}
+\label{fig:ibusb2b}
+\end{figure}
+
+Reading it cycle by cycle:
+
+\begin{table}[H]
+\centering
+\caption{Back-to-back fetch, cycle by cycle}
+\label{tab:ibuscycles}
+\begin{tabular}{@{}clL{0.50\linewidth}@{}}
+\toprule
+\textbf{Cycle} & \textbf{\sig{ARADDR}} & \textbf{What happens} \\
+\midrule
+1 & \texttt{0x00} & AR handshake for the first word. No response yet. \\
+2 & \texttt{0x04} & AR handshake for the second word, \emph{and} the R beat for
+    \texttt{0x00} arrives in the same cycle. \\
+3 & \texttt{0x08} & Same again: address for the third word out, data for the
+    second word in. \\
+4 & \texttt{0x0C} & Steady state. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The overlap in cycle 2 is the whole point. \sig{ARVALID} for the next address is
+already high in the cycle the current \sig{R} beat is accepted, so the address
+phase of fetch $n{+}1$ runs concurrently with the data phase of fetch $n$. With a
+memory that answers in one cycle this sustains one instruction per cycle, which
+is the measured CPI of 1.00 quoted in Chapter~\ref{ch:verif}.
+
+If the next address is not sequential --- a taken branch, or a redirect --- the
+predicted target replaces \texttt{PC+4} in this sequence without any change to
+the timing. What breaks the pattern is a stalled S2: once the holding register
+fills, no new AR is issued and the address stops advancing until S2 drains it.
+
+\section{Master port properties}
+
+Both master ports obey the same rules, and both are checked every run by the
+procedural monitors and the assertion layer:
+
+\begin{itemize}[nosep]
+  \item \sig{VALID} never waits for \sig{READY}; once \sig{VALID} is high the
+        payload is stable until the handshake.
+  \item At most one transaction outstanding per port. On \sig{dbus} a read and a
+        write are never in flight together, since the state machine is in exactly
+        one of \sig{S\_RD} and \sig{S\_WR}.
+  \item Write addresses and write data are issued independently and may be
+        accepted in either order.
+  \item All three response codes are handled. \sig{EXOKAY} does not exist in
+        AXI4-Lite and is actively hunted by the monitors.
+  \item \sig{VALID} is low during reset on both ports.
+\end{itemize}
+
+\sig{AWPROT} and \sig{ARPROT} on \sig{dbus} are tied to \texttt{3'b011} (data,
+privileged, non-secure); \sig{ARPROT} on \sig{ibus} is tied to \texttt{3'b111}
+(instruction, privileged, non-secure).

@@ -1,0 +1,135 @@
+\chapter{RTL module inventory}
+\label{app:modules}
+
+\section{Delivered RTL}
+
+\begin{longtable}{@{}L{38mm}L{0.30\linewidth}L{0.24\linewidth}@{}}
+\caption{Modules in \file{hdl/}}\label{tab:apmods}\\
+\toprule
+\textbf{File} & \textbf{Function} & \textbf{Tags} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File} & \textbf{Function} & \textbf{Tags} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\file{cpu\_top.v} & Top level: pipeline registers, stage wiring, AXI ports, trap and interrupt sequencing & REQ1--4; D1, D2, D4, D5 \\
+\file{fetch\_unit.v} & S1: PC, ibus master, holding register, redirect and discard & REQ5, REQ12; D6--D8 \\
+\file{branch\_predictor.v} & BHT + BTB with optional return-address stack & REQ8; D9--D11, D24 \\
+\file{decode.v} & Instruction field extraction & REQ7 \\
+\file{imm\_gen.v} & Immediate reconstruction for the five formats & REQ7 \\
+\file{control.v} & Opcode to control lines; SYSTEM decoding & REQ7; D23 \\
+\file{regfile.v} & $32\times32$ register file & REQ10 \\
+\file{alu\_top.v} & Operand selection and ALU operation derivation & --- \\
+\file{alu.v} & Arithmetic and logic & --- \\
+\file{branch\_unit.v} & Real branch direction and target & --- \\
+\file{lsu.v} & S2 data AXI master; the only coded FSM & REQ5, REQ11, REQ12; D12 \\
+\file{hazard\_unit.v} & Centralised stall, flush and forwarding & REQ6; D13, D14, D23 \\
+\file{exception\_unit.v} & Synchronous cause priority chain and \reg{mtval} selection & D3, D17, D18 \\
+\file{csr\_file.v} & M-mode CSRs, trap and MRET sequencing, counters & REQ9; D3, D5, D15, D16, D25 \\
+\file{writeback\_mux.v} & S3 writeback source selection & --- \\
+\file{pic.v} & Interrupt controller & D19--D22, D-LAT, D-BAND, D-NEST, D-SPUR, D-DDL, D-SW \\
+\file{mtimer.v} & Machine timer & D26, D27 \\
+\file{axi\_lite\_slave.v} & Shared AXI4-Lite slave register interface & D-AXI \\
+\file{defines.vh} & Shared encodings and cause constants & --- \\
+\end{longtable}
+
+\section{Verification collateral}
+
+The testbenches, models, assertion files and shared includes are listed with
+their roles in Table~\ref{tab:collateral}, and are not repeated here. What
+follows is only the build and stimulus collateral around them.
+
+\begin{table}[H]
+\centering
+\caption{Build and stimulus files in \file{debug/sim/}}
+\label{tab:apdebug}
+\begin{tabular}{@{}L{0.34\linewidth}L{0.52\linewidth}@{}}
+\toprule
+\textbf{File} & \textbf{Role} \\
+\midrule
+\file{program\_axi.s} & Directed self-checking test program \\
+\file{program\_dual.s} & Dual-core handshake program \\
+\file{asm.py} & Two-pass RV32I assembler; emits the hex image and the label-address include \\
+\file{rtl.f}, \file{tb\_cpu.f} & Shared file lists used by both flows \\
+\file{tb\_block.f} & The nine block-level benches, ModelSim only \\
+\file{compile.do} & Single canonical compile, in the documented order \\
+\file{sim.do}, \file{regress.do} & Single run, and the fourteen-run regression \\
+\file{run\_verilator.sh}, \file{run\_verilator.ps1} & Assertion and coverage flow \\
+\file{soc\_map.vh} & Testbench address map \\
+\file{wave.do} & AXI-grouped waveform set \\
+\file{verif\_gui.py} & Graphical launcher for both flows \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section{Build order and entry points}
+\label{sec:buildorder}
+
+\file{debug/sim/rtl.f} is the source list and fixes the compile order; both
+simulation flows read it unchanged (\texttt{vlog -f rtl.f},
+\texttt{verilator -f rtl.f}). A module may only instantiate modules from a
+strictly lower level, so the same list can be handed to a lint, synthesis or
+formal front-end, which do require definition before use.
+
+\begin{table}[H]
+\centering
+\caption{RTL compile order (\file{debug/sim/rtl.f})}
+\label{tab:rtllevels}
+\begin{tabular}{@{}clL{0.44\linewidth}@{}}
+\toprule
+\textbf{Level} & \textbf{Modules} & \textbf{Instantiates} \\
+\midrule
+\multirow{14}{*}{L0}
+ & \file{alu.v}              & --- \\
+ & \file{axi\_lite\_slave.v} & --- \\
+ & \file{branch\_predictor.v}& --- \\
+ & \file{branch\_unit.v}     & --- \\
+ & \file{control.v}          & --- \\
+ & \file{csr\_file.v}        & --- \\
+ & \file{decode.v}           & --- \\
+ & \file{exception\_unit.v}  & --- \\
+ & \file{fetch\_unit.v}      & --- \\
+ & \file{hazard\_unit.v}     & --- \\
+ & \file{imm\_gen.v}         & --- \\
+ & \file{lsu.v}              & --- \\
+ & \file{regfile.v}          & --- \\
+ & \file{writeback\_mux.v}   & --- \\
+\midrule
+\multirow{3}{*}{L1}
+ & \file{alu\_top.v} & \file{alu} \\
+ & \file{mtimer.v}   & \file{axi\_lite\_slave} \\
+ & \file{pic.v}      & \file{axi\_lite\_slave} \\
+\midrule
+L2 & \file{cpu\_top.v} & \file{alu\_top} (L1) and the twelve L0 modules other
+than \file{alu} and \file{axi\_lite\_slave} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The testbench collateral follows the same rule in \file{tb\_cpu.f} (system
+bench) and \file{tb\_block.f} (block benches). Two orderings there are
+load-bearing: the arbiter precedes the dual-core bench that instantiates it, and
+the \sig{bind} file is compiled last, because a bind statement names both the
+target module and the checker module.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}L{0.44\linewidth}L{0.44\linewidth}@{}}
+\toprule
+\textbf{Command} & \textbf{What it does} \\
+\midrule
+\texttt{vsim -c -do "do compile.do; quit -f"} & Compile only; must report
+  \texttt{Errors: 0, Warnings: 0} \\
+\texttt{vsim -c -do "do sim.do; quit -f"}     & One run of the system bench \\
+\texttt{make modelsim} & The full fourteen-run regression, test programs
+  reassembled first \\
+\texttt{make test}     & The Verilator assertion and coverage flow \\
+\bottomrule
+\end{tabular}
+\caption{Build and run commands, issued from \file{debug/sim}}
+\label{tab:buildcmds}
+\end{table}

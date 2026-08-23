@@ -1,0 +1,38 @@
+\chapter{Acronyms and terms}
+\label{app:acronyms}
+
+\begin{longtable}{@{}L{28mm}L{0.62\linewidth}@{}}
+\toprule
+\textbf{Term} & \textbf{Meaning as used in this document} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Term} & \textbf{Meaning as used in this document} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+AXI4-Lite & Simplified AMBA AXI profile: five channels, no bursts, no transaction IDs. \\
+BHT & Branch history table; here the direction bit inside the predictor entry. \\
+BTB & Branch target buffer; here the tag and target inside the same entry. \\
+Claim & The moment the CPU commits to a handler, signalled to the PIC by \sig{cpu\_irq\_ack}. \\
+CSR & Control and status register, accessed by the CSR instructions rather than over a bus. \\
+DECERR & AXI decode error response, produced by the interconnect for an unmapped address. \\
+EOI & End of interrupt; signalled by \sig{cpu\_irq\_eoi} on an interrupt-returning \sig{MRET}. \\
+Effective band & The band a PIC source is using now, which differs from its configured band after an escalation. \\
+Hart & Hardware thread; one CPU instance here. \\
+IF/DX, DX/WB & The two pipeline registers, between S1--S2 and S2--S3. \\
+In service & A PIC source that has been claimed and sits on the nesting stack. \\
+LSU & Load/store unit; the data-side AXI master. \\
+M-mode & RISC-V machine mode, the only privilege level implemented. \\
+PIC & Programmable interrupt controller, \file{hdl/pic.v}. \\
+Pending & A PIC source with an enabled request that has not yet been claimed. \\
+RAS & Return-address stack. \\
+Redirect & The signal that changes the fetch path: misprediction, trap entry or \sig{MRET}. \\
+S1, S2, S3 & The three pipeline stages: fetch, decode+execute, writeback. \\
+SLVERR & AXI slave error response, produced by a real slave that refuses an access. \\
+Spurious claim & A claim whose source had already deasserted when the acknowledgement arrived. \\
+SVA & SystemVerilog Assertions; the concurrent-property layer in \file{debug/sva/}. \\
+WARL & Write-any, read-legal: a field that accepts a write and returns a legal value. \\
+WSTRB & AXI write byte strobes, one bit per byte lane. \\
+\end{longtable}

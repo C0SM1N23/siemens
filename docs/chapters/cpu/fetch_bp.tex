@@ -1,0 +1,194 @@
+\chapter{Fetch stage and branch prediction}
+\label{ch:fetch}
+
+\section{Fetch unit}
+
+\file{hdl/fetch\_unit.v} owns the program counter and the \sig{ibus} AXI4-Lite
+read master. It keeps at most one read in flight and raises the next \sig{ARVALID}
+in the same cycle the current \sig{R} beat is accepted, so a latency-1 memory
+sustains one instruction per cycle.
+
+\subsection{Outstanding-transaction state}
+
+The fetch unit has no state register. Its behaviour is encoded in four
+independent flags:
+
+\begin{table}[H]
+\centering
+\caption{Fetch unit state flags (\file{hdl/fetch\_unit.v})}
+\label{tab:fetchflags}
+\begin{tabular}{@{}lL{0.63\linewidth}@{}}
+\toprule
+\textbf{Flag} & \textbf{Meaning and update} \\
+\midrule
+\sig{ar\_pending\_q} & \sig{ARVALID} is up but has not been accepted. Set when an issue is
+  not taken in its own cycle, cleared by \sig{ARREADY}. \\
+\sig{inflight\_q}    & The address was accepted and the \sig{R} beat is still owed. Set on the
+  AR handshake, cleared when the beat lands. Drives \sig{RREADY} directly. \\
+\sig{discard\_q}     & The in-flight fetch is wrong-path. Set when a redirect arrives while the
+  slot is busy, cleared when the beat is swallowed. \\
+\sig{hold\_valid\_q} & The holding register contains an instruction that S2 could not accept.
+  Set when a good beat lands while S2 is not ready, cleared on consumption or redirect. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Although the flags are independent, the AXI slot they describe moves through a
+well-defined cycle. Figure~\ref{fig:fetchfsm} draws that cycle as the four flags
+produce it. It describes behaviour; no corresponding state register exists.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  % ---- the AXI read slot: three states -------------------------------
+  \node[font=\scriptsize\itshape,anchor=west,color=accent] at (-14,16)
+        {the AXI read slot};
+  \node[stbi] (idle) at (0,0)    {IDLE};
+  \node[stb]  (arp)  at (58,0)   {AR\_PEND};
+  \node[stb]  (infl) at (29,-32) {IN\_FLIGHT};
+
+  \draw[->,draw=accent] (idle) to[bend left=13]
+      node[lbl,above,align=center,pos=0.5]
+      {issue\_now \&\ !ARREADY} (arp);
+  \draw[->,draw=accent,loop above,looseness=7,out=65,in=115] (arp) to
+      node[lbl,above]{!ARREADY} (arp);
+  \draw[->,draw=accent] (arp) to[bend left=13]
+      node[lbl,right=1mm,align=left,pos=0.45]{ARREADY} (infl);
+  \draw[->,draw=accent] (infl) to[bend left=13]
+      node[lbl,left=1.5mm,align=right,pos=0.80]
+      {RVALID\\\scriptsize beat consumed} (idle);
+  \draw[->,draw=accent] (idle) to[bend left=13]
+      node[lbl,right=1.5mm,align=left,pos=0.74]
+      {issue\_now\\\scriptsize \&\ ARREADY} (infl);
+
+  % ---- discard_q: a flag, not a fourth state -------------------------
+  \node[font=\scriptsize\itshape,anchor=west,color=accent] at (-14,-50)
+        {\sig{discard\_q}, orthogonal to the slot above};
+  \node[stbi] (dc) at (6,-64)  {\sig{discard\_q} = 0};
+  \node[stb]  (ds) at (62,-64) {\sig{discard\_q} = 1};
+
+  \draw[->,draw=accent] (dc) to[bend left=17]
+      node[lbl,above,align=center]{redirect\_i while the slot is busy} (ds);
+  \draw[->,draw=accent] (ds) to[bend left=17]
+      node[lbl,below,align=center]{RVALID --- the stale beat is swallowed} (dc);
+\end{tikzpicture}
+\caption{Instruction-fetch behaviour, derived from \sig{ar\_pending\_q},
+\sig{inflight\_q} and \sig{discard\_q}. Double outlines mark the reset
+condition. \sig{discard\_q} is drawn separately because it is exactly that in
+the RTL: an independent flag, armed by a redirect from \emph{either} busy state,
+because a read cannot be cancelled once \sig{ARVALID} is up. Neither machine
+exists as a state register.}
+\label{fig:fetchfsm}
+\end{figure}
+
+\subsection{Holding register}
+
+When S2 stalls, a returned instruction parks in a one-entry holding register and
+no new fetch is issued until it drains. S1 therefore can never run more than one
+instruction ahead of S2, and the effective PC freezes for the duration of the
+stall. The same mechanism is what silences the instruction bus during
+\sig{WFI}: once the holding register is full, \sig{issue\_now} is low and no AR
+goes out.
+
+\subsection{Redirect with a read in flight}
+
+An issued AXI read cannot be cancelled. When a redirect arrives while the slot is
+busy, \sig{discard\_q} is set; the stale beat is accepted and dropped, and only
+then does fetching restart at \sig{redirect\_pc}. The deferred address is held in
+\sig{npc\_q} for the cycles in which nothing is being delivered.
+
+\subsection{Fetch errors and reset behaviour}
+
+A fetch that returns \sig{SLVERR} or \sig{DECERR} does not stall or trap in S1.
+The word is delivered with \sig{fetch\_fault} set and traps as an instruction
+access fault only if it reaches S2. A faulting fetch on a mispredicted path is
+therefore flushed silently, which is the intended behaviour.
+
+\sig{ARVALID} is explicitly gated with \sig{rst\_n\_i}:
+
+\begin{center}
+\ttfamily\small
+assign ibus\_arvalid\_o = rst\_n\_i \& (ar\_pending\_q | issue\_now);
+\end{center}
+
+\begin{rtlnote}
+The gate is not cosmetic. \sig{issue\_now} is combinational free-slot logic, so
+without it the fetch unit requests \sig{RESET\_PC} while reset is still asserted.
+AXI4-Lite forbids \sig{VALID} during reset, and a slave holding \sig{READY}
+high in reset would accept a phantom address.
+\end{rtlnote}
+
+\section{Branch predictor}
+
+\file{hdl/branch\_predictor.v} implements a combined BHT and BTB with an optional
+return-address stack. Sizes come from the \sig{BP\_ENTRIES} and \sig{RAS\_DEPTH}
+parameters forwarded by \file{cpu\_top}.
+
+\subsection{Table organisation}
+
+\begin{table}[H]
+\centering
+\caption{Predictor table entry, 128 entries by default}
+\label{tab:btb}
+\begin{tabular}{@{}llL{0.5\linewidth}@{}}
+\toprule
+\textbf{Field} & \textbf{Source} & \textbf{Purpose} \\
+\midrule
+\sig{valid}  & set on first update & Entry has been learned. \\
+\sig{tag}    & \sig{PC[31:9]}      & Full remaining PC, so aliasing is detected rather than mispredicted. \\
+\sig{state}  & 1 bit               & Last outcome of this branch; the 1-bit saturating counter the brief requires. \\
+\sig{isret}  & 1 bit               & Entry was learned from a return; predict from the RAS top instead of the stored target. \\
+\sig{target} & 32 bits             & Last resolved target. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Indexing is direct-mapped on \sig{PC[8:2]}. Storing the target is not optional:
+at fetch time the immediate has not been decoded, so a direction bit alone could
+not redirect anything. A miss predicts not-taken, which is the only possibility
+--- with no entry there is no stored target to jump to.
+
+Updates happen only when a branch or jump commits in S2. Nothing in the predictor
+is ever speculative, so there is no repair path that could itself be wrong after
+a flush. Entries survive traps: trap and \sig{MRET} redirects are architectural,
+come from \reg{mtvec}/\reg{mepc}, and bypass the predictor entirely.
+
+\subsection{Return-address stack}
+
+The BTB stores the last target, which is systematically wrong for a return called
+from several sites. The RAS corrects that class of misprediction and is beyond
+what the brief required.
+
+\begin{table}[H]
+\centering
+\caption{RAS behaviour (\file{hdl/branch\_predictor.v})}
+\label{tab:ras}
+\begin{tabular}{@{}lL{0.62\linewidth}@{}}
+\toprule
+\textbf{Event} & \textbf{Action} \\
+\midrule
+Committed call  & Push PC+4. Identified by \sig{rd} $\in$ \{\sig{x1}, \sig{x5}\}, the register-hint
+                  convention from the ISA specification. \\
+Committed return & Pop. Identified by \sig{rs1} $\in$ \{\sig{x1}, \sig{x5}\} on \sig{JALR},
+                  excluding the both-link case. \\
+Both at once    & The popped slot is immediately refilled, so the top entry is replaced rather
+                  than the depth changing. \\
+Overflow        & The stack pointer wraps. \\
+Underflow       & Prediction falls back to the stored BTB target. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Overflow and underflow cost accuracy only, never correctness, because the
+architectural answer always comes from \file{branch\_unit.v}. The pointer
+arithmetic is sized to the pointer width rather than to the parameter, so the
+wrap comparison stays exact for any legal \sig{RAS\_DEPTH}.
+
+\subsection{Misprediction detection}
+
+The prediction travels with the instruction through IF/DX and is compared in S2
+against the real direction \emph{and} the real target. Either mismatch is a
+misprediction. The hazard unit then asserts \sig{redirect}, the wrong-path fetch
+in S1 is dropped, IF/DX takes a bubble, and the correct target is fetched the
+next cycle. The branch instruction itself commits normally. Total cost: one
+cycle.

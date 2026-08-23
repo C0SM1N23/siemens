@@ -1,0 +1,174 @@
+\documentclass[11pt,openany]{report}
+
+\newcommand{\docrevision}{3.0}
+\newcommand{\docdate}{22 August 2026}
+\newcommand{\docbaseline}{branch \texttt{RISCV}, at \texttt{d534045}}
+
+\input{preamble}
+
+\begin{document}
+
+% ===========================================================================
+\begin{titlepage}
+\centering
+\vspace*{22mm}
+
+{\color{accent}\rule{\linewidth}{1.2pt}}\\[6mm]
+{\Huge\bfseries RV32I System-on-Chip}\\[4mm]
+{\LARGE CPU, Programmable Interrupt Controller\\[2mm] and Machine Timer}\\[6mm]
+{\Large\itshape RTL Implementation Documentation}\\[4mm]
+{\color{accent}\rule{\linewidth}{1.2pt}}
+
+\vfill
+
+\begin{tabular}{@{}lL{0.58\linewidth}@{}}
+\toprule
+Document        & RV32I SoC --- RTL Implementation Documentation \\
+Revision        & \docrevision \\
+Date            & \docdate \\
+Source baseline & \docbaseline \\
+Target          & Behavioural RTL simulation (no vendor IP) \\
+Language        & Verilog--2005 (IEEE 1364--2005) \\
+Deliverables    & \file{hdl/}, \file{debug/} (testbenches, SVA, coverage) \\
+\bottomrule
+\end{tabular}
+
+\vspace{12mm}
+
+\begin{minipage}{0.86\linewidth}
+\small
+The RTL implementation of an RV32I processor core, a programmable interrupt
+controller and a machine timer: architecture, register interfaces, control
+behaviour, SoC integration, and the verification performed on them.
+\end{minipage}
+
+\vspace{18mm}
+\end{titlepage}
+
+% ===========================================================================
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\chapter*{Revision history}
+\addcontentsline{toc}{chapter}{Revision history}
+\markboth{Revision history}{}
+
+\begin{tabular}{@{}lL{0.15\linewidth}L{0.58\linewidth}@{}}
+\toprule
+\textbf{Rev.} & \textbf{Date} & \textbf{Change} \\
+\midrule
+1.0 & 17 August 2026 & First issue. The CPU, PIC and machine timer as delivered
+on baseline \texttt{95d1e29}, with the traceability matrix and the verification
+evidence available then. \\
+\addlinespace
+2.0 & 20 August 2026 & Two RTL changes: every flop is now reset, and the
+reserved bits of \reg{SRCx\_CONFIG} and \reg{ESCALATION\_CFG} are now hardwired
+to zero, as the register map had always said. New chapters on the compile order,
+on the reset architecture with every register's reset value, and on the
+verification procedures step by step. Regression: six runs to twelve. \\
+\addlinespace
+3.0 & \docdate &
+\emph{Added:} Part~\ref{part:verif}, verification and validation, with
+Section~\ref{sec:valscope} stating how much of each value space each area
+covers; two block benches, \file{tb\_bp} for the branch predictor and
+\file{tb\_alu} for the arithmetic path, taking the regression to fourteen runs
+and 2\,520 checks; Section~\ref{sec:delegated}, the matrix of design questions
+the two briefs delegated.
+\emph{Corrected:} the pipeline and command-latch payloads, described as unreset
+since revision 1.0; the trap-cause table, which listed the causes in numeric
+rather than evaluation order; what the decoder does with an illegal encoding;
+the PIC register count, 56 and not 59; every check count, now read from the
+regression log.
+\emph{Removed:} the reset-architecture and sequential-control chapters, the
+compile-order rationale and the port-naming rationale --- internal engineering
+decisions rather than delivered behaviour. The register reset values they
+restated are in each block's register map and in Appendix~\ref{app:regmap}; the
+build order and the CPU trap-flag diagram moved to
+Appendix~\ref{app:modules} and Chapter~\ref{ch:csr}. 115 pages to 105. \\
+\bottomrule
+\end{tabular}
+
+\chapter*{Scope and reading guide}
+\addcontentsline{toc}{chapter}{Scope and reading guide}
+\markboth{Scope and reading guide}{}
+
+Three blocks are documented here: the RV32I CPU, the programmable interrupt
+controller and the machine timer. They are delivered together because the
+interrupt path only makes sense as a whole; the PIC is nonetheless a
+self-contained IP block with its own register interface and is documented as one
+(Part~\ref{part:pic}). The multi-channel DMA engine, the dual-port SRAM and the
+interconnect are \emph{not} part of this delivery, and appear only where the CPU
+or the PIC has to interoperate with them.
+
+\paragraph{Organisation.} Parts~\ref{part:cpu} to \ref{part:integration}
+describe the implementation block by block: architecture, register interfaces,
+control behaviour and the integration surface. Part~\ref{part:verif} covers the
+verification --- the environment, the procedure run for each block, and the
+results --- with Section~\ref{sec:valscope} giving the scope of each area, value
+space by value space. Part~\ref{part:reference} carries the requirement and
+design-decision matrix and the known limitations. The register maps of all three
+blocks are collected in Appendix~\ref{app:regmap}.
+
+\paragraph{Assumed background.} RV32I and normal RTL practice are assumed; the
+base instruction set is not re-explained. AXI4-Lite \emph{is} explained, in
+Section~\ref{sec:axiprimer}, because it is the integration surface of all three
+blocks --- but only as far as is needed to follow what this implementation does
+with it.
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\cleardoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% ===========================================================================
+\part{System overview}\label{part:system}
+\input{chapters/system/soc_overview}
+
+\part{RISC-V CPU subsystem}\label{part:cpu}
+\input{chapters/cpu/architecture}
+\input{chapters/cpu/pipeline_control}
+\input{chapters/cpu/fetch_bp}
+\input{chapters/cpu/lsu_axi}
+\input{chapters/cpu/csr_traps}
+
+\part{Programmable interrupt controller}\label{part:pic}
+\input{chapters/pic/architecture}
+\input{chapters/pic/registers}
+\input{chapters/pic/behaviour}
+
+\part{SoC integration}\label{part:integration}
+\input{chapters/integration/integration}
+\input{chapters/integration/mtimer}
+
+\part{Verification and validation}\label{part:verif}
+\input{chapters/reference/verification}
+\input{chapters/reference/verif_plan}
+
+\part{Engineering reference}\label{part:reference}
+\input{chapters/reference/traceability}
+\input{chapters/reference/limitations}
+
+\appendix
+\input{appendices/regmap}
+\input{appendices/modules}
+\input{appendices/acronyms}
+
+\bibliographystyle{plain}
+\begin{thebibliography}{9}
+\bibitem{riscv-unpriv}
+RISC-V Foundation, \emph{The RISC-V Instruction Set Manual, Volume I:
+Unprivileged ISA}, version 20191213.
+
+\bibitem{riscv-priv}
+RISC-V Foundation, \emph{The RISC-V Instruction Set Manual, Volume II:
+Privileged Architecture}, version 20211203.
+
+\bibitem{axi}
+ARM Limited, \emph{AMBA AXI and ACE Protocol Specification}, IHI 0022E.
+\end{thebibliography}
+\addcontentsline{toc}{chapter}{Bibliography}
+
+\end{document}

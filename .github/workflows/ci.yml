@@ -1,0 +1,24 @@
+# Runs the Verilator SVA + functional-coverage flow on every push/PR.
+# ModelSim ASE can't run in CI (no headless license), so the reference
+# regression stays local; Verilator covers the same testbench here.
+name: CPU CI
+
+on:
+  push:
+    branches: [RISCV]
+  pull_request:
+    branches: [RISCV, master]
+
+jobs:
+  verilator:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
+
+      - name: Assemble + run SVA / functional-coverage flow
+        run: make test

@@ -1,0 +1,962 @@
+\chapter{Verification plan: procedures and results}
+\label{ch:verifplan}
+
+Chapter~\ref{ch:verif} states the verification strategy and the headline
+results. This chapter is the working document behind it: for each block-level
+bench, what is being proved, the procedure step by step, and the pass criterion.
+It is written so that a reader can follow a procedure without the source open,
+and so that an engineer picking the work up can re-derive why each step is
+there.
+
+\section{How to read a procedure}
+
+Every procedure below has the same shape.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lL{0.66\linewidth}@{}}
+\toprule
+\textbf{Objective} & The property being proved, stated as something that could
+be false. \\
+\textbf{Setup} & What is instantiated and how it is driven. \\
+\textbf{Procedure} & Numbered steps. Each step is either a stimulus (``write
+X'', ``raise line Y'') or an observation with its expected value. \\
+\textbf{Pass criterion} & What must hold for the section to pass. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The three conventions that shape every procedure --- each step self-checking
+with \verb|===| so an X never passes as a match, every negative property given a
+countable witness, and every negative followed by the positive that shows it was
+masking rather than a dead path --- are stated in Section~\ref{sec:method} and
+are not repeated here. Where a procedure below says \emph{the paired positive},
+that is the convention being applied.
+
+\section{Regression composition}
+
+\begin{table}[H]
+\centering
+\caption{The fourteen regression runs, from one compile}
+\label{tab:reg12}
+\begin{tabular}{@{}clL{0.38\linewidth}rl@{}}
+\toprule
+\textbf{\#} & \textbf{Bench} & \textbf{Scope} & \textbf{Checks} & \textbf{Result} \\
+\midrule
+1  & \file{tb\_cpu\_axi}    & System, default latencies (CPI check active here) & 97 & Pass \\
+2  & \file{tb\_cpu\_axi}    & System, high fixed AXI latencies & 95 & Pass \\
+3  & \file{tb\_cpu\_axi}    & System, random backpressure, seeds 101/202 & 95 & Pass \\
+4  & \file{tb\_cpu\_axi}    & System, random backpressure, seeds 777/888 & 95 & Pass \\
+5  & \file{tb\_dual\_core}  & Two cores, shared memory, 2:1 arbiter & 5 & Pass \\
+6  & \file{tb\_pic}         & PIC feature bench & 139 & Pass \\
+7  & \file{tb\_pic\_reset}  & PIC reset values, X-freedom, async reset & 350 & Pass \\
+8  & \file{tb\_pic\_ro}     & PIC read-only registers and reserved bits & 478 & Pass \\
+9  & \file{tb\_pic\_status} & PIC \reg{SRCx\_STATUS}, field by field & 424 & Pass \\
+10 & \file{tb\_mtimer\_regs}& Machine-timer registers and access rules & 224 & Pass \\
+11 & \file{tb\_csr\_ro}     & CSR read-only / WARL / tied-off / absent & 282 & Pass \\
+12 & \file{tb\_traps}       & One directed test per trap cause & 111 & Pass \\
+13 & \file{tb\_bp}          & Branch predictor tables, RAS boundaries, reset & 68 & Pass \\
+14 & \file{tb\_alu}         & ALU decode and operand boundaries & 57 & Pass \\
+\midrule
+   & \textbf{Total}         & & \textbf{2\,520} & \textbf{14/14} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Compile and elaboration report \texttt{Errors: 0, Warnings: 0} for every run.
+The banners are deliberately distinct per bench, so the log is validated by
+counting them: a bench that dies early prints no banner \emph{and} no
+\texttt{FAIL:} line, which a ``no failures'' check alone would accept.
+
+% ===========================================================================
+\section{PIC reset verification}
+\label{sec:vp-picreset}
+
+\textbf{Bench:} \file{debug/hdl/tb\_pic\_reset.v} --- 350 checks.
+
+\paragraph{Objective.} Prove that every flop in the interrupt controller is
+reset by \sig{rst\_n\_i}; that every mapped register returns its documented reset
+value on its first access; that nothing leaves reset holding X, including state
+with no register view; that the reset is asynchronous and dominant; and that the
+block leaves reset disarmed.
+
+\paragraph{Why it is a separate bench.} A reset defect is a first-cycle defect.
+The feature bench spends its opening hundred cycles configuring the block, so by
+the time it observes anything the reset values are gone. This bench observes
+before anything is written.
+
+\paragraph{Setup.} The PIC alone, with its AXI4-Lite port driven by the shared
+master tasks, its 16 source lines and its claim/end-of-interrupt pins driven
+directly by the bench. Clock 10\,ns; reset is under the bench's control rather
+than the shared generator's, because the procedure asserts it a second time.
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=4pt]
+
+\item[\textbf{1}] \textbf{Bus and CPU outputs while reset is asserted.}
+\begin{enumerate}[label=1.\arabic*,leftmargin=12mm,itemsep=1pt]
+  \item Hold \sig{rst\_n\_i} = 0 for four clock cycles.
+  \item Sample the slave outputs. \sig{BVALID} and \sig{RVALID} must be 0
+        (IHI0022E A3.1.2); \sig{BRESP}, \sig{RRESP} and \sig{RDATA} must contain
+        no X and must read \texttt{OKAY}, \texttt{OKAY} and
+        \texttt{0x0000\_0000}.
+  \item Sample the CPU side: \sig{cpu\_irq} = 0, \sig{cpu\_irq\_vec} = 0, both
+        X-free.
+\end{enumerate}
+
+\item[\textbf{2}] \textbf{Every mapped register reads its reset value.}
+\begin{enumerate}[label=2.\arabic*,leftmargin=12mm,itemsep=1pt]
+  \item Release \sig{rst\_n\_i} between clock edges.
+  \item Read all 16 \reg{SRCx\_CONFIG}, all 16 \reg{SRCx\_SW\_TRIG}, all 16
+        \reg{SRCx\_STATUS} and the 8 global registers --- the complete 56-word
+        map --- and compare each against the reset column of
+        Table~\ref{tab:picmap}.
+\end{enumerate}
+All 16 instances of each per-source register are read, not a sample. A register
+that resets correctly at index 0 and not at index 11 is exactly what a spot
+check misses.
+
+\item[\textbf{3}] \textbf{CPU-side outputs after release} are inactive and
+X-free.
+
+\item[\textbf{4}] \textbf{State with no register view.} Probe all 16
+\sig{stack\_id} and \sig{stack\_key} entries through hierarchical references and
+require them X-free; require \sig{depth} = 0. These are the flops a ``the valid
+bit covers it'' argument would leave unreset, and they are read by
+\reg{NEST\_STATUS.TOP\_ID} and \reg{ACTIVE\_VEC.ID}.
+
+\item[\textbf{5}] \textbf{Asynchronous reset from a fully loaded state.}
+\begin{enumerate}[label=5.\arabic*,leftmargin=12mm,itemsep=1pt]
+  \item Write every global register to a value different from its reset value:
+        \reg{BAND\_CONFIG} = \texttt{0x27}, \reg{NEST\_MAX} = 4,
+        \reg{ESCALATION\_CFG} = \texttt{0x110}, \reg{INT\_ENABLE} =
+        \texttt{0xFFFF}.
+  \item Write all 16 \reg{SRCx\_CONFIG} and set all 16 software channels.
+  \item Raise two source lines and claim two nesting levels.
+  \item \emph{Confirm the precondition:} nesting depth must be non-zero and
+        \reg{BAND\_CONFIG} must read back \texttt{0x27}. Without this step the
+        section could pass on a block that was never loaded.
+  \item Assert \sig{rst\_n\_i} = 0 \emph{off a clock edge}. \sig{cpu\_irq} must
+        drop before the next edge.
+  \item Hold three cycles, release between edges.
+  \item Repeat the full 56-register read-back of step 2, and the stack probe of
+        step 4.
+\end{enumerate}
+
+\item[\textbf{6}] \textbf{The block is disarmed out of reset.}
+\begin{enumerate}[label=6.\arabic*,leftmargin=12mm,itemsep=1pt]
+  \item With no configuration written at all, hold source 4 high for eight
+        cycles.
+  \item \sig{cpu\_irq} must stay low and \reg{SRC4\_STATUS.PEND} must stay 0,
+        because \reg{INT\_ENABLE} reset to 0.
+  \item \emph{The paired positive:} write \reg{INT\_ENABLE} = \texttt{0x0010}
+        with the same line still high. \sig{cpu\_irq} must now assert. This is
+        what proves step 6.2 observed masking rather than a dead source line.
+\end{enumerate}
+\end{enumerate}
+
+\paragraph{Pass criterion.} 350 checks, zero failures. Step 5 must produce the
+same 56 values as step 2.
+
+\paragraph{Result.} Pass. Run against the previous revision of the RTL, step
+1.2 fails on \sig{BRESP} and \sig{RRESP}, and step 4 fails on all 32
+nesting-stack entries. That is the evidence that the procedure detects the
+defect it was written for.
+
+% ===========================================================================
+\section{PIC read-only and reserved-bit verification}
+\label{sec:vp-picro}
+
+\textbf{Bench:} \file{debug/hdl/tb\_pic\_ro.v} --- 478 checks.
+
+\paragraph{Objective.} Prove that every read-only object in the register map is
+read-only, and that every reserved bit position is hardwired to zero.
+
+\paragraph{The two promises.} ``Read-only'' means two separate things, and a
+test that checks only one of them is not a test:
+
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+\item the access is \textbf{rejected} --- the write answers SLVERR, so software
+finds out instead of believing it succeeded;
+\item the state is \textbf{unchanged} --- the register still holds what the
+hardware put there.
+\end{enumerate}
+
+The second promise is vacuous unless the register holds a non-trivial value at
+the moment of the attempt. Writing 0 to a register that already reads 0 and then
+observing 0 proves nothing. Every read-only register in this bench is therefore
+driven to a known non-zero value by real hardware activity first.
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=4pt]
+
+\item[\textbf{1}] \textbf{\reg{SRC0..15\_STATUS} --- 16 read-only registers.}
+\begin{enumerate}[label=1.\arabic*,leftmargin=12mm,itemsep=1pt]
+  \item Enable all 16 sources.
+  \item Give every source the maximum deadline (\texttt{0xFFFF}), so
+        \sig{DDL\_TIMER} runs --- making the register hardware-driven and
+        non-zero --- without ever expiring inside the run.
+  \item Raise all 16 lines; let the timers advance.
+  \item For each index: read, write all-ones, require SLVERR, read again, and
+        require the six state bits \sig{PEND}, \sig{ACTIVE}, \sig{ESC},
+        \sig{SPUR} and \sig{EFF\_BAND} to be identical.
+  \item For \sig{DDL\_TIMER}, which is a live counter and cannot be checked by
+        ``unchanged'', require the stronger property: after the rejected write
+        it must have \emph{advanced}, and it must not equal the written value.
+  \item Repeat step 1.4 writing \texttt{0x0000\_0000}: a rejection may not
+        depend on the data.
+\end{enumerate}
+
+\item[\textbf{2}] \textbf{\reg{NEST\_STATUS}.} Claim one interrupt so
+\sig{DEPTH} and \sig{TOP\_ID} are both non-zero, then apply the read-only
+sequence.
+
+\item[\textbf{3}] \textbf{\reg{ACTIVE\_VEC}.} With the interrupt still in
+service, so \sig{VALID} and \sig{ID} are set, apply the same sequence.
+
+\item[\textbf{4}] \textbf{Unmapped offsets.} Every word from \texttt{0xE0} to
+\texttt{0xFC} must answer SLVERR on \emph{both} a read and a write. This is what
+turns a stray pointer into a precise access-fault trap in the CPU instead of a
+silent read of zero.
+
+\item[\textbf{5}] \textbf{Reserved bits.} For each register, write all-ones and
+require the reserved positions to read back 0 while the live positions keep the
+value:
+\begin{center}\small
+\begin{tabular}{@{}ll@{}}
+\reg{SRCx\_CONFIG} (all 16) & reserved [15:8] and [3] \\
+\reg{BAND\_CONFIG}          & reserved [31:8] \\
+\reg{NEST\_MAX}             & reserved [31:5] \\
+\reg{ESCALATION\_CFG}       & reserved [31:9], [7:5] and [3:2] \\
+\reg{INT\_ENABLE}           & reserved [31:16] \\
+\reg{SPURIOUS\_LOG}         & reserved [31:16] \\
+\reg{INT\_STATUS}           & reserved [31:3] \\
+\reg{SRCx\_SW\_TRIG} (all 16) & only bit [0] is readable state \\
+\end{tabular}
+\end{center}
+
+\item[\textbf{6}] \textbf{\reg{SRCx\_SW\_TRIG.KEY} is write-only.} Set a channel
+with the real key, read the register back, and require the key field to read 0.
+If the key read back, software could discover it by reading the register, which
+defeats the purpose of having one.
+
+\item[\textbf{7}] \textbf{Write-1-to-clear semantics.} Produce a spurious
+claim, so that bit 6 of \reg{SPURIOUS\_LOG} and the \sig{SPUR} bit of
+\reg{INT\_STATUS} are both set by hardware. Then: write 0 to both, and nothing
+may change; write 1 to the \emph{wrong} bit, and the set bit must survive;
+write 1 to the right bit, and it must clear. This is the
+other half of being read-only: a bit that software cannot \emph{set}. A read,
+modify and write back that puts a 0 into the register must leave a set bit
+alone, or every handler that touches the register loses events it never meant
+to acknowledge.
+
+\item[\textbf{8}] \textbf{\reg{NEST\_MAX} is WARL.} Write 0 (stores 1), 17
+(stores 16), 31 (stores 16), 5 (stores 5 exactly). The clamp is not cosmetic: a
+depth limit of 0 would mask every offer for ever.
+
+\item[\textbf{9}] \textbf{Narrow writes.} Attempt a byte write to each of the
+four lanes of a read-only register, plus a write with no lanes enabled: all five
+must SLVERR and change nothing. \emph{The paired positive:} the same byte-lane
+write to a \emph{writable} register must succeed, proving the rejection was
+decoded from the address and not from the strobe.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 478 checks, zero failures.
+
+\begin{deviation}
+\textbf{Finding.} This procedure found a real deviation between the delivered
+RTL and the register specification: the reserved bits of \reg{SRCx\_CONFIG}
+([15:8] and [3]) and of \reg{ESCALATION\_CFG} ([7:5] and [3:2]) were stored and
+read back rather than hardwired to zero. Software could therefore write a 1 into
+a bit the specification called reserved and read it back, acquiring a dependency
+that a later revision defining that bit would break. The RTL was corrected to
+mask them on write, matching the documented map; the design is otherwise
+unchanged and the feature bench required no modification.
+\end{deviation}
+
+% ===========================================================================
+\section{PIC status-register verification}
+\label{sec:vp-picstatus}
+
+\textbf{Bench:} \file{debug/hdl/tb\_pic\_status.v} --- 424 checks.
+
+\paragraph{Objective.} \reg{SRCx\_STATUS} is the only window software has into
+what a source is doing. Section~\ref{sec:vp-picro} proves software cannot write
+it; this proves the hardware puts the right thing in it.
+
+\paragraph{Method note.} Every field is checked in \emph{both} directions: it
+must come up when its condition holds and go away when the condition stops
+holding. A status bit stuck at 1 is as useless as one stuck at 0, and only the
+two-sided check finds the first.
+
+\begin{table}[H]
+\centering
+\caption{\reg{SRCx\_STATUS} verification, field by field}
+\label{tab:vpstatus}
+\begin{tabular}{@{}L{0.15\linewidth}L{0.37\linewidth}L{0.32\linewidth}@{}}
+\toprule
+\textbf{Field} & \textbf{Procedure} & \textbf{Key point} \\
+\midrule
+\sig{PEND} [0] &
+  1. line high with \reg{INT\_ENABLE} = 0 $\rightarrow$ must stay 0.
+  2. enable the source $\rightarrow$ must become 1.
+  3. drop the line $\rightarrow$ must return to 0.
+  4. a neighbouring source must not have moved. &
+  The enable term is the part worth proving: software must be able to tell an
+  ignored peripheral from a quiet one. \\
+\midrule
+\sig{ACTIVE} [1] &
+  1. raise a level source $\rightarrow$ \sig{PEND}=1, \sig{ACTIVE}=0.
+  2. claim $\rightarrow$ both 1, because the line is still high.
+  3. clear the source in the handler $\rightarrow$ \sig{PEND}=0,
+     \sig{ACTIVE}=1.
+  4. end of interrupt $\rightarrow$ both 0. &
+  \sig{PEND} and \sig{ACTIVE} are independent, and step 2 is where a design that
+  conflated them would fail. \\
+\midrule
+\sig{DDL\_TIMER} [31:16] &
+  1. idle $\rightarrow$ 0. 2. pending $\rightarrow$ advancing, measured twice.
+  3. claimed $\rightarrow$ cleared, and stays 0 for the whole handler.
+  4. idle again $\rightarrow$ 0. 5. a source with no deadline configured holds
+  it at 0 while genuinely pending. &
+  The counter measures how long the source \emph{waited for service}, so it must
+  stop the moment service starts. \\
+\midrule
+\sig{ESC} [2] and \sig{EFF\_BAND} [5:4] &
+  1. band 3, deadline 8, jump-to-band-0 policy. 2. hold the request past the
+  deadline. 3. \sig{ESC}=1 \emph{and} \sig{EFF\_BAND}=0. 4. \reg{SRCx\_CONFIG}
+  must be untouched. 5. after service both revert. &
+  Checked together on purpose: a design that set the flag and forgot to move the
+  band would silently lose the whole feature. \\
+\midrule
+\sig{EFF\_BAND}, bump mode &
+  Watch the effective band on \emph{every} clock edge, count the transitions
+  and flag any that moved more than one band. Require exactly three
+  transitions, none skipping, ending at band 0; then require it to saturate
+  rather than wrap. &
+  A register read costs several cycles, so polling over AXI cannot tell a
+  correct $3\rightarrow2\rightarrow1\rightarrow0$ walk from a single
+  $3\rightarrow0$ jump. This is why the check is a per-cycle monitor. \\
+\midrule
+\sig{SPUR} [3] &
+  \emph{Negative first:} a source still asserted at the claim and cleared later
+  inside the handler must \textbf{not} be flagged, and must not touch
+  \reg{SPURIOUS\_LOG}. \emph{Then positive:} drop the line between the offer and
+  the claim $\rightarrow$ \sig{SPUR}=1, sticky log bit set,
+  \reg{INT\_STATUS.SPUR} set, nesting depth still 1 (the claim is accounted, so
+  ack and eoi stay balanced), and on return \sig{SPUR} clears while the sticky
+  log does not. &
+  The distinction is \emph{when} the request disappears, not how fast. The
+  negative case is the normal behaviour of every peripheral in this system, so
+  getting it wrong would flag every interrupt. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Life-cycle walk.} The bench closes with one source taken through its
+whole life, reading the register at every transition, so the fields are shown as
+a sequence rather than as six independent facts.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (idle) at (0,0)   {IDLE};
+  \node[stb]  (pend) at (38,0)  {PENDING};
+  \node[stb]  (svc)  at (81,0)  {IN SERVICE};
+  \node[stb]  (done) at (128,0) {SERVICED};
+
+  \draw[->,draw=accent] (idle) -- node[lbl,above]{line high} (pend);
+  \draw[->,draw=accent] (pend) -- node[lbl,above]{claim} (svc);
+  \draw[->,draw=accent] (svc)  -- node[lbl,above,align=center]
+        {handler clears\\\scriptsize the source} (done);
+
+  % what the register reads in each state, directly under its own box
+  \node[font=\scriptsize,align=center,anchor=north] at (0,-8)   {all 0\\timer 0};
+  \node[font=\scriptsize,align=center,anchor=north] at (38,-8)  {PEND=1\\timer running};
+  \node[font=\scriptsize,align=center,anchor=north] at (81,-8)  {PEND=1 ACTIVE=1\\timer cleared};
+  \node[font=\scriptsize,align=center,anchor=north] at (128,-8) {ACTIVE=1\\timer 0};
+
+  % the return leg leaves and re-enters from the sides, so its verticals stay
+  % clear of the annotation column under each state
+  \draw[->,draw=accent] (done.east) -- (144,0) -- (144,-26) -- (-14,-26)
+        -- (-14,0) -- (idle.west);
+  \node[lbl,above=0.5mm] at (65,-26) {end of interrupt};
+\end{tikzpicture}
+\caption{\reg{SRCx\_STATUS} life cycle. The bench reads the register at each of
+the four states and after the return, and compares the whole six-bit state
+field, so a bit that is right in one state and wrong in the next is caught.}
+\label{fig:statuslife}
+\end{figure}
+
+\paragraph{Pass criterion.} 424 checks, zero failures.
+
+% ===========================================================================
+\section{Machine-timer register verification}
+\label{sec:vp-mtimer}
+
+\textbf{Bench:} \file{debug/hdl/tb\_mtimer\_regs.v} --- 224 checks.
+
+\paragraph{Objective.} Verify the timer as a block in its own right rather than
+only through the system bench, for two reasons: its reset values are the unusual
+ones in the delivery (\reg{mtimecmp} resets to all-ones, so the timer is born
+disarmed), and its only defence against an out-of-range access is the shared
+slave's address decode, which nothing else here exercises.
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item[\textbf{1}] \textbf{During reset:} \sig{BVALID}/\sig{RVALID} low,
+\sig{BRESP}/\sig{RRESP}/\sig{RDATA} X-free, \sig{irq} low.
+
+\item[\textbf{2}] \textbf{Reset values.} \reg{MTIME\_HI} = 0;
+\reg{MTIME\_LO} within a small window of 0, because it is already counting;
+\reg{MTIMECMP\_LO} and \reg{MTIMECMP\_HI} both all-ones; \sig{irq} low. Then let
+it run 200 cycles: a disarmed timer must never fire.
+
+\item[\textbf{3}] \textbf{Rate.} Measure the counter delta between two
+back-to-back reads, then between two reads separated by 50 extra clock cycles.
+The difference between the two deltas must be \emph{exactly} 50. Taking the
+difference cancels the fixed AXI overhead, which turns an approximate check into
+an exact one.
+
+\item[\textbf{4}] \textbf{Round-trip} on each register independently, with a
+cross-check after each write that the other three are untouched. The
+\reg{MTIME\_LO} case is checked against a window opening at the written value,
+because the counter resumes immediately.
+
+\item[\textbf{5}] \textbf{Byte strobes.} Write all-ones one lane at a time and
+require exactly that lane to change; then a write with no lanes enabled, which
+must answer OKAY and change nothing.
+
+\item[\textbf{6}] \textbf{Unmapped offsets.} All 60 words from \texttt{0x10} to
+\texttt{0xFC} must SLVERR on read and on write. \emph{The paired positive:} the
+four mapped words must still answer OKAY, so step 6 is a decode result and not a
+blanket rejection.
+
+\item[\textbf{7}] \textbf{Interrupt behaviour.}
+\begin{enumerate}[label=7.\arabic*,leftmargin=12mm,itemsep=1pt]
+  \item Disarm, zero the counter, confirm \sig{irq} low.
+  \item Arm in the documented order --- \reg{MTIMECMP\_LO} first, then
+        \reg{MTIMECMP\_HI}. After the low half alone, \sig{irq} must still be
+        low, because the high half is still all-ones and the compare cannot be
+        satisfied. This is the step that proves the arming order is safe.
+  \item Write the high half; \sig{irq} must rise when \reg{mtime} reaches
+        \reg{mtimecmp}.
+  \item \sig{irq} is a level: it must hold high while the compare holds.
+  \item Move \reg{mtimecmp} forward, as a handler would; \sig{irq} must clear.
+        There is no status register to write --- the compare \emph{is} the
+        status.
+  \item \emph{The paired positive for 7.2:} set \reg{mtimecmp} to a time already
+        past. It must fire at once, proving the hardware compares the full 64
+        bits and that step 7.2 was not simply a timer that never fires.
+\end{enumerate}
+
+\item[\textbf{8}] \textbf{Asynchronous reset} from a configured, armed, firing
+state, asserted off a clock edge. \sig{irq} must drop before the next edge, and
+all four registers must return to their reset values --- in particular
+\reg{mtimecmp} back to all-ones, leaving the timer disarmed again.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 224 checks, zero failures.
+
+% ===========================================================================
+\section{CSR access-rule verification}
+\label{sec:vp-csr}
+
+\textbf{Bench:} \file{debug/hdl/tb\_csr\_ro.v} --- 282 checks.
+
+\paragraph{Objective.} The CSR file has four access classes that are easy to
+confuse, and confusing them is the classic CSR defect. This bench separates them
+and checks each on its own terms.
+
+\begin{table}[H]
+\centering
+\caption{CSR access classes and the rule each must obey}
+\label{tab:csrclass}
+\begin{tabular}{@{}lL{0.28\linewidth}L{0.34\linewidth}@{}}
+\toprule
+\textbf{Class} & \textbf{Registers} & \textbf{Required behaviour on a write} \\
+\midrule
+Read-only & \reg{mip}, \reg{mvendorid}, \reg{marchid}, \reg{mimpid},
+  \reg{mhartid} & \textbf{Must trap} (illegal instruction) and leave the value
+  alone. The trap is what lets software discover the mistake. \\
+WARL & \reg{misa}; \reg{mepc}[1:0]; the \reg{mstatus} WPRI fields;
+  \reg{mie}[15:0] & \textbf{Must not trap.} The write is accepted and only the
+  legal part is kept. A WARL field that traps breaks conforming software. \\
+Tied off & \reg{mhpmcounter8..31}, their upper halves, \reg{mhpmevent3..31} ---
+  77 addresses & \textbf{Must not trap}, must read 0, must swallow the write.
+  They exist and are hardwired, which is not the same as absent. \\
+Absent & everything else, including \reg{mcountinhibit} & \textbf{Must trap} on
+  a read \emph{and} on a write. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item[\textbf{1}] \textbf{Reset value of every implemented CSR}, against
+Table~\ref{tab:csrmap}. \reg{mstatus} is the one that is not zero, because MPP
+is hardwired to \texttt{11}.
+
+\item[\textbf{2}] \textbf{Read-only CSRs.} \reg{mip} is first driven non-zero by
+asserting two interrupt lines, so ``unchanged'' means something. Each of the
+five is then attacked with all three CSR operations --- CSRRW, CSRRS and
+CSRRC --- each of which must raise illegal, and the value re-read afterwards.
+
+\item[\textbf{3}] \textbf{Read-only \emph{fields} inside writable CSRs.} These
+are the bits a register-level test misses: the CSR accepts the write, nothing
+traps, but part of the value must not survive.
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{CSR} & \textbf{Written} & \textbf{Must read back} \\
+\midrule
+\reg{mstatus} & \texttt{0xFFFF\_FFFF} & \texttt{0x0000\_1888} (MIE, MPIE, MPP=11) \\
+\reg{mie}     & \texttt{0xFFFF\_FFFF} & \texttt{0xFFFF\_0000} \\
+\reg{mie}     & \texttt{0x0000\_FFFF} & \texttt{0x0000\_0000} (no live bit touched) \\
+\reg{mepc}    & \texttt{0xFFFF\_FFFF} & \texttt{0xFFFF\_FFFC} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\emph{The paired positive:} \reg{mtvec} and \reg{mscratch} are written with
+arbitrary 32-bit patterns and must keep every bit, showing that the rows above
+masked fields rather than dropping writes.
+
+\item[\textbf{4}] \textbf{\reg{misa} is WARL, not read-only.} All three
+operations must be accepted without trapping, and the value must stay
+\texttt{0x4000\_0100}. This is the distinction the bench exists to make: a
+design that made \reg{misa} read-only would trap here and break conforming
+startup code that probes the extension set by writing to it.
+
+\item[\textbf{5}] \textbf{Tied-off registers.} All 77 addresses read 0, accept a
+write of all-ones without trapping, and still read 0 afterwards.
+
+\item[\textbf{6}] \textbf{Absent CSRs} raise illegal on read and on write:
+\reg{mcountinhibit} (deliberately not implemented --- the specification makes it
+optional and defines the absent behaviour as ``all counters run'', which is what
+this design does), \reg{sstatus}, \reg{pmpcfg0}, the user-mode cycle counter,
+and the addresses \texttt{0x000} and \texttt{0xFFF}. The \emph{boundaries} of
+each tied-off range are then checked one address either side, which is where an
+off-by-one in a range comparison would show.
+
+\item[\textbf{7}] \textbf{The pure-read exception.} CSRRS or CSRRC with
+\texttt{rs1} = x0 is defined as a read with no write side effect, so it must not
+trap even on a read-only CSR.
+
+\item[\textbf{8}] \textbf{Implemented counters are writable} on both halves,
+independently --- the other side of step 5: tied off is not the same as
+read-only.
+
+\item[\textbf{9}] \textbf{Asynchronous reset} from a fully written state returns
+every CSR to its reset value, while \reg{mhartid} and \reg{misa} are unaffected
+because they are hardwired rather than stored.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 282 checks, zero failures.
+
+% ===========================================================================
+\section{Trap-cause verification}
+\label{sec:vp-traps}
+
+\textbf{Bench:} \file{debug/hdl/tb\_traps.v} --- 111 checks.
+
+\paragraph{Objective.} Give every trap cause its own isolated test, with the
+four architectural results checked individually: \reg{mcause}, \reg{mepc},
+\reg{mtval}, and the handler address actually entered.
+
+\paragraph{Why, given the system bench already covers traps.} The system bench
+proves every cause is reachable and counts the entries exactly. That is the
+right test for ``the trap mechanism works end to end''. It is the wrong test for
+``cause 6 records the right \reg{mtval}'', because a single failing cause is one
+line in a hundred, and because the causes are interleaved with everything else
+the program does. Isolation also makes the negative half checkable: for every
+cause that must not commit its instruction or must not issue a bus transaction,
+that is asserted in the same case instead of inferred.
+
+\paragraph{Setup.} \reg{cpu\_top} against two behavioural AXI4-Lite memories:
+instruction memory at \texttt{0x0000} (256 words, so \texttt{0x8000} is
+unmapped) and data memory at \texttt{0x2000} (256 words, so \texttt{0x4000} is
+unmapped). The interrupt pins are driven directly by the bench rather than
+through the PIC, so the CPU's trap logic is isolated from the controller's.
+
+Each case is one reset, one small program written directly into the instruction
+memory word by word, and one trap. The program always begins by setting
+\reg{mtvec}; the handler is a self-loop, which is what makes ``which handler was
+entered'' observable. Architectural results are read from the CSR file through
+hierarchical references, so the check is exact without adding a debug port to
+the RTL.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4.5mm]
+  \node[blkf,minimum width=96mm] (s1) {\textbf{1.} assert reset, write the case
+    program into instruction memory};
+  \node[blkf,below=of s1,minimum width=96mm] (s2) {\textbf{2.} release reset
+    between clock edges; the program sets \reg{mtvec}};
+  \node[blkf,below=of s2,minimum width=96mm] (s3) {\textbf{3.} the case
+    instruction executes; exactly one thing can go wrong and it is the thing
+    under test};
+  \node[blkf,below=of s3,minimum width=96mm] (s4) {\textbf{4.} wait for
+    \sig{cpu\_in\_trap}; check \reg{mcause}, \reg{mepc}, \reg{mtval}};
+  \node[blkf,below=of s4,minimum width=96mm] (s5) {\textbf{5.} let the pipeline
+    settle on the handler self-loop; check the entry address};
+  \node[blk,below=of s5,minimum width=96mm] (s6) {\textbf{6.} check the negative
+    property for this cause: no writeback, or no bus transaction};
+  \draw[flow] (s1) -- (s2); \draw[flow] (s2) -- (s3); \draw[flow] (s3) -- (s4);
+  \draw[flow] (s4) -- (s5); \draw[flow] (s5) -- (s6);
+\end{tikzpicture}
+\caption{The procedure applied to every case in Table~\ref{tab:trapcases}.}
+\label{fig:trapproc}
+\end{figure}
+
+{\small
+\begin{longtable}{@{}cL{0.25\linewidth}lllL{0.19\linewidth}@{}}
+\caption{Trap-cause test cases. \texttt{H} is the handler base (\texttt{0x0000\_0080}).}
+\label{tab:trapcases}\\
+\toprule
+\textbf{Cause} & \textbf{Stimulus} & \reg{mepc} & \reg{mtval} & \textbf{Entry} & \textbf{Also checked} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Cause} & \textbf{Stimulus} & \reg{mepc} & \reg{mtval} & \textbf{Entry} & \textbf{Also checked} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\bottomrule
+\endlastfoot
+0  & \texttt{jal x0,+6} at \texttt{0x08}; target \texttt{0x0E} has bit~1 set
+   & \texttt{0x08} & \texttt{0x0E} & \texttt{H} & no bus traffic \\
+1  & \texttt{jal} to \texttt{0x8000}, outside the instruction memory
+   & \texttt{0x8000} & \texttt{0x8000} & \texttt{H} & \reg{mepc} is the address
+     that could not be fetched, not the jump \\
+2  & the word \texttt{0xFFFF\_FFFF} (opcode \texttt{1111111})
+   & \texttt{0x08} & \texttt{0xFFFF\_FFFF} & \texttt{H} & no writeback,
+     no bus traffic \\
+3  & \texttt{EBREAK}
+   & \texttt{0x08} & \texttt{0x08} & \texttt{H} & \reg{mepc} points \emph{at}
+     the EBREAK, so a debugger can resume it \\
+11 & \texttt{ECALL}
+   & \texttt{0x08} & \texttt{0} & \texttt{H} & no faulting address exists, so
+     \reg{mtval} is 0 \\
+4  & \texttt{lw x5,1(x1)} with \texttt{x1}=\texttt{0x2000}, a \emph{mapped}
+     address & \texttt{0x0C} & \texttt{0x2001} & \texttt{H} & zero bus
+     transactions; \texttt{x5} untouched \\
+4  & \texttt{lh x5,1(x1)} --- the halfword rule is bit~0 only
+   & \texttt{0x0C} & \texttt{0x2001} & \texttt{H} & zero bus transactions \\
+6  & \texttt{sw x0,2(x1)}, \texttt{x1}=\texttt{0x2000}
+   & \texttt{0x0C} & \texttt{0x2002} & \texttt{H} & zero bus transactions ---
+     the dangerous case, since a store that reached the bus would have corrupted
+     memory \\
+6  & \texttt{sh x0,1(x1)}
+   & \texttt{0x0C} & \texttt{0x2001} & \texttt{H} & zero bus transactions \\
+5  & \texttt{lw x5,0(x1)} with \texttt{x1}=\texttt{0x4000}, aligned but unmapped
+   & \texttt{0x0C} & \texttt{0x4000} & \texttt{H} & exactly one read
+     transaction; \texttt{x5} untouched \\
+7  & \texttt{sw x0,0(x1)} with \texttt{x1}=\texttt{0x4000}
+   & \texttt{0x0C} & \texttt{0x4000} & \texttt{H} & exactly one write
+     transaction \\
+\midrule
+\multicolumn{6}{@{}l@{}}{\emph{Cause priority}} \\
+4  & \texttt{lw x5,3(x1)} with \texttt{x1}=\texttt{0x4000}: the address is
+     \emph{both} misaligned and unmapped & \texttt{0x0C} & \texttt{0x4003} &
+     \texttt{H} & cause 4 must win over cause 5, with zero bus transactions \\
+\midrule
+\multicolumn{6}{@{}l@{}}{\emph{Machine external interrupts}} \\
+16 & \reg{mstatus.MIE} = 1 and \reg{mie}[16] = 1; request on vector 0
+   & boundary & \texttt{0} & \texttt{H} & \reg{mcause} =
+     \texttt{0x8000\_0010}; acknowledge pulsed once \\
+19 & \reg{mie}[19] only; vector 3 & boundary & \texttt{0} & \texttt{H} &
+     \reg{mcause} = \texttt{0x8000\_0013} \\
+31 & \reg{mie}[31] only; vector 15 & boundary & \texttt{0} & \texttt{H} &
+     \reg{mcause} = \texttt{0x8000\_001F} \\
+\end{longtable}}
+
+For the interrupt cases \reg{mepc} is required to be a 4-aligned address inside
+the program body rather than a fixed number, because it is the instruction to
+\emph{resume} at and which instruction that is depends on when the request
+arrived. Everything else about the interrupt is exact.
+
+\paragraph{Cause priority, and why it needs its own case.} Alignment is checked
+before the access is issued, so an address that is both misaligned and unmapped
+must raise cause 4 and issue nothing. Without this case, an implementation that
+issued first and trapped on the response afterwards would still pass every other
+row in the table.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=3.6mm]
+  \node[blk,minimum width=104mm] (a) {interrupt pending, enabled, and at an
+     instruction boundary?};
+  \node[blkf,below=of a,minimum width=104mm] (b) {instruction access fault
+     (cause 1) --- the fetch already failed};
+  \node[blkf,below=of b,minimum width=104mm] (c) {illegal instruction
+     (cause 2)};
+  \node[blkf,below=of c,minimum width=104mm] (d) {breakpoint (cause 3)};
+  \node[blkf,below=of d,minimum width=104mm] (e) {environment call (cause 11)};
+  \node[blkf,below=of e,minimum width=104mm] (f) {instruction address
+     misaligned (cause 0)};
+  \node[blkf,below=of f,minimum width=104mm] (g) {load / store address
+     misaligned (causes 4, 6) --- \emph{checked before any access is issued}};
+  \node[blkf,below=of g,minimum width=104mm] (h) {load / store access fault
+     (causes 5, 7) --- only knowable from the bus response};
+  \node[blk,below=of h,minimum width=104mm] (i) {no trap: the instruction
+     commits};
+  \foreach \x/\y in {a/b,b/c,c/d,d/e,e/f,f/g,g/h,h/i} \draw[flow] (\x) -- (\y);
+\end{tikzpicture}
+\caption{Trap priority as implemented. The interrupt is tested first and at an
+instruction boundary, so a preempted instruction reruns cleanly after
+\texttt{MRET}. The two shaded groups near the bottom are the pair the
+cause-priority case separates.}
+\label{fig:trappri}
+\end{figure}
+
+\subsection*{Negative cases}
+
+Two negatives are checked, each immediately followed by the positive that proves
+it was masking and not a dead path.
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item \textbf{A vector masked in \reg{mie} is never taken.} \reg{mstatus.MIE}=1
+and \reg{mie} enables cause 16 only; a request is raised on vector 5 and held
+for 300 cycles. \sig{cpu\_in\_trap} must stay low, the acknowledge must never
+pulse, and \reg{mcause} must never be written. \emph{Then} the same request is
+switched to vector 0, and must be taken at once with
+\reg{mcause}=\texttt{0x8000\_0010}. Without this pairing, an implementation that
+ignored the vector entirely and took any request would still pass the three
+positive interrupt cases.
+
+\item \textbf{A request with \reg{mstatus.MIE}=0 is never taken.} \reg{mie}
+enables cause 16, but the global enable is left at its reset value of 0. The
+enabled vector is held for 300 cycles with no trap and no acknowledge.
+\end{enumerate}
+
+\subsection*{Vectored \reg{mtvec}}
+
+Both halves of the vectored rule are checked. A design that sent
+\emph{everything} to BASE\,+\,4$\cdot$cause would pass a check that looked
+only at interrupts.
+
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+\item \reg{mtvec} = \texttt{H}\,|\,1; take interrupt cause 19. The handler entry
+must be \texttt{H}\,+\,76.
+\item \reg{mtvec} = \texttt{H}\,|\,1; take \texttt{ECALL}, cause 11. The handler
+entry must be \texttt{H} --- vectoring applies to interrupts only.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 111 checks, zero failures; every case must reach its
+trap inside the 2\,000-cycle limit.
+
+% ===========================================================================
+\section{Branch predictor verification}
+\label{sec:vp-bp}
+
+\textbf{Bench:} \file{debug/hdl/tb\_bp.v} --- 68 checks.
+
+\paragraph{Objective.} Prove the three groups of predictor behaviour that a
+program running on the core cannot reach: the reset state of the tables, the
+index and tag behaviour over the \emph{whole} table rather than the handful of
+entries a program touches, and the three return-address-stack boundaries ---
+overflow, underflow, and the both-link \sig{JALR} that replaces the top of
+stack.
+
+\paragraph{Why it was added.} Chapter~\ref{ch:fetch} documents the RAS
+overflow, underflow and replace-top behaviours and the \sig{RAS\_DEPTH}~=~0
+tie-off. The directed program never nests calls deeper than three, so none of
+the four was exercised anywhere in the regression, and no run looked at the
+predictor's state out of reset. The behaviour was implemented and documented but
+not validated, which is a different thing from being wrong.
+
+\paragraph{Setup.} Two instances of \file{branch\_predictor.v} driven from the
+same stimulus: one at the delivered defaults (\sig{ENTRIES} = 128,
+\sig{RAS\_DEPTH} = 8) and one with \sig{RAS\_DEPTH} = 0. Driving both from one
+stimulus means any difference between them can only be the parameter. The read
+port is combinational, so a lookup is an assignment and a settle delta; an
+update is one clock edge with \sig{update\_en\_i} high, withdrawn immediately
+after, so each check sees exactly one write.
+
+\paragraph{A note on addresses.} The index is \sig{PC[8:2]}, so two addresses
+512\,bytes apart share an entry. That is the subject of step 5 and a trap
+everywhere else, so each step below works in its own index band; the allocation
+is written down at the top of the bench.
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item[\textbf{1}] \textbf{Reset state.} Hold \sig{rst\_n\_i} = 0 for four
+cycles and probe the five packed arrays (\sig{valid}, \sig{state}, \sig{isret},
+\sig{tag}, \sig{target}) through hierarchical references: each must be
+identically zero, compared with \verb|===| so an X cannot pass. Probe the RAS
+pointer, its counter, and all 8 stack entries.
+
+\item[\textbf{2}] \textbf{Every index misses out of reset.} Release reset, then
+look up all 128 index positions. Each must predict not-taken, and each must
+drive a \sig{pred\_target\_o} that is X-free --- the output is read
+combinationally on every lookup, hit or miss, so a miss must still produce a
+defined value. This is exhaustive over the index space, deliberately: an entry
+that resets at index 0 and not at index 91 is what a spot check misses.
+
+\item[\textbf{3}] \textbf{Learn and re-learn.} Update one entry taken, then
+not-taken, then taken again, reading the prediction after each. The 1-bit state
+must follow the last outcome in \emph{both} directions --- a state stuck at
+taken would pass a one-directional test --- and the stored target must come back
+verbatim, including after it is replaced.
+
+\item[\textbf{4}] \textbf{Indexing is 1:1.} Write all 128 entries with distinct
+recognisable targets, then read all 128 back. Aliasing in either direction shows
+up as a wrong target.
+
+\item[\textbf{5}] \textbf{The tag is full.} Take two addresses that share an
+index and differ in the lowest tag bit --- the bit an off-by-one in the
+index/tag split would move --- and confirm the shared index first. Learn A;
+A must hit and B must miss. Learn B; B must hit with its own target and A must
+now miss. The second half is what distinguishes eviction from a false hit.
+
+\item[\textbf{6}] \textbf{\sig{update\_en\_i} gates the write.} Drive a
+different direction and target on the update port with the enable low for two
+cycles; neither may change.
+
+\item[\textbf{7}] \textbf{RAS ordering.} Tag one entry as a return and give it a
+deliberately wrong stored target, so that any prediction coming from the BTB is
+visible. With an empty stack it must predict that wrong target. Push three
+calls; the prediction must follow the newest link, then the second, then the
+first as the returns pop. An entry that is \emph{not} tagged as a return must
+keep using its BTB target throughout, with the stack non-empty.
+
+\item[\textbf{8}] \textbf{Underflow.} Pop the stack empty, then pop once more.
+The depth must not wrap or go negative, and the prediction must fall back to the
+stored BTB target and stay X-free.
+
+\item[\textbf{9}] \textbf{Overflow.} Push \sig{RAS\_DEPTH}~+~2 = 10 calls with
+links identified by number, checking the depth after every push: it must count
+1--8 and then hold at 8. Then pop the stack out one link at a time and require
+links 10 down to 3 in exactly that order. After eight pops the stack must be
+empty and the prediction back on the BTB target --- links 1 and 2 are gone,
+which is the documented accuracy loss.
+
+\item[\textbf{10}] \textbf{Both-link \sig{JALR}.} With an empty stack, a
+simultaneous call and return must push (depth 0\,$\rightarrow$\,1). With a
+non-empty stack it must leave the depth unchanged and replace the top; the entry
+beneath must still be intact when the next pop reaches it.
+
+\item[\textbf{11}] \textbf{\sig{RAS\_DEPTH} = 0.} The second instance, having
+seen identical stimulus throughout, must predict a return-tagged entry from the
+BTB target, must drive no X, and must still return the direction bit correctly.
+
+\item[\textbf{12}] \textbf{Asynchronous reset from a trained state.} Confirm the
+precondition --- the table holds a learned entry and the stack is not empty ---
+then assert reset off a clock edge. The prediction must drop before the next
+edge. After release, all 128 entries must miss again, the stack pointer and
+counter must be zero, and the target array must be identically zero.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 68 checks, zero failures. Five of those checks are
+loop summaries: three cover all 128 index positions, one the ten pushes of the
+overflow chain, and one the eight pops that walk it back out.
+
+\paragraph{Result.} Pass, on the first run against the delivered RTL. No defect
+was found.
+
+\begin{rtlnote}
+\textbf{The bench was validated by mutation.} A bench that has never failed
+proves nothing about its own sensitivity, and this one found no defect, so its
+teeth were demonstrated instead. Removing the saturation term from the RAS
+occupancy counter --- changing \texttt{else if (push\_only \&\& cnt\_q !=
+RAS\_DEPTH)} to \texttt{else if (push\_only)}, the single most plausible
+overflow defect --- makes the bench report 8 failures, in steps 9, 10 and 12.
+The mutation was then reverted and the run repeated clean.
+\end{rtlnote}
+
+% ===========================================================================
+\section{Arithmetic path verification}
+\label{sec:vp-alu}
+
+\textbf{Bench:} \file{debug/hdl/tb\_alu.v} --- 57 checks.
+
+\paragraph{Objective.} Prove two things the system bench cannot: that every
+combination of \{\sig{ALUOp}, \sig{funct3}, \sig{funct7}, \sig{ALUSrc}\} selects
+the operation it is supposed to, and that each operation is correct at the
+operand values where arithmetic goes wrong.
+
+\paragraph{Why it was added.} The system bench proves that each instruction
+class executes and that the program's expected results appear in the register
+file. It does not reach the sign boundary, the shift-amount boundary, or the
+operand pairs that separate a signed comparison from an unsigned one, because a
+hand-written directed program does not contain those values. The functional
+coverage layer bins instruction \emph{classes}, not operand values, so it
+reports full coverage of a space it is not measuring. This bench supplies the
+operand-value evidence the validation-scope table
+(Section~\ref{sec:valscope}) needs in order to be honest about the ALU.
+
+\paragraph{Setup.} \file{alu\_top.v}, which instantiates \file{alu.v}, driven
+directly on its ports. Both halves of the path are therefore covered in one
+place: the decode from control signals to a concrete operation, and the
+operation itself. The block is purely combinational, so each case is an
+assignment, a settle delta and a compare.
+
+\subsection*{Procedure}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+\item[\textbf{1}] \textbf{Operand select.} With distinct values on the register
+port and the immediate port, \sig{ALUSrc\_i} = 0 must produce the register
+result and \sig{ALUSrc\_i} = 1 the immediate result. Every later step drives the
+port it is not using with \texttt{0xDEAD\_BEEF}, so a mux fault shows up as a
+recognisable wrong answer rather than as a plausible one.
+
+\item[\textbf{2}] \textbf{The decode, exhaustively.} Operands \texttt{0x11} and
+\texttt{0x03} are chosen so that all eleven operations give different answers.
+Under \sig{ALUOP\_FUNCT}, all 8 \sig{funct3} values are applied with both
+\sig{funct7} values and both \sig{ALUSrc} values --- 32 cases. Then the three
+other \sig{ALUOp} encodings, and one encoding \file{control.v} never emits,
+which must fall back to ADD rather than to X. \\
+The asymmetry this step exists for: \sig{SUB} is an R-type-only form, so
+\sig{funct7} = \texttt{0100000} with \sig{funct3} = \texttt{000} must subtract
+when \sig{ALUSrc} = 0 and \emph{add} when \sig{ALUSrc} = 1, because bits
+[31:25] of an I-type instruction are part of the immediate and can legitimately
+hold that pattern. Both directions are checked.
+
+\item[\textbf{3}] \textbf{ADD and SUB at the sign boundary.} INT\_MAX\,+\,1
+wrapping to INT\_MIN; $-1$\,+\,1 discarding the carry; INT\_MIN\,+\,INT\_MIN;
+0\,$-$\,1 borrowing; INT\_MIN\,$-$\,1 wrapping to INT\_MAX;
+0\,$-$\,INT\_MIN staying INT\_MIN.
+
+\item[\textbf{4}] \textbf{Shifts, exhaustive over the amount.} Every shift
+amount 0--31 for SLL, SRL and SRA against a pattern with both halves set, so a
+lost or duplicated bit is visible. Then the three cases that separate SRA from
+SRL: SRA of INT\_MIN by 31 is all ones, SRL of the same word by 31 is 1, and
+SRA of a positive value by 31 is 0 --- which is what shows the sign is being
+propagated rather than a constant being shifted in. Finally the \texttt{[4:0]}
+masking: shift amounts of 32, 33 and \texttt{0xFFFF\_FFE0}.
+
+\item[\textbf{5}] \textbf{SLT against SLTU.} The five pairs where they must
+disagree or must agree: $-1$ against 1 both ways round, INT\_MIN against
+INT\_MAX, equal operands, and 0 against 1.
+
+\item[\textbf{6}] \textbf{Bitwise operations.} The full 4$\times$4 matrix of
+\{0, all-ones, \texttt{0xAAAA\_AAAA}, \texttt{0x5555\_5555}\} for AND, OR and
+XOR --- 48 cases, which contains all three identities.
+
+\item[\textbf{7}] \textbf{LUI and AUIPC.} LUI must pass operand B through and
+ignore operand A entirely; AUIPC must add, including with a
+sign-extended negative immediate.
+\end{enumerate}
+
+\paragraph{Pass criterion.} 57 checks, zero failures. Three of those checks are
+loop summaries covering 32 shift amounts each, and two cover 16 decode cases
+and 16 pattern pairs.
+
+\paragraph{Result.} Pass, on the first run against the delivered RTL. No defect
+was found.
+
+\begin{rtlnote}
+\textbf{Validated by mutation, as above.} Changing \sig{ALU\_SRA} from
+\texttt{\$signed(operand\_a\_i) >>> operand\_b\_i[4:0]} to a logical shift ---
+the classic sign-extension defect, and one that a directed program using only
+small positive operands would never expose --- makes the bench report 32
+failures: 31 of the 32 SRA shift amounts (all but a shift of zero, where the two
+forms agree) and the SRA-of-INT\_MIN check. The mutation was reverted and the
+run repeated clean.
+\end{rtlnote}

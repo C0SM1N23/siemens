@@ -1,0 +1,98 @@
+\chapter{Limitations and open points}
+\label{ch:limits}
+
+The items below are properties of the delivered RTL, not defects. They are listed
+so that integration proceeds with them known.
+
+\section{Instruction set}
+
+Multiply and divide are not implemented; the \sig{M} extension was out of scope
+per the specification and its encodings decode as illegal instructions. There are
+no atomic instructions --- RV32I has no load-reserved / store-conditional and none
+were added. There are no floating-point, compressed or vector extensions.
+\reg{misa} reports exactly what is built.
+
+Only machine mode exists. \reg{mstatus.MPP} is hardwired to \texttt{11} because
+there is no other privilege level to return to. There is no virtual memory and no
+MMU or PMP.
+
+\section{Memory system}
+
+There are no caches, no write buffer and no coherence mechanism. Every load and
+store goes to the bus and blocks the execute stage for the whole round trip.
+Consequently a hart is sequentially consistent by construction, which is what
+makes flag-based sharing between cores sound, but single-thread memory
+performance is bounded by bus latency.
+
+Each master port carries at most one outstanding transaction. AXI4-Lite has no
+bursts or IDs, and none are used. The per-channel handshake tracking in the LSU
+was written so that a later move to AXI4-Full is additive, but that move has not
+been made.
+
+\section{Peripheral address decoding}
+
+Both peripheral slaves decode only \sig{addr[7:2]}. Within an interconnect window
+larger than 256\,bytes, higher addresses alias onto the first registers instead of
+producing an error response. Two clean resolutions exist --- exact 256\,byte
+windows in the decoder, or a wider comparison in the shared slave --- and the
+choice belongs with the system memory map, which is not yet fixed.
+
+\section{Interrupts}
+
+The PIC serves one CPU. Source-to-core targeting for a multi-core configuration
+is undefined, and each core would want its own timer compare register.
+
+The PIC supports preemptive nesting natively, and the feature bench exercises it.
+Through the CPU, however, only one nesting level is exercised, because handlers
+run with \reg{MIE} = 0. Multi-level nesting through the CPU requires handler
+software that re-enables \reg{MIE} after saving \reg{mepc}, \reg{mcause} and
+\reg{mstatus} --- the standard RISC-V sequence. That is a software addition on top
+of the existing end-of-interrupt path, not a hardware gap.
+
+The two-mask arrangement carries the starvation rule stated in
+Chapter~\ref{ch:soc}: a source enabled in the PIC but masked in \reg{mie} is
+never claimed and starves everything less urgent. Deadline escalation does not
+address this case.
+
+\section{Reset}
+
+Reset is asynchronous and active low across all three blocks. Release is not
+synchronised. In simulation this is harmless, and the benches deliberately
+release reset between clock edges so the behaviour is exercised rather than
+avoided. Real silicon would require a reset synchroniser --- asynchronous
+assertion, synchronous de-assertion --- to respect recovery and removal timing.
+
+Reset asserted in the middle of a bus transaction is not exercised: the models
+and the CPU reset together. This becomes relevant once the system defines its
+reset controller.
+
+The dual-port SRAM in the wider system uses synchronous reset while the CPU and
+DMA use asynchronous reset. Harmonising that is a system-level decision.
+
+\section{Counters and CSR conformance}
+
+\reg{mcountinhibit} is not implemented, which the specification permits; software
+therefore cannot freeze a counter around a measurement window.
+\reg{mtvec.MODE} does not force a legal value on a reserved write, as noted in
+Chapter~\ref{ch:csr}. The performance-counter events are fixed in hardware and
+\reg{mhpmevent} is tied off, so the events cannot be reprogrammed.
+
+\section{Verification scope}
+
+Verification is directed and self-checking: expected values are written by
+hand, so the results establish that the delivery behaves as this document
+describes, at the values listed in Section~\ref{sec:valscope}. Functional
+coverage stands at 88 of 92 bins, with all four misses accounted for
+individually in Table~\ref{tab:covmiss}. Section~\ref{sec:valscope} states, area
+by area, which value spaces were covered exhaustively and which were sampled;
+the rows marked \emph{selected} are where the delivery is thinnest. The
+testbench interconnect covers two slaves; richer fabrics, including one that
+generates its own decode errors, arrive with the real interconnect.
+
+\section{Area, timing and power}
+
+No synthesis has been run, so this document contains no area, frequency or power
+figure for any block. One design choice is known to carry a cost that only
+synthesis can quantify: the single decode-and-execute stage produces a long
+combinational path (Chapter~\ref{ch:cpuarch}), which would set the achievable
+clock frequency on a real target.

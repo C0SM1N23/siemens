@@ -1,0 +1,195 @@
+\chapter{Subsystem integration}
+\label{ch:integration}
+
+\section{Shared AXI4-Lite slave}
+\label{sec:axislave}
+
+\file{hdl/axi\_lite\_slave.v} implements the slave-side handshake once. Both the
+PIC and the machine timer instantiate it, and it is available unchanged to any
+register-mapped peripheral --- the DP-SRAM ports or the DMA configuration port
+would use it as-is.
+
+The split is deliberate: the shared module owns AW/W collection, the B response
+and the AR/R response, while the peripheral only describes its registers. A
+peripheral supplies four things:
+
+\begin{table}[H]
+\centering
+\caption{Peripheral-side hooks of \file{axi\_lite\_slave.v}}
+\label{tab:slavehooks}
+\begin{tabular}{@{}L{0.22\linewidth}lL{0.46\linewidth}@{}}
+\toprule
+\textbf{Hook} & \textbf{Direction} & \textbf{Meaning} \\
+\midrule
+\sig{wr\_en}, \sig{wr\_addr}, \sig{wr\_data}, \sig{wr\_strb}
+  & to peripheral & One-cycle write pulse with word offset, data and strobes. \\
+\sig{wr\_ok}   & from peripheral & Combinational: is this offset writable? \\
+\sig{rd\_addr} & to peripheral & Requested word offset, valid while \sig{ARVALID}. \\
+\sig{rd\_data}, \sig{rd\_ok} & from peripheral & Combinational read multiplexer and readability qualifier. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Write path}
+
+AW and W are collected independently and may arrive in either order. Two flags
+track what has landed; when both are present and no response is outstanding, the
+transaction commits.
+
+\begin{center}
+\ttfamily\small
+wr\_commit = aw\_got\_q \&\& w\_got\_q \&\& !s\_axi\_bvalid\_o;
+\end{center}
+
+Readiness is derived directly from those flags, so the slave stops accepting a
+channel it has already captured and stops accepting anything at all while a
+response is pending:
+
+\begin{center}
+\ttfamily\small
+s\_axi\_awready\_o = !aw\_got\_q \&\& !s\_axi\_bvalid\_o;\\
+s\_axi\_wready\_o\ \ = !w\_got\_q\ \ \&\& !s\_axi\_bvalid\_o;
+\end{center}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (idle)  at (0,0)    {IDLE};
+  \node[stb]  (gotaw) at (46,20)  {GOT\_AW};
+  \node[stb]  (gotw)  at (46,-20) {GOT\_W};
+  \node[stb]  (both)  at (92,0)   {BOTH};
+  \node[stb]  (resp)  at (137,0)  {RESP};
+
+  \draw[->,draw=accent] (idle)  -- node[lbl,pos=0.5,above left=-1mm and -3mm]{AW hs} (gotaw);
+  \draw[->,draw=accent] (idle)  -- node[lbl,pos=0.5,below left=-1mm and -3mm]{W hs}  (gotw);
+  \draw[->,draw=accent] (gotaw) -- node[lbl,pos=0.5,above right=-1mm and -3mm]{W hs} (both);
+  \draw[->,draw=accent] (gotw)  -- node[lbl,pos=0.5,below right=-1mm and -3mm]{AW hs}(both);
+  \draw[->,draw=accent] (idle)  -- node[lbl,pos=0.5,above,align=center]
+        {AW + W\\\scriptsize same cycle} (both);
+  \draw[->,draw=accent] (both)  -- node[lbl,pos=0.5,above,align=center]
+        {\texttt{wr\_commit}\\\scriptsize \texttt{wr\_en\_o} pulses} (resp);
+
+  % return leg routed below every node, clear of GOT_W
+  \draw[->,draw=accent] (resp.south) -- (137,-38) -- (0,-38) -- (idle.south);
+  \node[lbl,above=0.5mm] at (68,-38) {BREADY --- BVALID drops, flags clear};
+
+  \node[align=left,font=\scriptsize,anchor=north west,
+        draw=rulegrey,fill=boxbg,inner sep=5pt,text width=118mm] at (0,-48)
+    {\textbf{Reset:} both flags clear, \texttt{BVALID} low.
+     \texttt{BOTH} lasts exactly one cycle --- the got bits are registered and
+     \texttt{wr\_commit} is combinational from them, so the commit is always the
+     cycle \emph{after} the second handshake, including when AW and W arrive
+     together. \texttt{BRESP} = \texttt{wr\_ok\_i}\,?\,OKAY\,:\,SLVERR, captured
+     at commit.};
+\end{tikzpicture}
+\caption{Write handshake of \file{axi\_lite\_slave.v}, encoded in
+\sig{aw\_got\_q}, \sig{w\_got\_q} and \sig{s\_axi\_bvalid\_o} rather than in a
+state register.}
+\label{fig:slavewr}
+\end{figure}
+
+\subsection{Read path}
+
+The read side is simpler: \sig{ARREADY} is the inverse of \sig{RVALID}, so a new
+address is accepted only when no response is pending. On the AR handshake the
+peripheral's combinational read data and its \sig{rd\_ok} qualifier are captured
+into \sig{RDATA} and \sig{RRESP}.
+
+\sig{BRESP} and \sig{RRESP} are combinational functions of stored error flags
+and are driven whether or not the corresponding \sig{VALID} is asserted, so both
+flags and \sig{s\_axi\_rdata\_o} reset to zero: the response pins read
+\texttt{OKAY} and \texttt{0x0000\_0000} from time zero rather than \texttt{X}.
+The reset bench checks all three while reset is still asserted
+(Section~\ref{sec:vp-picreset}, step 1).
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=2pt,xscale=1.05]
+  clk      & 10{C} \\
+  ARVALID  & 2L 2H 6L \\
+  ARREADY  & 4H 2L 4H \\
+  ARADDR   & 2U 2D{off} 6U \\
+  RVALID   & 4L 4H 2L \\
+  RREADY   & 6L 2H 2L \\
+  RDATA    & 4U 4D{reg} 2U \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,8}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{Register read. \sig{ARREADY} drops while the response is outstanding,
+which is what enforces the one-transaction-per-direction contract.}
+\label{fig:slaveread}
+\end{figure}
+
+\paragraph{Contract.} At most one transaction per direction, which matches the
+CPU's one-outstanding master exactly. Nothing in the system requires more.
+
+\section{Interconnect in the verification environment}
+
+\begin{sloppypar}
+The testbench builds the interconnect from two cascaded 1-to-2 address decoders,
+\file{axi\_lite\_dec2.v}. The first splits the \texttt{0x3xxx\_xxxx} window from
+everything else; the second splits that window into the PIC and the machine
+timer. Anything outside a mapped region returns DECERR from the memory model,
+which the CPU turns into a precise access fault.
+\end{sloppypar}
+
+This is testbench infrastructure, not part of the delivery. The real system will
+supply its own fabric; the CPU requires nothing from it beyond conformant
+AXI4-Lite behaviour and the three response codes.
+
+\section{Interrupt path end to end}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=4mm,font=\small]
+  \node[blkf,minimum width=26mm] (p) {peripheral};
+  \node[blk,right=14mm of p,minimum width=26mm] (pic) {pic};
+  \node[blk,right=14mm of pic,minimum width=26mm] (cpu) {cpu\_top};
+  \node[blkf,right=14mm of cpu,minimum width=26mm] (sw) {handler};
+
+  \draw[flow] (p) -- node[lbl,above,align=center]{\scriptsize line asserted\\\scriptsize and held} (pic);
+  \draw[flow] (pic) -- node[lbl,above,align=center]{\scriptsize cpu\_irq\\\scriptsize + vector} (cpu);
+  \draw[flow] (cpu) -- node[lbl,above,align=center]{\scriptsize trap entry\\\scriptsize mcause = 16+v} (sw);
+  \draw[flow] (cpu.south) ++(-6mm,0) -- ++(0,-8mm) -| node[lbl,pos=0.25,below]{\scriptsize ack: claim, push} (pic.south);
+  \draw[flow] (sw.south) -- ++(0,-14mm) -| node[lbl,pos=0.25,below]{\scriptsize clears the peripheral} (p.south);
+  \draw[flow] (sw.north) -- ++(0,6mm) -| node[lbl,pos=0.25,above]{\scriptsize MRET $\to$ eoi: pop} (pic.north);
+\end{tikzpicture}
+\caption{Interrupt flow across the three blocks. The peripheral holds its line
+until the handler clears it; the PIC owns priority and nesting; the CPU owns the
+architectural trap state.}
+\label{fig:irqflow}
+\end{figure}
+
+The two masks stack on purpose. \reg{INT\_ENABLE} in the PIC says ``this source
+may reach the CPU''; \reg{mie} in the CPU says ``current software cares''. They
+are independent, which is what allows software to mask a class of interrupts
+without reconfiguring the controller.
+
+The failure mode of that arrangement was found during verification and is stated
+in Chapter~\ref{ch:soc}: a source enabled in the PIC but masked in \reg{mie} is
+never claimed, so it remains the PIC's offer forever and starves everything less
+urgent. This is not an RTL defect --- both masks behave as specified --- but it is
+an integration rule the system must respect.
+
+\section{Multi-core behaviour}
+
+Nothing in the core is shared between instances. There is no static state,
+memories are external, and identity comes only from the \sig{RESET\_PC} and
+\sig{HART\_ID} parameters. Two or more instances work behind a standard AXI
+interconnect.
+
+RV32I has no load-reserved / store-conditional, but every memory operation here
+is in-order and blocking --- one outstanding transaction, no store buffer --- so
+each hart is sequentially consistent and flag-based handshakes through shared
+memory are sound. This is the same property the system's ping-pong buffering
+relies on.
+
+\begin{deviation}
+\textbf{Not resolved at system level.} The PIC serves one CPU. Which source
+targets which core is undefined for a multi-core configuration, and each core
+would want its own timer compare register. The dual-core testbench exercises two
+cores sharing memory through an arbiter; it does not exercise interrupt routing
+to two cores, because the routing policy does not exist yet.
+\end{deviation}

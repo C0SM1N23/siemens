@@ -1,0 +1,174 @@
+\chapter{PIC behaviour and design decisions}
+\label{ch:picbehav}
+
+This chapter records the decisions the feature specification delegated, together
+with what the RTL actually does. Each section names the requirement area from the
+brief.
+
+\section{Priority grouping}
+
+Four bands exist. A band is a class of service rather than a fixed rank: its
+urgency is a 2-bit value in \reg{BAND\_CONFIG}, so the four bands can be
+reordered system-wide with a single register write while every source keeps its
+own configuration.
+
+Within a band, the 4-bit \sig{INTRA} field decides, higher being more urgent. If
+those are equal too, the lowest source index wins. The two levels are separate
+deliberately, because they change for different reasons: the band mapping is what
+gets re-shuffled when the system changes operating mode, while the intra-band
+value is the fine ordering inside a class.
+
+Reconfiguring a source's band while an interrupt from it is already active cannot
+corrupt nesting. The priority key is snapshotted onto the stack at the claim, so
+the threshold in use is the value captured then. New pending evaluations of that
+source use the new band immediately.
+
+\section{Preemption and nesting}
+
+Maximum depth is \reg{NEST\_MAX}, default 8, clamped by hardware to the range
+[1,\,16]; 16 is the physical stack depth. Enforcement is by masking: once
+\sig{depth} equals \reg{NEST\_MAX} the resolver offers nothing, so the CPU is
+never shown an interrupt it could not legally claim. The limit therefore cannot
+be exceeded by construction.
+
+What is saved at a preemption is the source id and its priority key, pushed as a
+pair onto the stack inside the controller. The key is what keeps the preemption
+threshold stable; the id is what the end-of-interrupt pops. Architectural CPU
+state --- \reg{mepc}, \reg{mcause}, \reg{mstatus} --- is the software's
+responsibility under the standard RISC-V convention, so the controller stores
+only what the controller itself needs.
+
+The CPU signals completion with the dedicated \sig{cpu\_irq\_eoi} pulse.
+
+A dedicated pulse is what makes nesting possible. The CPU's \sig{cpu\_in\_trap}
+level says only that a trap is in progress; it cannot express \emph{which}
+nesting level has finished, so one pulse per interrupt-returning \sig{MRET} is
+required to pop exactly one. \sig{cpu\_in\_trap} is still driven, for
+observability, but the PIC does not use it.
+
+A preemption blocked by the depth limit is visible rather than silent:
+\reg{INT\_STATUS.OVF} and \reg{NEST\_STATUS.OVF} are set. Nothing is lost --- the
+blocked source stays pending and is offered as soon as the depth drops.
+
+\section{Spurious interrupt detection}
+
+A source may deassert between being offered and the CPU's claim. The condition is
+detectable at exactly one point: the claim itself. When \sig{cpu\_irq\_ack}
+arrives, the controller re-checks the request of the source it had offered; if
+that request is gone, the claim is spurious.
+
+\begin{center}
+\ttfamily\small
+claim\_spur = claim\_push \&\& !req[claimed\_id];
+\end{center}
+
+The response is status flags, not a discard and not a dedicated vector:
+\reg{SRCx\_STATUS.SPUR}, the sticky \reg{SPURIOUS\_LOG} bit, and
+\reg{INT\_STATUS.SPUR}. The claim is \emph{still} pushed onto the nesting stack.
+
+That last point looks wrong at first reading and is the deliberate choice. A
+vectored CPU has already committed to entering the handler by the time the PIC
+learns the request vanished. If the PIC skipped the push, that handler's
+end-of-interrupt would pop somebody else's level and corrupt the stack. Keeping
+\sig{ack} and \sig{eoi} balanced matters more than keeping the depth counter
+tidy. The handler reads the flag and exits early. A dedicated spurious vector was
+rejected because it would require a separate CPU entry path for a case that costs
+a two-instruction check.
+
+Distinguishing a spurious interrupt from a legitimately fast-clearing source is a
+question of \emph{when} the request disappears, not how quickly. A source still
+asserted at the claim and cleared later inside its own handler is the normal case
+--- that is how every peripheral in this system behaves --- and is never flagged.
+Only a request already gone at the moment of the ack is spurious. Edge-triggered
+sources are immune by construction, since the latch holds the request until it is
+consumed.
+
+Logging is at two granularities: \reg{SPURIOUS\_LOG} identifies \emph{which}
+source misbehaved and survives until software clears it, while
+\reg{INT\_STATUS.SPUR} is the cheap global poll.
+
+\section{Deadline-aware escalation}
+\label{sec:deadline}
+
+Each source has a 16-bit deadline in \reg{SRCx\_CONFIG.DEADLINE}, in the same
+word as its band and priority, so one write configures a source completely. A
+value of zero disables the deadline, which is also the reset state.
+
+Elapsed time is measured by a per-source counter that runs while the slot is a
+pending request awaiting service, and is cleared on claim or on return to idle.
+It is not free-running: it measures exactly the interval the deadline is about.
+
+\begin{table}[H]
+\centering
+\caption{Deadline counter update (\file{hdl/pic.v})}
+\label{tab:ddlcnt}
+\begin{tabular}{@{}lL{0.60\linewidth}@{}}
+\toprule
+\textbf{Condition} & \textbf{Action on \sig{ddl\_cnt[s]}} \\
+\midrule
+not counting        & cleared --- the slot is idle or has no deadline \\
+escalation fires    & cleared --- re-arms the window \\
+deadline not yet hit& increments \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Escalation means one of two things, selected by \reg{ESCALATION\_CFG.MODE}. Jump
+mode sets the effective band to the configurable \sig{TARGET} --- one decisive
+promotion regardless of where the source started. Bump mode moves it one band
+more urgent, stopping at band 0 --- a gentler, proportional escalation. Only the
+\emph{effective} band changes; the configured band in \reg{SRCx\_CONFIG} is left
+untouched, so the escalation is transparent and reversible.
+
+Repetition is optional. With \sig{MULTI} = 0 a source escalates at most once per
+waiting episode. With \sig{MULTI} = 1 the counter re-arms after each escalation,
+so a source that keeps waiting keeps climbing; combined with bump mode this gives
+a source that ages upward one band per deadline period.
+
+The escalated priority is dropped at the claim: from the cycle the source goes
+into service it is no longer a pending request awaiting service, so the
+effective band reverts to the configured band and the deadline counter resets.
+Escalation therefore never accumulates across events --- each request starts
+from the priority software actually programmed.
+\reg{SRCx\_STATUS.ESC} clears with it, while the global \reg{INT\_STATUS.ESC}
+stays sticky so the event itself is not lost.
+
+The promotion takes effect on the cycle the deadline is missed, not on the one
+after it: the escalated band is already in the priority key the resolver
+evaluates on that same cycle.
+
+\section{Software-triggered interrupts}
+
+A software interrupt is raised by a single write to \reg{SRCx\_SW\_TRIG} with bit
+0 set and the key \texttt{0xA5A5} in bits [31:16]. One write, not a sequence, so
+there is no partially armed state to get stuck in. The key is what makes it safe:
+a stray or corrupted single-bit write does nothing.
+
+Clearing works both ways. Writing bit 0 = 0 clears it explicitly, with no key
+required, and a claim also self-clears it exactly like an edge-triggered hardware
+source, so a handler need not remember to tidy up after itself.
+
+If a software trigger lands on a channel that already has a pending hardware
+request, the two merge and the slot simply stays pending --- the request is
+\sig{(hardware | software) \& enable}, so there is one request per slot rather
+than two competing ones. The consequence is worth stating: a claim consumes the
+software bit, but if the hardware line is still asserted the slot remains pending
+and will be offered again. That is correct level-triggered behaviour, not a lost
+or duplicated interrupt.
+
+A software request is subject to deadline escalation exactly like any other, with
+no special case in the RTL. That is the point of merging at the slot: once inside
+the priority pipeline a software interrupt is genuinely indistinguishable from a
+hardware one.
+
+\section{Reset behaviour}
+
+Every configuration and status register resets as listed in
+Table~\ref{tab:picmap}, with the two documented exceptions. The nesting depth
+resets to zero, the active, escalated, spurious and edge-pending masks all reset
+to zero, and the output pair \sig{cpu\_irq} / \sig{cpu\_irq\_vec} resets to
+\{0,\,0\}.
+
+The reset is asynchronous and active low, matching the CPU. Reset assertion is
+therefore visible at the instant it occurs rather than at the next clock edge;
+release takes effect on the following rising edge.

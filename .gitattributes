@@ -1,0 +1,17 @@
+# Normalize line endings: store everything as LF in the repo.
+* text=auto
+
+# Files that run under bash/WSL must stay LF in the working tree too,
+# otherwise a CRLF checkout on Windows breaks them ($'\r': command not found).
+*.sh   text eol=lf
+
+# Keep the sources/tooling as plain text (LF in the repo).
+*.v    text
+*.sv   text
+*.do   text
+*.py   text
+*.md   text
+*.hex  text
+
+# Never let git touch the Siemens spec PDFs.
+*.pdf  binary

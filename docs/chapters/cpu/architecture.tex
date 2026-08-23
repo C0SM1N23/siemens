@@ -1,0 +1,201 @@
+\chapter{CPU architecture}
+\label{ch:cpuarch}
+
+\section{Execution model}
+
+The core executes RV32I in three stages. The stage split is the one the brief
+fixed, but the placement of work inside it is a design decision with a
+consequence that runs through the whole implementation:
+
+\begin{table}[H]
+\centering
+\caption{Pipeline stages and the work done in each}
+\label{tab:stages}
+\begin{tabular}{@{}clL{0.56\linewidth}@{}}
+\toprule
+\textbf{Stage} & \textbf{Name} & \textbf{Work} \\
+\midrule
+S1 & Fetch & PC generation, \sig{ibus} AXI read, branch prediction lookup. \\
+S2 & Decode + Execute & Decode, register read, ALU, branch resolution, CSR access,
+     the entire load/store transaction, and every trap and interrupt decision. \\
+S3 & Writeback & Register file write. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Putting decode, execute and the memory access in one stage means an instruction
+either completes entirely or not at all. That is what makes the traps precise
+without any recovery mechanism: there is never a half-finished instruction for a
+trap to repair. The cost is a long combinational path (decode $\to$ ALU $\to$
+address $\to$ alignment check), which would limit clock frequency on real
+silicon. For the behavioural simulation target of this project that cost is not
+paid, so the trade was taken deliberately.
+
+\begin{figure}[H]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[x=1mm,y=1mm,font=\small]
+  % --- stage bands -------------------------------------------------------
+  \begin{scope}[on background layer]
+    \fill[boxbg]     (-16,-64) rectangle (22,12);
+    \fill[boxbg!55]  (26,-64)  rectangle (128,12);
+    \fill[boxbg]     (132,-64) rectangle (168,12);
+  \end{scope}
+  \node[font=\small\bfseries,color=accent] at (3,7)   {S1 fetch};
+  \node[font=\small\bfseries,color=accent] at (77,7)  {S2 decode + execute};
+  \node[font=\small\bfseries,color=accent] at (150,7) {S3 writeback};
+
+  % --- S1 ----------------------------------------------------------------
+  \node[blk,minimum width=32,minimum height=12] (fu) at (3,-6)
+        {fetch\_unit\\\scriptsize PC + ibus master};
+  \node[blk,minimum width=32,minimum height=12] (bp) at (3,-30)
+        {branch\_predictor\\\scriptsize BTB/BHT + RAS};
+
+  % --- pipeline registers ------------------------------------------------
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=68,inner sep=0] (ifdx) at (24,-28) {};
+  \node[rotate=90,font=\tiny] at (24,-28) {IF/DX};
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=68,inner sep=0] (dxwb) at (130,-28) {};
+  \node[rotate=90,font=\tiny] at (130,-28) {DX/WB};
+
+  % --- S2 datapath, left to right ----------------------------------------
+  \node[blk,minimum width=24,minimum height=12] (dec) at (42,-6)
+        {decode\\\scriptsize imm\_gen};
+  \node[blk,minimum width=24,minimum height=9]  (ctl) at (42,-24) {control};
+  \node[blk,minimum width=24,minimum height=12] (rf)  at (76,-6)
+        {regfile\\\scriptsize 32$\times$32};
+  \node[blk,minimum width=24,minimum height=9]  (fwd) at (76,-24) {forward mux};
+
+  \node[blk,minimum width=26,minimum height=10] (alu) at (112,-6)  {alu\_top / alu};
+  \node[blk,minimum width=26,minimum height=10] (bu)  at (112,-22) {branch\_unit};
+  \node[blk,minimum width=26,minimum height=11] (lsu) at (112,-40)
+        {lsu\\\scriptsize dbus master};
+  \node[blk,minimum width=26,minimum height=11] (csr) at (112,-56)
+        {csr\_file\\\scriptsize + traps};
+
+  % --- control blocks, clear of the operand rail at x = 94 ---------------
+  \node[blkf,minimum width=28,minimum height=9] (hz)  at (42,-46) {hazard\_unit};
+  \node[blkf,minimum width=30,minimum height=9] (exc) at (76,-46) {exception\_unit};
+
+  % --- S3 ----------------------------------------------------------------
+  \node[blk,minimum width=30,minimum height=10] (wb) at (150,-22) {writeback\_mux};
+
+  % --- S1 into IF/DX, IF/DX into S2 --------------------------------------
+  \draw[flow] (fu.east) -- (ifdx.west|-fu);
+  \draw[flow] (ifdx.east|-dec) -- (dec.west);
+  \draw[flow] (ifdx.east|-ctl) -- (ctl.west);
+
+  % --- decode -> regfile -> forwarding mux -------------------------------
+  \draw[flow] (dec.east) -- (rf.west);
+  \draw[flow] (rf.south) -- (fwd.north);
+
+  % --- operand distribution rail -----------------------------------------
+  \draw[flow,-] (fwd.east) -- (94,-24);
+  \draw[thick,draw=accent] (94,-6) -- (94,-56);
+  \foreach \y in {-6,-22,-40,-56} \draw[flow] (94,\y) -- (99,\y);
+
+  % --- S2 results into DX/WB, one arrow out to S3 ------------------------
+  \draw[flow] (alu.east) -- (dxwb.west|-alu);
+  \draw[flow] (bu.east)  -- (dxwb.west|-bu);
+  \draw[flow] (lsu.east) -- (dxwb.west|-lsu);
+  \draw[flow] (csr.east) -- (dxwb.west|-csr);
+  \draw[flow] (dxwb.east|-wb) -- (wb.west);
+
+  % --- predictor: lookup up into S1, update back along the bottom --------
+  \draw[flow] (bp.north) -- (fu.south) node[lbl,midway,right=1mm]{predict};
+  \draw[flow] (126,-22) -- (126,-64) -- (3,-64) -- (bp.south)
+        node[lbl,pos=0.55,above]{update at commit};
+
+  % --- redirect: leaves branch_unit downward, climbs in the gap between the
+  %     operand rail and the alu column, then runs above every block --------
+  \draw[flowd] (bu.north) -- (112,-14) -- (96,-14) -- (96,4) -- (3,4) -- (fu.north)
+        node[lbl,pos=0.62,above]{redirect};
+
+  % --- writeback value back into the forwarding mux ----------------------
+  \draw[flow] (wb.south) -- (150,-31) -- (61,-31) -- (61,-24) -- (fwd.west);
+  \node[lbl,below=0.5mm] at (78,-31) {S3$\to$S2 forwarding};
+\end{tikzpicture}}
+
+\caption{CPU block structure. Each box is a module in \file{hdl/}.}
+\label{fig:cpu}
+\end{figure}
+
+\section{Top-level interface}
+
+\begin{table}[H]
+\centering
+\caption{\file{cpu\_top} parameters}
+\label{tab:cpuparams}
+\begin{tabular}{@{}lllL{0.42\linewidth}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Use} & \textbf{Effect} \\
+\midrule
+\sig{RESET\_PC}   & \texttt{0x0000\_0000} & Reset vector & First address fetched out of reset. \\
+\sig{HART\_ID}    & \texttt{0}            & \reg{mhartid} & Gives each instance its identity in a multi-core system. \\
+\sig{BP\_ENTRIES} & \texttt{128}          & Predictor & BTB/BHT depth; must be a power of two. \\
+\sig{RAS\_DEPTH}  & \texttt{8}            & Predictor & Return-address stack depth; \texttt{0} removes the RAS entirely. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The port list is one clock, one reset, the two AXI4-Lite master ports, and the
+five interrupt signals of Table~\ref{tab:cpupic}. It has not changed since the
+first pipeline version; \sig{WFI}, the return-address stack and the performance
+counters were all added without touching it. That was a deliberate constraint,
+since the CPU is one block among several in a system being built in parallel.
+
+\section{Datapath modules}
+
+\begin{table}[H]
+\centering
+\caption{Combinational datapath modules}
+\label{tab:datapath}
+\begin{tabular}{@{}lL{0.66\linewidth}@{}}
+\toprule
+\textbf{Module} & \textbf{Function as implemented} \\
+\midrule
+\file{decode.v}  & Slices the fixed RV32I fields out of the instruction word: opcode, \sig{rd},
+                   \sig{rs1}, \sig{rs2}, \sig{funct3}, \sig{funct7}. Pure wiring. \\
+\file{imm\_gen.v} & Rebuilds the immediate for the five encoding formats from the same bits. \\
+\file{control.v} & Turns the opcode into the S2 control lines, and flags any encoding it does
+                   not recognise. An unknown opcode leaves every line at its inactive default;
+                   a \emph{known} opcode with a bad \sig{funct} field keeps the lines its opcode
+                   implies and only adds \sig{illegal}. Either way the instruction has no side
+                   effect, but by two later gates rather than by the decoder: the LSU request is
+                   ANDed with \sig{!illegal}, so no transaction is issued, and the trap squashes
+                   the instruction on its way into DX/WB, so no register is written. Both are
+                   checked in \file{tb\_traps}. \\
+\file{alu\_top.v} & Selects the operands (register or immediate, PC for \sig{AUIPC}) and derives
+                   the ALU operation from \sig{funct3}/\sig{funct7}. \\
+\file{alu.v}     & The arithmetic and logic itself. \\
+\file{branch\_unit.v} & Computes the \emph{real} direction and target of every control transfer.
+                   This is the value the prediction is checked against and the value that trains
+                   the predictor. Masks bit~0 of the target for \sig{JALR}, as the ISA requires. \\
+\file{regfile.v} & $32\times32$, \sig{x0} hardwired to zero, two combinational read ports for S2,
+                   one write port from S3, all registers reset to zero. \\
+\file{writeback\_mux.v} & Selects what enters \sig{rd}: ALU result, load data, PC+4 for the
+                   \sig{JAL}/\sig{JALR} link, or the CSR read value. The write enable is gated by
+                   the DX/WB valid bit. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Instruction set coverage}
+
+RV32I is implemented in full. Two encodings are handled by explicit decision
+rather than by the base arithmetic:
+
+\begin{itemize}[nosep]
+  \item \sig{FENCE} decodes as a no-operation. The core is a single hart, in-order,
+        with blocking memory operations and no store buffer, so there is nothing
+        to order. Only \sig{funct3} = \texttt{000} is accepted; \sig{FENCE.I}
+        belongs to Zifencei, is not implemented, and decodes as illegal.
+  \item The \sig{SYSTEM} opcode decodes only exact encodings: \sig{ECALL},
+        \sig{EBREAK}, \sig{MRET}, \sig{WFI} (\sig{imm12} = \texttt{0x105}) and the
+        six CSR forms. \sig{funct3} = \texttt{100} is reserved and decodes as
+        illegal.
+\end{itemize}
+
+Multiply and divide are out of scope per the brief and are not implemented; the
+\sig{M} extension encodings decode as illegal instructions. \reg{misa} reports
+\texttt{0x4000\_0100}, that is MXL = 32-bit with extension \sig{I} only, which
+matches what is actually built.
