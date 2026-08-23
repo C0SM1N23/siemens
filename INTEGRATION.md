@@ -8,8 +8,16 @@ The three blocks were developed independently on the `RISCV`, `DMA` and
 was rebased, rewritten or force-pushed. The work happens on `master`, which
 now carries all three blocks plus the interconnect that joins them.
 
-Read this document as the answer to "what did you have to change in their
-code, and why?".
+Read this as the answer to "what did you have to change in their code, and
+why?". The short version is four source changes, two per block, none of them
+touching a block's algorithm.
+
+| # | Block | Change | Reason |
+|---|---|---|---|
+| [2.1](#21-active_master_ch-was-used-before-it-was-declared) | DMA | `active_master_ch` declaration moved above its use | the block did not compile |
+| [2.2](#22-int_status-and-int_enable-were-connected-to-nothing) | DMA | `irq` driven from `INT_STATUS & INT_ENABLE` | two registers software could write did nothing |
+| [3.1](#31-module-regfile-renamed-to-sram_regfile) | DP-SRAM | module `regfile` renamed `sram_regfile` | name collision with the CPU's register file |
+| [3.2](#32-compile-list-updated-for-the-rename) | DP-SRAM | its `compile.do` follows the rename | the block bench would not compile |
 
 ---
 
@@ -20,17 +28,25 @@ without path collisions, two of the blocks were relocated on temporary staging
 branches (`dma-stage`, `sram-stage`) cut from the branch tips, and those
 staging branches were merged. The original branches were never modified.
 
+Every block now has the same shape — `hdl/` for the design, `debug/` for its
+verification — so nothing about the tree depends on which block you happen to
+be looking at.
+
 | Path | Origin | Contents |
 |---|---|---|
-| `hdl/`, `debug/` | `RISCV` | CPU, PIC, machine timer + their verification |
+| `cpu/` | `RISCV` | CPU, PIC, machine timer + their verification and docs |
 | `dma/` | `DMA` | multi-channel DMA engine + its verification |
 | `sram/` | `SDRAM` | dual-port SRAM + its verification |
 | `soc/` | new | interconnect, SoC top level, system verification |
+| `docs/` | `RISCV` | engineering documentation (LaTeX) |
 
-The CPU stayed at the repository root because its build system (`Makefile`,
-CI workflow, `debug/sim/rtl.f`, `compile.do`, the `tb_*.f` filelists) refers to
-roughly fifty paths that would otherwise all have to be rewritten. Moving the
-other two blocks was the smaller and lower-risk change.
+The CPU's build system refers to roughly fifty paths, but all of them are
+relative *within* the block (`../../hdl/alu.v` from `debug/sim/`), so moving
+`hdl/` and `debug/` together under `cpu/` left every one of them correct. The
+same held for the links inside `README.md` and `ARCHITECTURE.md`, which is why
+both moved into `cpu/` rather than being rewritten. Only four things outside
+the block needed updating: the `Makefile`, the SoC filelist, the SoC bench
+include path, and the root `README.md`, which is now the SoC landing page.
 
 ### Collisions the relocation resolved
 
@@ -49,13 +65,21 @@ regression's test program, so they were restored explicitly.
 
 The `DMA` and `SDRAM` branches had simulator output committed: ModelSim `work/`
 libraries, `vsim.wlf`, `transcript`, `modelsim.ini`, `.vcd` dumps and a `.bak`
-file. These are build artifacts, regenerated on every run, and they are already
-covered by `.gitignore`. They were dropped during the relocation.
+file. These are build artifacts, regenerated on every run, and are already
+covered by `.gitignore`.
 
 The `SDRAM` branch also carried a full copy of its sources in the repository
 root alongside the copy under `Siemens/`. The two had drifted apart — the last
 upload updated only the `Siemens/` copy — so the root copies were stale. Only
 `Siemens/` was kept, as `sram/`.
+
+One file existed only in that stale root copy: `tb_regfile.v`, a bench for the
+register bank. It was not carried over, and it was already dead before this
+integration: it instantiates the module with the old unsuffixed port names
+(`clk`, `a_reg_valid`, `irq`), which the block renamed to `clk_i`,
+`a_reg_valid_i`, `irq_o` in a later upload. It could no longer compile against
+its own DUT on its own branch. Rewriting it is listed under
+[open points](#7-open-points).
 
 ---
 
@@ -72,8 +96,7 @@ upload updated only the `Siemens/` copy — so the root copies were stale. Only
 ```
 
 **Cause.** `mc_dma_top` read `active_master_ch` in four continuous assignments
-at line 103, but declared the register at line 117, fourteen lines further
-down:
+at line 103, but declared the register fourteen lines further down:
 
 ```verilog
     wire fetch_data_valid_ch0 = fetch_data_valid && active_master_ch[0];   // line 103
@@ -86,11 +109,59 @@ is not an implicit net either, because it is later declared as a `reg`, which
 is what produces the second, contradictory-looking error.
 
 **Fix.** The declaration and the `always` block that drives it were moved above
-the assignments that read them. No logic changed — the same register, the same
-reset value, the same update condition.
+the assignments that read them. No logic changed — same register, same reset
+value, same update condition.
 
-This bug was present on the branch tip as fetched, not introduced by the
-integration.
+This was present on the branch tip as fetched, not introduced by the
+integration. It was still present after the branch was updated mid-work, so it
+was re-checked against the newer tip and fixed there.
+
+### 2.2 `INT_STATUS` and `INT_ENABLE` were connected to nothing
+
+**Symptom.** Elaborating the SoC reported:
+
+```
+** Warning: (vsim-2685) Too few port connections for 'slave_inst'. Expected 39, found 37.
+** Warning: (vsim-3722) Missing connection for port 'int_enable'.
+** Warning: (vsim-3722) Missing connection for port 'int_status'.
+```
+
+**Cause.** The DMA's register file implements both registers properly —
+`INT_STATUS` is sticky, set by the per-channel lines, write-1-to-clear;
+`INT_ENABLE` is a plain read/write mask. But `mc_dma_top` left both outputs
+unconnected and drove the top-level interrupt straight from the raw
+per-channel lines:
+
+```verilog
+    assign irq = hw_irq;
+```
+
+So two registers that software can write and read back did nothing at all.
+Masking an interrupt had no effect, and writing 1 to `INT_STATUS` did not
+release the request — the only way to deassert the line was to disable the
+channel itself.
+
+**Fix.** The outputs are connected and the interrupt is taken from them:
+
+```verilog
+    assign irq = int_status_w[3:0] & int_enable_w[3:0];
+```
+
+This makes the documented register map real and gives the handler the usual
+sequence: read `INT_STATUS` to find the channel, clear that channel's
+`CONTROL.enable` so the raw line drops, then write 1 to the `INT_STATUS` bit to
+release the request. The SoC's own test handler
+([program_soc.s](soc/debug/sim/program_soc.s)) does exactly that.
+
+**Consequence for the DMA's own bench.** `tb_mc_dma_top` checked `irq[0]`
+after a transfer without ever unmasking it, which used to work because the mask
+was ignored. One line was added to its setup:
+
+```verilog
+    axil_write({24'h0, ADDR_INT_ENABLE}, 32'h0000_000F);
+```
+
+The bench passes unchanged otherwise, and the elaboration warnings are gone.
 
 ---
 
@@ -100,12 +171,12 @@ integration.
 
 **Cause.** Both blocks define a module called `regfile`:
 
-- `hdl/regfile.v` — the CPU's 32 general-purpose registers
+- `cpu/hdl/regfile.v` — the CPU's 32 general-purpose registers
 - `sram/hdl/regfile.v` — the DP-SRAM's control/status register bank
 
 On their own branches that was fine. In the SoC they compile into the same
-library, where the second definition silently overrides the first and the
-elaborated design gets the wrong module.
+library, where the second definition overrides the first and the elaborated
+design silently gets the wrong module.
 
 **Fix.** The DP-SRAM's bank was renamed:
 
@@ -121,31 +192,214 @@ their parent module and cannot collide.
 
 The CPU's `regfile` was not renamed. It is referenced by the CPU's own
 testbenches, assertions and documentation, so renaming it would have touched
-far more code for no additional benefit.
+far more code for the same result.
 
-### 3.2 Port naming (no change needed)
+### 3.2 Compile list updated for the rename
 
-The `SDRAM` branch had already renamed its ports to the `_i`/`_o` convention
-the CPU uses (`clk_i`, `rst_n_i`, `a_awaddr_i`, ...) before this integration.
-Nothing had to be adapted.
+`sram/debug/sim/compile.do` still named `regfile.v`. One line changed:
 
-The DMA block still uses unsuffixed `clk` / `rst_n` and `s_axi_*` / `m_axi_*`
-port names. These were deliberately **not** renamed: rewriting a block's port
-list is a change to that block's interface, and it would invalidate its own
-testbenches. The SoC top level connects to the names as they are.
+```
+vlog -work work ../../hdl/sram_regfile.v
+```
+
+The block's own bench then runs unchanged: **67 checks, 67 pass**.
 
 ---
 
-## 4. Verification baseline
+## 4. What was deliberately *not* changed
 
-Before any of the above, the CPU's existing regression was run to establish
-that the merge broke nothing:
+**Port naming.** The DMA still uses unsuffixed `clk` / `rst_n` and
+`s_axi_*` / `m_axi_*`. The CPU and the DP-SRAM use the `_i`/`_o` convention.
+Rewriting a block's port list is a change to its interface: it would invalidate
+that block's own testbenches for no functional gain. The SoC top level connects
+to the names as they are, and says so where it does.
+
+(The `SDRAM` branch had already converted itself to `_i`/`_o` before this
+integration, so no adaptation was needed there either.)
+
+**The blocks' algorithms.** No change was made to the DMA's channel state
+machine, arbitration or scatter-gather logic, nor to the SRAM's collision
+detection, bandwidth counters or slave FSM. Everything above is a connection
+or a name.
+
+---
+
+## 5. New RTL written for the integration
+
+None of this replaces anything in the three blocks; it is the fabric between
+them. It lives in [soc/hdl/](soc/hdl/).
+
+### `axi_full2lite.v` — the reason an interconnect was not enough
+
+The DMA is an AXI4-Full master: it issues INCR bursts of eight 32-bit beats
+and expects `WLAST`/`RLAST` and one write response per burst. Every slave in
+the system is AXI4-Lite, which has no bursts at all. Without a bridge the two
+simply cannot be wired together.
+
+The bridge splits each burst into one AXI4-Lite transaction per beat and
+reassembles what the DMA expects. Two decisions in it are worth stating:
+
+- **The write response is sticky.** AXI4 gives a burst exactly one write
+  response, so the burst's response is the worst response any beat received.
+  Losing an error inside a burst would let a failed transfer look clean.
+- **Unsupported requests are refused, not approximated.** It handles INCR and
+  FIXED bursts of 32-bit beats. A WRAP burst or a narrow transfer is answered
+  `SLVERR` with nothing issued on the bus, rather than being translated into
+  the wrong addresses.
+
+### `axi_lite_dec.v` — 1 master to N slaves, with `DECERR`
+
+Generalises `cpu/debug/hdl/axi_lite_dec2.v`, which the CPU block had written as
+a testbench stand-in for exactly this. Anything outside every window is
+answered `DECERR` instead of being left to hang the master.
+
+**One real bug was found here, and it is worth recording.** The original
+routing rule — inherited from `axi_lite_dec2` — selects the slave from the live
+address whenever `xVALID` is high, for the response path as well as the address
+path. On the CPU's data bus that is harmless. On its *instruction* bus it is a
+combinational loop: the fetch unit issues the `AR` for fetch N+1 in the same
+cycle the `R` beat of fetch N lands, so `RVALID` came to depend on `ARVALID`,
+which already depended on the `R` beat. ModelSim stopped with
+
+```
+** Error (suppressible): (vsim-3601) Iteration limit 5000 reached at time 125 ns.
+```
+
+The fix is to route the *response* phase by the select latched at the address
+handshake, and only the address phase by the live address. That is correct on
+its own terms — a response can only follow its own address handshake — and it
+breaks the loop. The reasoning is written into the module header so the next
+person does not reintroduce it.
+
+### `axi_lite_arb.v` — M masters to 1 slave
+
+Round-robin, one transaction per grant, released on the response beat. Used
+only in front of the data memory, which is single-ported. The dual-port SRAM
+deliberately has no arbiter: each master gets its own physical port.
+
+### `axi_lite_ram.v` — the instruction and data memories
+
+A synthesizable AXI4-Lite RAM with byte enables and a `$readmemh` image, so the
+SoC is a complete design rather than something that only elaborates with a
+behavioural model attached. The array is zeroed before the image loads: an `X`
+returned on `RDATA` propagates into the register file, from there into an
+address, and surfaces hundreds of cycles later somewhere unrelated.
+
+### `soc_top.v` and `soc_addr_map.vh`
+
+The top level and the address map. Three properties of the map are design
+decisions rather than defaults, and they are argued in the header of
+[soc_addr_map.vh](soc/hdl/soc_addr_map.vh):
+
+- **Each window's mask is exactly its size**, so an access inside a window but
+  past the end of the block behind it cannot alias back onto that block — it
+  misses every window and gets `DECERR`. This matters most for the SRAM, whose
+  1 KB is far smaller than its address granularity suggests.
+- **Reachability is not uniform.** The instruction bus reaches only IMEM; the
+  data bus reaches everything except IMEM; the DMA reaches only DMEM and the
+  SRAM. So there is no self-modifying-code path, and a runaway descriptor
+  cannot reprogram the interrupt controller.
+- **The SRAM is reached at the same address from both sides**, the CPU on port
+  A and the DMA on port B. That is what a dual-port memory is for, and it is
+  also what keeps the block's collision detector reachable in the assembled
+  system instead of being dead logic behind an arbiter.
+
+### Address map
+
+| Window | Base | Size | Reached by |
+|---|---|---|---|
+| IMEM | `0x0000_0000` | 8 KB | CPU instruction bus |
+| DMEM | `0x0000_2000` | 8 KB | CPU data bus, DMA (arbitrated) |
+| DP-SRAM | `0x1000_0000` | 1 KB | CPU data bus (port A), DMA (port B) |
+| PIC | `0x3000_0000` | 64 KB | CPU data bus |
+| machine timer | `0x3001_0000` | 64 KB | CPU data bus |
+| DMA registers | `0x3002_0000` | 64 KB | CPU data bus |
+
+### Interrupt map
+
+| PIC source | Device |
+|---|---|
+| 0..3 | DMA channels 0..3 (done or error) |
+| 4 | DP-SRAM collision / cooldown |
+| 5, 6 | unused, tied low |
+| 7 | machine timer |
+| 8..15 | unused, tied low |
+
+Channel 7 for the timer follows the convention the CPU block's own system
+bench already used, so nothing there had to be renumbered.
+
+---
+
+## 6. Verification
+
+### Baseline, before anything was changed
+
+The CPU's existing regression was run first, so that "the merge broke nothing"
+is a measured claim rather than an assumption:
 
 ```
 14/14 runs PASSED, 0 FAIL lines, 0 compile errors
 ```
 
-After the two source fixes, all three blocks compile into a single ModelSim
-library with **0 errors and 0 warnings**.
+It was run again after the block was relocated into `cpu/`: **still 14/14**.
 
-<!-- SECTIONS BELOW ARE APPENDED AS THE INTERCONNECT WORK PROCEEDS -->
+### After integration
+
+| Regression | Result |
+|---|---|
+| CPU, 14 runs (`make modelsim`) | all pass |
+| SoC, 2 runs (`make soc`) | all pass |
+| DMA block bench (`tb_mc_dma_top`) | passes |
+| DP-SRAM block bench (`tb_dp_sram_top`) | 67/67 checks pass |
+
+All three blocks compile into a single ModelSim library with **0 errors and
+0 warnings**.
+
+### What the SoC regression proves
+
+**`tb_full2lite`** drives the bridge directly against a real RAM: 8-beat
+bursts (the DMA's actual traffic), single-beat bursts, odd lengths with partial
+byte strobes, FIXED bursts, `RLAST` placement, the unsupported WRAP and narrow
+cases, and recovery to a clean burst afterwards.
+
+**`tb_soc_top`** runs real software on the real CPU. The bench supplies only a
+clock, a reset and a program image; the checking is done by the program, which
+builds a descriptor in data memory, programs DMA channel 0, sleeps on `WFI`, is
+woken by the DMA's completion interrupt through the PIC, and compares what the
+DMA moved against what it was asked to move. One run covers:
+
+- the CPU data bus decoded to four different slaves
+- the DMA fetching its descriptor and source data from DMEM, arbitrated
+  against the CPU's own data bus
+- 64 bytes, so the channel loops over two 32-byte chunks rather than finishing
+  on its first pass
+- eight-beat AXI4-Full bursts crossing the bridge in both directions
+- the SRAM written by the DMA on port B and read back by the CPU on port A
+- DMA completion to PIC source 0 to CPU interrupt to handler to `MRET`,
+  including the `WFI` wake and the release of the interrupt line
+
+The bench also reads the SRAM array directly, not only through the CPU, so a
+symmetric addressing error on both the write and the read path could not hide.
+
+---
+
+## 7. Open points
+
+Things a following iteration should pick up. None of them block the SoC as it
+stands.
+
+- **A collision-scenario system test.** The dual-port SRAM's collision
+  detection is verified in its own bench and is reachable in the SoC by
+  construction, but no system-level run yet has the CPU and the DMA hitting
+  the same word deliberately to exercise the collision interrupt through the
+  PIC.
+- **`tb_regfile.v` for the SRAM register bank.** Dead since the block renamed
+  its ports; the register bank is currently covered only indirectly, through
+  `tb_dp_sram_top`.
+- **The DMA's multi-channel paths in the SoC.** The system test drives channel
+  0. The other three channels and the round-robin scheduling policy are
+  covered by the DMA's own bench, not yet at system level.
+- **`make test` (Verilator) does not build the SoC.** The CPU block's CI flow
+  is Verilator-based; the SoC regression is ModelSim-only so far, because that
+  is what is installed locally. The SoC RTL has not been lint-checked against
+  Verilator.
