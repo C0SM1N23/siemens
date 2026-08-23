@@ -18,24 +18,24 @@
 // ---------------------------------------------------------------------------
 
 // --- include paths ----------------------------------------------------------
-+incdir+../../../hdl        // defines.vh, shared CPU encodings
++incdir+../../../cpu/hdl        // defines.vh, shared CPU encodings
 +incdir+../../hdl           // soc_addr_map.vh
 
 // --- L0: CPU leaves ---------------------------------------------------------
-../../../hdl/alu.v
-../../../hdl/axi_lite_slave.v
-../../../hdl/branch_predictor.v
-../../../hdl/branch_unit.v
-../../../hdl/control.v
-../../../hdl/csr_file.v
-../../../hdl/decode.v
-../../../hdl/exception_unit.v
-../../../hdl/fetch_unit.v
-../../../hdl/hazard_unit.v
-../../../hdl/imm_gen.v
-../../../hdl/lsu.v
-../../../hdl/regfile.v
-../../../hdl/writeback_mux.v
+../../../cpu/hdl/alu.v
+../../../cpu/hdl/axi_lite_slave.v
+../../../cpu/hdl/branch_predictor.v
+../../../cpu/hdl/branch_unit.v
+../../../cpu/hdl/control.v
+../../../cpu/hdl/csr_file.v
+../../../cpu/hdl/decode.v
+../../../cpu/hdl/exception_unit.v
+../../../cpu/hdl/fetch_unit.v
+../../../cpu/hdl/hazard_unit.v
+../../../cpu/hdl/imm_gen.v
+../../../cpu/hdl/lsu.v
+../../../cpu/hdl/regfile.v
+../../../cpu/hdl/writeback_mux.v
 
 // --- L0: DMA leaves ---------------------------------------------------------
 ../../../dma/hdl/axi4_lite_slave.v
@@ -56,13 +56,13 @@
 ../../hdl/axi_lite_ram.v      // AXI4-Lite RAM slave (IMEM / DMEM)
 
 // --- L1: depend on L0 only --------------------------------------------------
-../../../hdl/alu_top.v        // -> alu
-../../../hdl/mtimer.v         // -> axi_lite_slave
-../../../hdl/pic.v            // -> axi_lite_slave
+../../../cpu/hdl/alu_top.v        // -> alu
+../../../cpu/hdl/mtimer.v         // -> axi_lite_slave
+../../../cpu/hdl/pic.v            // -> axi_lite_slave
 ../../../sram/hdl/dp_sram_top.v   // -> slave_fsm, collision_det, mem_array, sram_regfile
 
 // --- L2: block tops ---------------------------------------------------------
-../../../hdl/cpu_top.v
+../../../cpu/hdl/cpu_top.v
 ../../../dma/hdl/mc_dma_top.v
 
 // --- L3: the SoC ------------------------------------------------------------

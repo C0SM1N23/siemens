@@ -1,4 +1,4 @@
-# RV32I CPU — build/test entry points. The actual flows live in debug/sim;
+# RV32I CPU — build/test entry points. The actual flows live in cpu/debug/sim;
 # this just wires them up for one-command runs and for CI.
 #
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
@@ -6,7 +6,7 @@
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
 
-SIM := debug/sim
+SIM := cpu/debug/sim
 PY  ?= python3
 
 .PHONY: all test verilator modelsim asm clean
