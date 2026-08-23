@@ -2,19 +2,27 @@
 // responder for addresses that fall outside every window.
 //
 // This is the N-slave generalisation of debug/hdl/axi_lite_dec2.v, which was
-// written as a testbench stand-in for exactly this block and has been through
-// the CPU regression. The routing rule is the same one, and it is the part
-// worth reading twice:
+// written as a testbench stand-in for exactly this block.
 //
-//   while the address is on the wire (xVALID high) the select comes from the
-//   address; after the handshake it is held in a register until the response
-//   completes.
+// ROUTING, AND WHY THE TWO PHASES DIFFER
+// The address phase (AW/AR/W) is routed by the live address while xVALID is
+// high, so that a W presented alongside its AW follows the right slave.
 //
-// That covers both orders a master can produce: W presented before AW (route
-// the W by the live AW address) and a response arriving after the address has
-// already dropped (route by the latched select). It is sound for one
-// outstanding transaction per direction, which is what every master in this
-// SoC does. Read and write paths decode independently, as AXI keeps them.
+// The response phase (B/R) is routed by the select LATCHED at the address
+// handshake, never by the live address. That distinction is not cosmetic. A
+// master may issue the next address in the same cycle the previous response
+// comes back - the CPU's instruction fetch does exactly that, issuing AR for
+// fetch N+1 on the cycle the R beat of fetch N lands. If the response mux
+// looked at the live address, RVALID would depend combinationally on ARVALID,
+// and since the fetch unit's ARVALID depends on the R beat it just took, the
+// two close a combinational loop through the decoder. Routing the response by
+// the latched select breaks it, and is correct on its own terms: a response
+// can only follow its own address handshake, so the latch is always the right
+// answer by the time the response can appear.
+//
+// Sound for one outstanding transaction per direction, which is what every
+// master in this SoC does. Read and write paths decode independently, as AXI
+// keeps them.
 //
 // The address compares are qualified with xVALID on purpose. A master's
 // address bus is undefined between transactions - the payload registers carry
@@ -137,11 +145,10 @@ always @(posedge clk_i or negedge rst_n_i) begin
     end
 end
 
-// live address while valid, latched select afterwards
+// W has no address of its own, so it follows the live AW while one is on the
+// wire and the latch afterwards. B and R use the latch only - see the header.
 wire [N-1:0] wr_sel = m_awvalid_i ? aw_hit  : wr_sel_q;
 wire         wr_err = m_awvalid_i ? aw_none : wr_err_q;
-wire [N-1:0] rd_sel = m_arvalid_i ? ar_hit  : rd_sel_q;
-wire         rd_err = m_arvalid_i ? ar_none : rd_err_q;
 
 // ---------------------------------------------------------------------------
 // DECERR responder for unmapped addresses
@@ -196,14 +203,14 @@ integer k;
 always @(*) begin
     bresp_mux = 2'b00;
     for (k = 0; k < N; k = k + 1)
-        if (wr_sel[k]) bresp_mux = s_bresp_i[k*2 +: 2];
+        if (wr_sel_q[k]) bresp_mux = s_bresp_i[k*2 +: 2];
 end
 
 always @(*) begin
     rresp_mux = 2'b00;
     rdata_mux = 32'h0;
     for (k = 0; k < N; k = k + 1)
-        if (rd_sel[k]) begin
+        if (rd_sel_q[k]) begin
             rresp_mux = s_rresp_i[k*2  +: 2];
             rdata_mux = s_rdata_i[k*32 +: 32];
         end
@@ -212,15 +219,15 @@ end
 // ---------------------------------------------------------------------------
 // master-side outputs
 // ---------------------------------------------------------------------------
-assign m_awready_o = aw_none ? err_awready : |(aw_hit & s_awready_i);
-assign m_wready_o  = wr_err  ? err_wready  : |(wr_sel & s_wready_i);
-assign m_bvalid_o  = wr_err  ? err_bvalid  : |(wr_sel & s_bvalid_i);
-assign m_bresp_o   = wr_err  ? RESP_DECERR : bresp_mux;
+assign m_awready_o = aw_none  ? err_awready : |(aw_hit & s_awready_i);
+assign m_wready_o  = wr_err   ? err_wready  : |(wr_sel & s_wready_i);
+assign m_bvalid_o  = wr_err_q ? err_bvalid  : |(wr_sel_q & s_bvalid_i);
+assign m_bresp_o   = wr_err_q ? RESP_DECERR : bresp_mux;
 
-assign m_arready_o = ar_none ? err_arready : |(ar_hit & s_arready_i);
-assign m_rvalid_o  = rd_err  ? err_rvalid  : |(rd_sel & s_rvalid_i);
-assign m_rresp_o   = rd_err  ? RESP_DECERR : rresp_mux;
-assign m_rdata_o   = rd_err  ? 32'h0       : rdata_mux;
+assign m_arready_o = ar_none  ? err_arready : |(ar_hit & s_arready_i);
+assign m_rvalid_o  = rd_err_q ? err_rvalid  : |(rd_sel_q & s_rvalid_i);
+assign m_rresp_o   = rd_err_q ? RESP_DECERR : rresp_mux;
+assign m_rdata_o   = rd_err_q ? 32'h0       : rdata_mux;
 
 // ---------------------------------------------------------------------------
 // slave-side outputs: payload broadcast, VALID/READY qualified by the select
@@ -235,13 +242,13 @@ generate
         assign s_wstrb_o  [i*4  +: 4]  = m_wstrb_i;
         assign s_wvalid_o [i]          = m_wvalid_i & wr_sel[i];
 
-        assign s_bready_o [i]          = m_bready_i & wr_sel[i];
+        assign s_bready_o [i]          = m_bready_i & wr_sel_q[i];
 
         assign s_araddr_o [i*32 +: 32] = m_araddr_i;
         assign s_arprot_o [i*3  +: 3]  = m_arprot_i;
         assign s_arvalid_o[i]          = m_arvalid_i & ar_hit[i];
 
-        assign s_rready_o [i]          = m_rready_i & rd_sel[i];
+        assign s_rready_o [i]          = m_rready_i & rd_sel_q[i];
     end
 endgenerate
 
