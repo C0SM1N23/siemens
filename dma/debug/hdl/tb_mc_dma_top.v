@@ -451,6 +451,10 @@ module tb_mc_dma_top;
         rst_n = 1;
         repeat (5) @(posedge clk);
 
+        // irq is now INT_STATUS masked by INT_ENABLE (see mc_dma_top), so the
+        // channels' interrupts have to be unmasked before they can be seen.
+        axil_write({24'h0, ADDR_INT_ENABLE}, 32'h0000_000F);
+
         scenario1_single_channel;
         scenario2_round_robin;
 
