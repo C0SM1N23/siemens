@@ -27,6 +27,10 @@ verification.
 to make them work together, and why each one was needed. Start there if the
 question is "what did you have to touch in their code".
 
+[VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) is an independent review of
+the result: mutation testing, coverage measurement, and — the part worth
+reading — the list of what no test covers.
+
 Each block keeps its own documentation: [cpu/README.md](cpu/README.md) and
 [cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md) for the core.
 
