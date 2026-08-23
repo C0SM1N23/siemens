@@ -4,6 +4,7 @@
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
 #   make modelsim   full 14-run ModelSim CPU regression (needs vsim; local)
 #   make soc        SoC regression: bridge + system + stress runs (needs vsim)
+#   make soc-sva    SoC lint + SVA assertion run on Verilator
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
 
@@ -11,7 +12,7 @@ SIM    := cpu/debug/sim
 SOCSIM := soc/debug/sim
 PY     ?= python3
 
-.PHONY: all test verilator modelsim soc asm clean
+.PHONY: all test verilator modelsim soc soc-sva asm clean
 
 all: test
 
@@ -51,8 +52,15 @@ modelsim: asm
 soc: asm
 	cd $(SOCSIM) && vsim -c -do "do regress.do; quit -f"
 
+# Lint the whole SoC with -Wall, then run every SoC bench with the bound SVA
+# layer live. ModelSim ASE cannot compile assertions, so this is where the
+# fabric's protocol and routing properties are actually checked.
+soc-sva: asm
+	bash $(SOCSIM)/run_verilator.sh
+
 clean:
 	rm -rf $(SIM)/obj_dir $(SIM)/work $(SIM)/cov_annotated
 	rm -f  $(SIM)/coverage.dat $(SIM)/*.log $(SIM)/transcript $(SIM)/modelsim.ini
-	rm -rf $(SOCSIM)/work
+	rm -rf $(SOCSIM)/work $(SOCSIM)/obj_dir
 	rm -f  $(SOCSIM)/transcript $(SOCSIM)/modelsim.ini $(SOCSIM)/*.wlf
+	rm -f  $(SOCSIM)/build_*.log $(SOCSIM)/run_*.log

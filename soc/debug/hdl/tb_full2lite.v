@@ -144,7 +144,7 @@ task do_write;
         for (b = 0; b <= len; b = b + 1) begin
             f_wdata  = seed + b;
             f_wstrb  = strb;
-            f_wlast  = (b == len);
+            f_wlast  = (b == {24'd0, len});
             f_wvalid = 1'b1;
             @(posedge clk);
             while (!f_wready) @(posedge clk);
@@ -190,7 +190,7 @@ task do_read;
             last_rresp = f_rresp;
             if (f_rlast) begin
                 rlast_count = rlast_count + 1;
-                if (b == len) rlast_on_last = 1;
+                if (b == {24'd0, len}) rlast_on_last = 1;
             end
             @(negedge clk);
             f_rready = 1'b0;
@@ -218,12 +218,12 @@ initial begin
     // -- 1: the DMA's own traffic shape, 8-beat INCR write then read ---------
     $display("\n-- 1: 8-beat INCR write, then read back --");
     do_write(32'h0000_0040, 8'd7, SIZE_32, BURST_INCR, 32'hA000_0000, 4'hF);
-    check(RESP_OKAY, {30'd0, last_bresp}, "8-beat write burst answers OKAY");
+    check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "8-beat write burst answers OKAY");
 
     do_read(32'h0000_0040, 8'd7, SIZE_32, BURST_INCR);
     for (i = 0; i < 8; i = i + 1)
         check(32'hA000_0000 + i, rd_word[i], "8-beat read returns the written word");
-    check(RESP_OKAY, {30'd0, last_rresp}, "8-beat read answers OKAY");
+    check({30'd0, RESP_OKAY}, {30'd0, last_rresp}, "8-beat read answers OKAY");
     check(32'd1, rlast_count,   "exactly one RLAST in the burst");
     check(32'd1, rlast_on_last, "RLAST lands on the final beat");
 
@@ -235,7 +235,7 @@ initial begin
     // -- 2: single beat, where first and last beat coincide ------------------
     $display("\n-- 2: single-beat burst (LEN=0) --");
     do_write(32'h0000_0080, 8'd0, SIZE_32, BURST_INCR, 32'hB0000000, 4'hF);
-    check(RESP_OKAY, {30'd0, last_bresp}, "single-beat write answers OKAY");
+    check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "single-beat write answers OKAY");
     do_read(32'h0000_0080, 8'd0, SIZE_32, BURST_INCR);
     check(32'hB0000000, rd_word[0], "single-beat read returns the word");
     check(32'd1, rlast_count,   "single beat carries exactly one RLAST");
@@ -245,7 +245,7 @@ initial begin
     $display("\n-- 3: LEN=2 with a half-word strobe --");
     for (i = 0; i < 3; i = i + 1) ram.mem[48 + i] = 32'hFFFF_FFFF;
     do_write(32'h0000_00C0, 8'd2, SIZE_32, BURST_INCR, 32'h1234_5678, 4'h3);
-    check(RESP_OKAY, {30'd0, last_bresp}, "strobed write answers OKAY");
+    check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "strobed write answers OKAY");
     check(32'hFFFF_5678, ram.mem[48], "WSTRB kept the upper half untouched");
     check(32'hFFFF_5679, ram.mem[49], "second beat also honoured the strobe");
     check(32'hFFFF_567A, ram.mem[50], "third beat also honoured the strobe");
@@ -253,7 +253,7 @@ initial begin
     // -- 4: FIXED burst, every beat to the same address ----------------------
     $display("\n-- 4: FIXED burst --");
     do_write(32'h0000_0100, 8'd3, SIZE_32, BURST_FIXED, 32'hC000_0000, 4'hF);
-    check(RESP_OKAY, {30'd0, last_bresp}, "FIXED write answers OKAY");
+    check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "FIXED write answers OKAY");
     check(32'hC000_0003, ram.mem[64], "FIXED wrote every beat to one address");
     check(32'h0000_0000, ram.mem[65], "FIXED did not advance to the next word");
 
@@ -261,11 +261,11 @@ initial begin
     $display("\n-- 5: WRAP burst is rejected, not mistranslated --");
     ram.mem[80] = 32'hDEAD_BEEF;
     do_write(32'h0000_0140, 8'd3, SIZE_32, BURST_WRAP, 32'hE000_0000, 4'hF);
-    check(RESP_SLVERR, {30'd0, last_bresp}, "WRAP write answers SLVERR");
+    check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "WRAP write answers SLVERR");
     check(32'hDEAD_BEEF, ram.mem[80], "WRAP write left memory untouched");
 
     do_read(32'h0000_0140, 8'd3, SIZE_32, BURST_WRAP);
-    check(RESP_SLVERR, {30'd0, last_rresp}, "WRAP read answers SLVERR");
+    check({30'd0, RESP_SLVERR}, {30'd0, last_rresp}, "WRAP read answers SLVERR");
     check(32'd1, rlast_count,   "a rejected read still delivers one RLAST");
     check(32'd1, rlast_on_last, "the rejected read delivers all its beats");
 
@@ -273,13 +273,13 @@ initial begin
     $display("\n-- 6: narrow (16-bit) transfer is rejected --");
     ram.mem[96] = 32'hCAFE_F00D;
     do_write(32'h0000_0180, 8'd1, SIZE_16, BURST_INCR, 32'hF000_0000, 4'hF);
-    check(RESP_SLVERR, {30'd0, last_bresp}, "narrow write answers SLVERR");
+    check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "narrow write answers SLVERR");
     check(32'hCAFE_F00D, ram.mem[96], "narrow write left memory untouched");
 
     // -- 7: back-to-back bursts, no state left behind ------------------------
     $display("\n-- 7: back-to-back bursts after a rejected one --");
     do_write(32'h0000_01C0, 8'd7, SIZE_32, BURST_INCR, 32'h5A5A_0000, 4'hF);
-    check(RESP_OKAY, {30'd0, last_bresp}, "the bridge recovered from SLVERR");
+    check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "the bridge recovered from SLVERR");
     do_read(32'h0000_01C0, 8'd7, SIZE_32, BURST_INCR);
     for (i = 0; i < 8; i = i + 1)
         check(32'h5A5A_0000 + i, rd_word[i], "recovered burst reads back clean");

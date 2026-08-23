@@ -45,3 +45,9 @@ cov_annotated/
 *.swp
 Thumbs.db
 __pycache__/
+
+# Verilator build output
+obj_dir/
+build_*.log
+run_*.log
+*.vcd
