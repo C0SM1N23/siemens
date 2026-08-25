@@ -113,16 +113,12 @@ In one library the second definition overrides the first. Renamed to
 parameter. At 2048 the counter never reaches the end of its window: measured 0
 `window_done` pulses, `BANDWIDTH_A/B` stop updating. Now `$clog2(WINDOW_CYCLES)`.
 
-**14. `mem_array` leaves reset holding X.**
-
-`sram/hdl/mem_array.v:6`. Add an `initial` that zeroes the array for simulation.
-
-**15. The sources were duplicated and had drifted.**
+**14. The sources were duplicated and had drifted.**
 
 One copy in the repository root, one under `Siemens/`; the last upload updated
 only `Siemens/`, so the two no longer matched.
 
-**16. `tb_regfile.v` no longer compiles.**
+**15. `tb_regfile.v` no longer compiles.**
 
 It uses the old port names (`clk`, `a_reg_valid`, `irq`) after they were renamed
 to `clk_i`, `a_reg_valid_i`, `irq_o`. The register bank is now covered only
@@ -135,13 +131,13 @@ indirectly through `tb_dp_sram_top`.
 No defects found in the CPU RTL so far. The items below are repository and
 verification level.
 
-**17. Two address maps that can drift.**
+**16. Two address maps that can drift.**
 
 `cpu/debug/sim/soc_map.vh` defines `IMEM_BASE`, `DMEM_BASE`, `PIC_BASE`,
 `TMR_BASE`; `soc/hdl/soc_addr_map.vh` defines `SOC_*` versions of the same
 addresses. They agree today and nothing enforces it.
 
-**18. Four injected defects survive the whole suite.**
+**17. Four injected defects survive the whole suite.**
 
 | Defect | Why nothing caught it |
 |---|---|
@@ -152,12 +148,12 @@ addresses. They agree today and nothing enforces it.
 
 Benches that catch all four exist in the review but are not in the repository.
 
-**19. The SoC is not in CI.** `.github/workflows/ci.yml` runs `make test` only —
+**18. The SoC is not in CI.** `.github/workflows/ci.yml` runs `make test` only —
 the CPU Verilator flow. Neither `make soc` nor `make soc-sva` is automated.
 
-**20. No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository.
+**19. No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository.
 
-**21. Untested at system level:** DMA channels 1..3 and round-robin; the machine
+**20. Untested at system level:** DMA channels 1..3 and round-robin; the machine
 timer, wired to PIC source 7 but never armed by an SoC program; PIC preemption,
 nesting, spurious detection and deadline escalation; backpressure on the SRAM and
 the peripherals, since the timing sweep reaches only IMEM and DMEM.
