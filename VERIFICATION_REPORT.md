@@ -1,17 +1,14 @@
 # Independent verification report
 
-An adversarial review of the integrated SoC on `master`, run against the
-working hypothesis that **any test that passes may be passing for the wrong
-reason until shown otherwise**.
+A review of the integrated SoC on `master`, run on the assumption that a test
+which passes may be passing for the wrong reason until shown otherwise.
 
-Scope: the three merged blocks (RV32I CPU + PIC + machine timer, multi-channel
-DMA, dual-port SRAM) and the interconnect written for the integration. No RTL
-was changed to make anything pass; every temporary edit was reverted and the
-tree confirmed clean.
+Scope: the three merged blocks and the interconnect written for the
+integration. No RTL was changed to make anything pass; every temporary edit was
+reverted and the tree confirmed clean.
 
-Reviewed at `7ff7da4`. Every verdict below carries the command that produced it
-and the line from the log that decides it. Anything without evidence is marked
-UNKNOWN rather than PASS.
+Reviewed at `7ff7da4`. Each verdict carries the command that produced it and the
+line from the log that decides it.
 
 ---
 
@@ -43,9 +40,8 @@ UNKNOWN rather than PASS.
 | `compile.do` updated, block bench runs | PASS | 67/67 |
 | `WIN_W = $clog2(WINDOW_CYCLES)` works off the default | PASS | 1024→`WIN_W=10`, BW=512; 2048→`11`, BW=1024; 256→`8`, BW=128; `RESULT: WINDOW OK` ×3 |
 
-The bandwidth figures scale exactly with the window (half the window, half the
-count), which is the strongest available confirmation that the counter is
-right rather than merely alive.
+The bandwidth figures scale exactly with the window — half the window, half the
+count — so the counter is right, not merely alive.
 
 ### The new fabric
 
@@ -83,7 +79,7 @@ right rather than merely alive.
 ## 2. Mutation testing
 
 Eight defects injected one at a time, full regression run for each, reverted
-after each. This is the part that decides whether the suite is real.
+after each.
 
 | # | Injected defect | Caught by | Caught |
 |---|---|---|---|
@@ -97,8 +93,7 @@ after each. This is the part that decides whether the suite is real.
 | 8 | `WIN_W` back to literal 10 with `WINDOW_CYCLES = 2048` | — SoC 9/9, Verilator 3/3, SRAM block bench 67/67 | **no** |
 
 **Four of eight survive the delivered suite.** All four are caught by benches
-written during this review, which is what separates "the design is wrong" from
-"the tests do not look":
+written during this review, so the design is right and the tests do not look:
 
 | Mutant | Caught by the independent bench |
 |---|---|
@@ -107,17 +102,16 @@ written during this review, which is what separates "the design is wrong" from
 | 7 | `A: INT_ENABLE=0 -> irq stays low -> expected 0x0, got 0x1` |
 | 8 | at `WINDOW_CYCLES=2048`: `window_done pulses = 0`, `WINDOW DEAD` |
 
-The four benches used as evidence (burst-bridge error injection, address map
-and reachability, DMA interrupt sequence, bandwidth window re-parameterisation)
-are not currently in the repository. Adding them is the single highest-value
-follow-up, because each one closes a surviving mutant.
+Those four benches — burst-bridge error injection, address map and
+reachability, DMA interrupt sequence, bandwidth window re-parameterisation —
+are not in the repository. Adding them closes all four surviving mutants.
 
 ---
 
 ## 3. Real defects found
 
-No functional defect was found in the RTL. One behaviour differs from what a
-reader of the register map would reasonably expect:
+No functional defect was found in the RTL. One behaviour differs from what the
+register map implies:
 
 **E — `INT_STATUS` write-1-to-clear cannot release the interrupt while the
 channel is still enabled.**
@@ -129,20 +123,18 @@ channel is still enabled.**
 cycle and the bit comes straight back. The handler must write
 `CONTROL.enable = 0` first.
 
-Severity: **low.** This is ordinary behaviour for a status bit fed by a level
-rather than an event, it is documented in INTEGRATION.md §2.2, and the SoC's
-own handler uses the correct order. But it means the W1C in the register map is
+Severity: **low.** Ordinary behaviour for a status bit fed by a level rather
+than an event, and the SoC's own handler uses the correct order. But the W1C is
 only half functional: software cannot acknowledge a completion without also
 disabling the channel.
 
-The other four surviving mutants are **verification gaps, not defects** — the
-property is implemented correctly, as the independent benches demonstrate.
+The other four surviving mutants are verification gaps, not defects.
 
 ---
 
 ## 4. What no verification covers
 
-The most important section. Everything here passed, and none of it is tested.
+Everything here passed, and none of it is tested.
 
 1. **BRESP stickiness** (`soc/hdl/axi_full2lite.v:278`). No delivered test
    produces an error on a beat inside a burst; `tb_full2lite` only exercises
@@ -176,8 +168,7 @@ The most important section. Everything here passed, and none of it is tested.
     a ModelSim message; an automated flow that counts PASS banners could miss
     it. The SoC regression is not in CI, so nothing catches it automatically.
 11. **No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository. Area,
-    frequency and timing closure are unknown; a clean lint says nothing about
-    any of them.
+    frequency and timing closure are unknown.
 12. **CI runs the CPU flow only** (`branches: [RISCV, master]`, `run: make
     test`). Neither `make soc` nor `make soc-sva` is automated.
 

@@ -74,17 +74,23 @@ The script does not build the DMA, so it fails for anyone who runs it.
 
 ## DP-SRAM — `sram/`
 
-### Blocking
+### Important
 
-**9. A byte write to a control register destroys the whole word.**
+**9. The register bank ignores `WSTRB`.**
 
 `sram/hdl/sram_regfile.v` has no `wstrb` port; `sram/hdl/dp_sram_top.v:173`
-passes only `a_reg_wdata_i`. The slave FSM receives `wstrb` and drops it on the
-way to the register bank, so `sb` into `INT_ENABLE` writes all 32 bits.
+passes only `a_reg_wdata_i`. An AXI4-Lite slave is expected to honour the write
+strobes.
+
+Most registers survive it by luck: the CPU replicates the byte across all four
+lanes (`cpu/hdl/lsu.v:92`), and the bank takes `wdata[7:0]` or `wdata[0]` for
+the narrow ones. The exception is `INT_ENABLE`, stored as a full 32-bit word:
+after `sb` of `0x01` it holds `0x01010101`, so a read-back returns garbage in
+the upper bits. Behaviour is still correct today because only bits 0..1 are
+used, but any register that uses the upper bits, or any read-modify-write,
+breaks.
 
 Add `wstrb` and apply it per byte, as `sram/hdl/mem_array.v:44-47` does.
-
-### Important
 
 **10. Register word 7 is a silent hole.**
 

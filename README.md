@@ -2,13 +2,11 @@
 
 Siemens summer internship, "Digital IC Design & Advanced Verification".
 
-Three blocks were developed and verified separately, one per branch. This
-branch joins them into a working System-on-Chip: an AXI4-Lite fabric, a
-burst bridge, an address map, an interrupt map, and a system test in which
-real software on the real CPU drives a real DMA transfer into the real SRAM.
+Three blocks were developed separately, one per branch. This branch joins them
+into a working SoC: an AXI4-Lite fabric, a burst bridge, and a system test where
+software on the CPU drives a DMA transfer into the SRAM.
 
-The block branches (`RISCV`, `DMA`, `SDRAM`) are untouched — nothing was
-rebased or rewritten to make the integration fit.
+The block branches (`RISCV`, `DMA`, `SDRAM`) are untouched.
 
 ## Layout
 
@@ -23,28 +21,23 @@ verification.
 | [soc/](soc/) | interconnect, SoC top level, system verification | new |
 | [docs/](docs/) | engineering documentation (LaTeX) | `RISCV` |
 
-[INTEGRATION.md](INTEGRATION.md) records every change made to the three blocks
-to make them work together, and why each one was needed. Start there if the
-question is "what did you have to touch in their code".
+- [INTEGRATION.md](INTEGRATION.md) — what changed in the three blocks, and how
+  they were joined.
+- [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) — independent review:
+  mutation testing, coverage, and what no test covers.
+- [TO_MODIFY.md](TO_MODIFY.md) — every defect and gap found, per block, with
+  file and line.
 
-[VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) is an independent review of
-the result: mutation testing, coverage measurement, and — the part worth
-reading — the list of what no test covers.
-
-[TO_MODIFY.md](TO_MODIFY.md) is the action list that came out of both: every
-defect and gap found, per block, with file and line.
-
-Each block keeps its own documentation: [cpu/README.md](cpu/README.md) and
-[cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md) for the core.
+The core keeps its own docs: [cpu/README.md](cpu/README.md) and
+[cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md).
 
 ## The system
 
 ### Data path
 
-Three panels, read top to bottom: the masters, the fabric that routes them, the
-slaves. Arrows are drawn only where a path is unambiguous; where a block has
-more than one source, the sources are named inside its box. The exact routing
-table follows below.
+Masters, the fabric that routes them, then the slaves. Where a block has more
+than one source, the sources are named inside its box; the full routing is in
+the table below.
 
 ```
 MASTERS
@@ -96,20 +89,18 @@ SLAVES  |                             |                                 |
                               +----------------------------+    +--------------------------------+
 ```
 
-Two paths worth following by hand:
+Two paths worth following:
 
 - **CPU load from the SRAM.** `dbus` -> `dec_d` leg 1 -> `dp_sram_top` port A.
-  No arbiter anywhere on that path, because port A belongs to the CPU alone.
-- **DMA moving one 32-byte chunk out of DMEM.** `m_axi` issues a single 8-beat
-  INCR burst -> `axi_full2lite` turns it into eight AXI4-Lite reads -> `dec_x`
-  leg 0 -> `arb_dmem`, where each of those eight queues against whatever the
-  CPU is doing on `dec_d` leg 0 -> `dmem`.
+  No arbiter: port A belongs to the CPU alone.
+- **DMA moving a 32-byte chunk out of DMEM.** `m_axi` issues one 8-beat INCR
+  burst -> `axi_full2lite` splits it into eight AXI4-Lite reads -> `dec_x`
+  leg 0 -> `arb_dmem`, where each queues against the CPU's `dec_d` leg 0.
 
 ### Inside the dual-port SRAM
 
-It is the only slave two masters reach without an arbiter, because it has two
-physical ports. Stacked boxes below, top to bottom, are the stages a request
-passes through.
+The only slave two masters reach without an arbiter, because it has two
+physical ports. The boxes below are the stages a request passes through.
 
 ```
                        +---------------------------------------------+
@@ -141,9 +132,8 @@ passes through.
 
 ### Routing table
 
-The column layout above cannot show a shared slave twice, so here it is
-exhaustively. A blank cell means that master has no path to that slave, and an
-access there is answered `DECERR` rather than left to hang.
+A blank cell means that master has no path to that slave; an access there is
+answered `DECERR`.
 
 | Slave | Base | Size | CPU ibus | CPU dbus | DMA master |
 |---|---|---|---|---|---|
@@ -154,9 +144,8 @@ access there is answered `DECERR` rather than left to hang.
 | mtimer | `0x3001_0000` | 64 KB | - | `dec_d` leg 3 | - |
 | dma regs | `0x3002_0000` | 64 KB | - | `dec_d` leg 4 | - |
 
-Each window's mask is exactly its size, so an address inside a window but past
-the end of the block behind it misses every window and gets `DECERR` instead of
-aliasing back onto the block.
+Each window's mask is exactly its size, so an address past the end of a block
+misses every window and gets `DECERR` instead of aliasing back onto it.
 
 ### Interrupt map
 
@@ -198,29 +187,24 @@ CPU's `mie[16+n]` gated by `mstatus.MIE`.
   new for the SoC (soc/): axi_lite_dec, axi_lite_arb, axi_full2lite, axi_lite_ram
 ```
 
-### Three decisions worth a sentence each
+### Design notes
 
 **The DMA speaks a different protocol from every slave.** It is an AXI4-Full
-master issuing eight-beat INCR bursts; every slave in the system is AXI4-Lite,
-which has no bursts at all. [axi_full2lite.v](soc/hdl/axi_full2lite.v) splits
-each burst into one AXI4-Lite transaction per beat and reassembles `RLAST` and
-the single write response the DMA expects.
+master issuing eight-beat INCR bursts; every slave is AXI4-Lite, which has no
+bursts. [axi_full2lite.v](soc/hdl/axi_full2lite.v) splits each burst into one
+Lite transaction per beat and rebuilds `RLAST` and the single write response.
 
-**The SRAM is not arbitrated, on purpose.** It has two independent AXI ports,
-so the CPU gets port A and the DMA gets port B, both mapped at the same
-address. Neither ever queues behind the other, and the block's own collision
-detector stays reachable in the assembled system - put an arbiter in front and
-that logic would be dead code. Only DMEM has a single port, so only DMEM gets
-an arbiter.
+**The SRAM is not arbitrated, on purpose.** Two independent ports mean the CPU
+gets port A and the DMA port B at the same address, so neither queues behind the
+other and the block's collision detector stays reachable. Only DMEM is
+single-ported, so only DMEM gets an arbiter.
 
-**Reachability is deliberately not uniform.** The instruction bus reaches only
-IMEM, so a runaway PC gets a decode error instead of executing peripheral
-registers. The data bus reaches everything except IMEM, so there is no
-self-modifying-code path. The DMA reaches only DMEM and the SRAM, so a bad
-descriptor cannot reprogram the interrupt controller.
+**Reachability is not uniform.** The instruction bus reaches only IMEM, so a
+runaway PC gets a decode error instead of executing peripheral registers. The
+data bus reaches everything except IMEM. The DMA reaches only DMEM and the SRAM,
+so a bad descriptor cannot reprogram the interrupt controller.
 
-The full map, including the interrupt source assignment, is in
-[soc/hdl/soc_addr_map.vh](soc/hdl/soc_addr_map.vh).
+The full map is in [soc/hdl/soc_addr_map.vh](soc/hdl/soc_addr_map.vh).
 
 ## Running it
 
@@ -235,35 +219,33 @@ make asm         # rebuild the test program images
 ```
 
 `make soc` runs three benches from one compile, the two system-level ones under
-four bus timings each (nominal, high fixed latency, and two seeds of random
-READY backpressure):
+four bus timings each (nominal, high fixed latency, two seeds of random READY
+backpressure):
 
-1. **[tb_full2lite](soc/debug/hdl/tb_full2lite.v)** — the burst bridge on its
-   own: 8-beat bursts, single-beat bursts, byte strobes, FIXED bursts,
-   `RLAST` placement, and the unsupported cases (WRAP, narrow transfers) which
-   must come back `SLVERR` with memory untouched rather than be mistranslated.
+1. **[tb_full2lite](soc/debug/hdl/tb_full2lite.v)** — the burst bridge alone:
+   8-beat and single-beat bursts, byte strobes, FIXED bursts, `RLAST`
+   placement, and the unsupported cases (WRAP, narrow) which must return
+   `SLVERR` with memory untouched.
 
-2. **[tb_soc_top](soc/debug/hdl/tb_soc_top.v)** — the whole SoC. The bench only
-   supplies a clock, a reset and a program image; the checking is done by
-   [program_soc.s](soc/debug/sim/program_soc.s) running on the CPU, which
-   builds a descriptor, programs a DMA channel, sleeps on `WFI`, is woken by
-   the DMA's completion interrupt through the PIC, and compares what the DMA
-   moved against what it was asked to move.
+2. **[tb_soc_top](soc/debug/hdl/tb_soc_top.v)** — the whole SoC. The bench
+   supplies a clock, a reset and a program image;
+   [program_soc.s](soc/debug/sim/program_soc.s) does the checking: it builds a
+   descriptor, programs a DMA channel, sleeps on `WFI`, is woken by the
+   completion interrupt through the PIC, and compares what the DMA moved
+   against what it was asked to move.
 
 3. **[tb_soc_stress](soc/debug/hdl/tb_soc_stress.v)** — the same SoC with the
-   CPU working the bus for the whole transfer instead of sleeping through it.
-   This is the run that reaches the contention logic: the arbiter with both
-   masters asking, both SRAM ports busy in the same cycle, real address
-   collisions, and an unmapped access that must come back `DECERR`. It
-   measures each of those and **fails if they did not happen** — a run that
-   passes without exercising what it was written for is not a passing run.
-   The transfers must come out bit-perfect regardless of the interference.
+   CPU working the bus throughout. This is the run that reaches the contention
+   logic: the arbiter with both masters asking, both SRAM ports busy in one
+   cycle, real address collisions, and an unmapped access returning `DECERR`.
+   It measures each and **fails if they did not happen**. The transfers must
+   stay bit-perfect regardless.
 
-`make soc-sva` lints the whole SoC with `-Wall` and re-runs every bench with the
-assertion layer in [soc/debug/sva/](soc/debug/sva/) bound live: AXI4-Lite and
-AXI4-Full protocol on every port, plus the fabric's own decisions — disjoint
-address windows, one-hot grants, a grant held until its response beat, a parked
-master that sees nothing, and a burst whose beat counter and `RLAST` agree.
+`make soc-sva` lints the SoC with `-Wall` and re-runs every bench with the
+assertion layer in [soc/debug/sva/](soc/debug/sva/) live: AXI4-Lite and
+AXI4-Full protocol on every port, plus disjoint address windows, one-hot grants,
+a grant held to its response beat, a parked master that sees nothing, and a
+burst whose beat counter and `RLAST` agree.
 
 ## Status
 
@@ -275,5 +257,4 @@ master that sees nothing, and a burst whose beat counter and `RLAST` agree.
 | DMA block bench | passes |
 | DP-SRAM block bench | 67/67 checks pass |
 
-All three blocks compile into a single library with no errors and no warnings,
-and the whole SoC lints clean under `verilator -Wall`.
+All three blocks compile into a single library with no errors and no warnings.
