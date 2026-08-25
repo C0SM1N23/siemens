@@ -61,10 +61,10 @@ unmasking it.
 ### DP-SRAM: `regfile` renamed to `sram_regfile`
 
 Both blocks defined a module called `regfile` — the CPU's 32 GPRs and the
-SRAM's control/status bank. In one library the second definition overrides the
-first and the elaborated design silently gets the wrong module. The SRAM's bank
-was renamed; the CPU's was left alone, since its testbenches, assertions and
-documentation all refer to it.
+SRAM's control/status bank. Compiled into one library the second definition
+overwrites the first (`vlog-2275`) and the elaborated design gets whichever was
+compiled last. The SRAM's bank was renamed; the CPU's was left alone, since its
+testbenches, assertions and documentation all refer to it.
 
 `sram/debug/sim/compile.do` was updated to match. The block's own bench then
 runs unchanged: 67 checks, 67 pass.
