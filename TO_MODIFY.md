@@ -54,31 +54,21 @@ Make completion a one-cycle pulse on entering `DONE`/`ERROR`, latched into
 moment of reset. The other 31 leave reset holding X. Use a loop over all 4 x 8
 entries.
 
-**6. Four AXI attribute registers have no `else` branch.**
-
-`dma/hdl/axi4_full_master.v:172, 177, 240, 245` — `arsize`, `arburst`, `awsize`,
-`awburst` are assigned only under reset. Make them `localparam` + `assign`.
-
-**7. The masked interrupt path is untested.**
+**6. The masked interrupt path is untested.**
 
 `dma/debug/hdl/tb_mc_dma_top.v` checks `irq[0]` without ever writing
 `INT_ENABLE`. Add a case where `INT_ENABLE = 0` and `irq` must not rise.
 
-**8. Channels 1..3 and round-robin are covered only in the block bench.**
+**7. Channels 1..3 and round-robin are covered only in the block bench.**
 
-### Hygiene
-
-**9. `dma/debug/sim/sim.do` is from a different project.**
+**8. `dma/debug/sim/sim.do` compiles a different project.**
 
 ```
 vlog ../../hdl/sistem_parcare.v
 vlog ../hdl/sistem_parcare_tb.v
 ```
 
-**10. Committed simulator output:** `debug/sim/work/`, `vsim.wlf`, `modelsim.ini`.
-
-**11. Romanian comments** in `axi4_full_master.v`, `dma_channel.v`,
-`mc_dma_top.v`, `priority_arbiter.v`.
+The script does not build the DMA, so it fails for anyone who runs it.
 
 ---
 
@@ -86,7 +76,7 @@ vlog ../hdl/sistem_parcare_tb.v
 
 ### Blocking
 
-**12. A byte write to a control register destroys the whole word.**
+**9. A byte write to a control register destroys the whole word.**
 
 `sram/hdl/sram_regfile.v` has no `wstrb` port; `sram/hdl/dp_sram_top.v:173`
 passes only `a_reg_wdata_i`. The slave FSM receives `wstrb` and drops it on the
@@ -96,41 +86,41 @@ Add `wstrb` and apply it per byte, as `sram/hdl/mem_array.v:44-47` does.
 
 ### Important
 
-**13. Register word 7 is a silent hole.**
+**10. Register word 7 is a silent hole.**
 
 `sram/hdl/dp_sram_top.v` sets `REG_WORD_MAX = 7`, so words 0..7 route to the
 register bank, but `sram/hdl/sram_regfile.v:49-55` defines only 0..6. Word 7
 reads 0, swallows writes, answers OKAY. Define it or return SLVERR.
 
-**14. The register region can never return an error.**
+**11. The register region can never return an error.**
 
 `sram/hdl/dp_sram_top.v:120`: `a_mem_error_final = a_is_reg ? 1'b0 : ...`.
 
-**15. Module `regfile` collides with the CPU's register file.** *(fixed on master)*
+**12. Module `regfile` collides with the CPU's register file.** *(fixed on master)*
 
 In one library the second definition overrides the first. Renamed to
 `sram_regfile`.
 
-**16. `WIN_W` was independent of `WINDOW_CYCLES`.** *(fixed on master)*
+**13. `WIN_W` was independent of `WINDOW_CYCLES`.** *(fixed on master)*
 
 `sram/hdl/sram_regfile.v` had `localparam WIN_W = 10;` while `WINDOW_CYCLES` is a
 parameter. At 2048 the counter never reaches the end of its window: measured 0
 `window_done` pulses, `BANDWIDTH_A/B` stop updating. Now `$clog2(WINDOW_CYCLES)`.
 
-**17. `mem_array` leaves reset holding X.**
+**14. `mem_array` leaves reset holding X.**
 
 `sram/hdl/mem_array.v:6`. Add an `initial` that zeroes the array for simulation.
 
-### Hygiene
+**15. The sources were duplicated and had drifted.**
 
-**18. Sources duplicated** in the repository root and under `Siemens/`, and the
-two had drifted — the last upload updated only `Siemens/`.
+One copy in the repository root, one under `Siemens/`; the last upload updated
+only `Siemens/`, so the two no longer matched.
 
-**19. `tb_regfile.v` is dead.** It uses the old port names (`clk`,
-`a_reg_valid`, `irq`) and no longer compiles against its own DUT. The register
-bank is covered only indirectly through `tb_dp_sram_top`.
+**16. `tb_regfile.v` no longer compiles.**
 
-**20. Committed artifacts:** `.vcd`, `transcript`, `work/`, `.bak`.
+It uses the old port names (`clk`, `a_reg_valid`, `irq`) after they were renamed
+to `clk_i`, `a_reg_valid_i`, `irq_o`. The register bank is now covered only
+indirectly through `tb_dp_sram_top`.
 
 ---
 
@@ -139,13 +129,13 @@ bank is covered only indirectly through `tb_dp_sram_top`.
 No defects found in the CPU RTL so far. The items below are repository and
 verification level.
 
-**21. Two address maps that can drift.**
+**17. Two address maps that can drift.**
 
 `cpu/debug/sim/soc_map.vh` defines `IMEM_BASE`, `DMEM_BASE`, `PIC_BASE`,
 `TMR_BASE`; `soc/hdl/soc_addr_map.vh` defines `SOC_*` versions of the same
 addresses. They agree today and nothing enforces it.
 
-**22. Four injected defects survive the whole suite.**
+**18. Four injected defects survive the whole suite.**
 
 | Defect | Why nothing caught it |
 |---|---|
@@ -156,12 +146,12 @@ addresses. They agree today and nothing enforces it.
 
 Benches that catch all four exist in the review but are not in the repository.
 
-**23. The SoC is not in CI.** `.github/workflows/ci.yml` runs `make test` only —
+**19. The SoC is not in CI.** `.github/workflows/ci.yml` runs `make test` only —
 the CPU Verilator flow. Neither `make soc` nor `make soc-sva` is automated.
 
-**24. No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository.
+**20. No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository.
 
-**25. Untested at system level:** DMA channels 1..3 and round-robin; the machine
+**21. Untested at system level:** DMA channels 1..3 and round-robin; the machine
 timer, wired to PIC source 7 but never armed by an SoC program; PIC preemption,
 nesting, spurious detection and deadline escalation; backpressure on the SRAM and
 the peripherals, since the timing sweep reaches only IMEM and DMEM.
