@@ -31,6 +31,9 @@ question is "what did you have to touch in their code".
 the result: mutation testing, coverage measurement, and — the part worth
 reading — the list of what no test covers.
 
+[TO_MODIFY.md](TO_MODIFY.md) is the action list that came out of both: every
+defect and gap found, per block, with file and line.
+
 Each block keeps its own documentation: [cpu/README.md](cpu/README.md) and
 [cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md) for the core.
 
