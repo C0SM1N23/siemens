@@ -246,7 +246,7 @@ module dma_channel (
             req_addr     = desc_addr_in;
         end else if (state == STATE_ACTIVE) begin
             req_is_write = active_is_write;
-            req_len      = 8'h07;
+            req_len      = (desc_len >= 32) ? 8'd7 : (desc_len[7:2] - 1);
             if (active_is_write)
                 req_addr = desc_dst;
             else
@@ -262,13 +262,19 @@ module dma_channel (
             status_out <= {29'd0, state};
     end
 
-    // Interrupt asserted on completion or error 
+    reg [2:0] state_d; // delay state pentru a detecta tranzitia
+    always @(posedge clk or negedge rst_n) begin
+        if (~rst_n) state_d <= STATE_IDLE;
+        else state_d <= state;
+    end
+
+    // Puls generat doar la intrarea in DONE sau ERROR
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             irq_out <= 1'b0;
-        else if (state == STATE_DONE || state == STATE_ERROR)
+        else if ((state == STATE_DONE || state == STATE_ERROR) && (state_d != STATE_DONE && state_d != STATE_ERROR))
             irq_out <= 1'b1;
-        else if (~enable)
+        else
             irq_out <= 1'b0;
     end
 
