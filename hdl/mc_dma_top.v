@@ -67,6 +67,7 @@ module mc_dma_top (
 
     wire [31:0] ch0_status,    ch1_status,    ch2_status,    ch3_status;
     wire [3:0]  hw_irq;
+    wire [31:0] int_status_w, int_enable_w;
 
     // 2. Between Channels (CH0 - CH3) and Priority Arbiter
     wire [ 3:0] ch_req;
@@ -87,6 +88,19 @@ module mc_dma_top (
     // 4. Scatter-Gather Loop (Master to Channels)
     wire [31:0] fetch_data_out;
     wire        fetch_data_valid;
+
+    // active_master_ch remembers which channel owns the transaction the master
+    // is currently running. It is declared here, ahead of the continuous
+    // assignments that read it below: Verilog requires a variable to be
+    // declared before it is referenced, and vlog rejects the other order with
+    // "Undefined variable" followed by "already declared in this scope".
+    reg [3:0] active_master_ch;
+    always @(posedge clk or negedge rst_n) begin
+        if (~rst_n)
+            active_master_ch <= 4'b0000;
+        else if (|ch_gnt) // one-cycle grant pulse: latch the channel id
+            active_master_ch <= ch_gnt;
+    end
 
     // ==== FIX BUG 2: date de fetch calificate per-canal ====
     // fetch_data_out/fetch_data_valid erau transmise nefiltrat (broadcast)
@@ -113,18 +127,21 @@ module mc_dma_top (
     wire        global_axi_error  = (m_axi_bvalid && m_axi_bready && m_axi_bresp[1]) || 
                                     (m_axi_rvalid && m_axi_rready && m_axi_rresp[1]);
 
-    // ==== [SOLUȚIE HARDWARE] Registru pentru a memora canalul activ ====
-    reg [3:0] active_master_ch;
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            active_master_ch <= 4'b0000;
-        else if (|ch_gnt) // Când primim un puls de grant de 1 ciclu, memorăm ID-ul
-            active_master_ch <= ch_gnt;
-    end
-    
 
-    // Connect top-level IRQ port
-    assign irq = hw_irq;
+    // Top-level interrupt: the LATCHED status masked by the enable, not the raw
+    // per-channel line.
+    //
+    // The register file already implements INT_STATUS (sticky, write-1-to-clear,
+    // set by hw_irq) and INT_ENABLE, but both outputs used to be left
+    // unconnected and irq was driven straight from hw_irq. That made two
+    // software-writable registers do nothing: masking an interrupt had no
+    // effect and clearing INT_STATUS did not drop the line, so the only way to
+    // deassert it was to disable the channel.
+    //
+    // The handler sequence this enables is the usual one: read INT_STATUS to
+    // find the channel, clear that channel's CONTROL.enable so hw_irq drops,
+    // then write 1 to the INT_STATUS bit to release the request.
+    assign irq = int_status_w[3:0] & int_enable_w[3:0];
 
     
     // Module Instantiations
@@ -174,6 +191,8 @@ module mc_dma_top (
         .ch3_status_in(ch3_status),
 
         .sched_policy   (sched_policy),
+        .int_status     (int_status_w),
+        .int_enable     (int_enable_w),
         .hw_irq_in      (hw_irq)
     );
 
