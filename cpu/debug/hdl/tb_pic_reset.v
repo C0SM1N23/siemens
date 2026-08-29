@@ -89,10 +89,12 @@ reg [31:0] rd;
 `include "tb_check.vh"
 `include "tb_axil_master.vh"
 
+wire [15:0] pic_pending;
 pic dut (
     .clk_i(clk), .rst_n_i(rst_n),
     .irq_src_i(irq_src),
-    .cpu_irq_o(cpu_irq), .cpu_irq_vec_o(cpu_irq_vec),
+    .cpu_mask_i(16'hFFFF),          // no CPU-side mask in the standalone bench
+    .cpu_irq_o(cpu_irq), .cpu_irq_vec_o(cpu_irq_vec), .pending_o(pic_pending),
     .cpu_irq_ack_i(cpu_irq_ack), .cpu_irq_eoi_i(cpu_irq_eoi),
     .s_axi_awaddr_i(awaddr), .s_axi_awprot_i(3'b0), .s_axi_awvalid_i(awvalid), .s_axi_awready_o(awready),
     .s_axi_wdata_i(wdata), .s_axi_wstrb_i(wstrb), .s_axi_wvalid_i(wvalid), .s_axi_wready_o(wready),

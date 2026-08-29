@@ -14,6 +14,12 @@
 #              one with a reason; nothing is waived wholesale.
 #   2. run     every bench, with --assert, so the bind layer is live. An
 #              assertion failure prints %Error and fails the script.
+#
+# The bind layer is both files: the CPU block's assertion binds (cpu_core_sva,
+# pic_sva and the AXI4-Lite checkers on cpu_top, the PIC and the timer) plus
+# the SoC's own. The CPU half was missing here until the two were split, so a
+# CPU or PIC invariant broken by the integration would not have been caught in
+# a SoC run at all.
 
 set -e
 cd "$(dirname "$0")"
@@ -53,6 +59,9 @@ run_bench () {
         ../../../cpu/debug/hdl/ck_rst_tb.v \
         "../hdl/$top.v" \
         "$CPUSVA"/axi_lite_sva.sv \
+        "$CPUSVA"/cpu_core_sva.sv \
+        "$CPUSVA"/pic_sva.sv \
+        "$CPUSVA"/bind_core_sva.sv \
         "$SVA"/axi_full_sva.sv \
         "$SVA"/soc_fabric_sva.sv \
         "$SVA"/soc_bind_sva.sv \
@@ -68,6 +77,7 @@ run_bench () {
 }
 
 status=0
+run_bench tb_addr_map   || status=1
 run_bench tb_full2lite  || status=1
 run_bench tb_soc_top    || status=1
 run_bench tb_soc_stress || status=1

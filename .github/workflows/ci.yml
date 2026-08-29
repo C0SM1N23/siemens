@@ -1,13 +1,17 @@
-# Runs the Verilator SVA + functional-coverage flow on every push/PR.
+# Runs the Verilator lint + SVA + functional-coverage flows on every push/PR.
 # ModelSim ASE can't run in CI (no headless license), so the reference
-# regression stays local; Verilator covers the same testbench here.
-name: CPU CI
+# regression stays local; Verilator covers the same testbenches here.
+#
+# Both flows run, and both gate the build. The CPU flow alone was not enough:
+# it never elaborates soc_top, so nothing in the interconnect, the address map
+# or the burst bridge was checked by CI at all.
+name: CI
 
 on:
   push:
-    branches: [RISCV]
+    branches: [master, RISCV, DMA, SDRAM]
   pull_request:
-    branches: [RISCV, master]
+    branches: [master, RISCV, DMA, SDRAM]
 
 jobs:
   verilator:
@@ -20,5 +24,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y verilator
 
-      - name: Assemble + run SVA / functional-coverage flow
+      - name: CPU - assemble + run SVA / functional-coverage flow
         run: make test
+
+      - name: SoC - lint + run every bench with the bind layer live
+        run: make soc-sva

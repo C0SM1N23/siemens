@@ -8,6 +8,7 @@
 // concerned: no bench instantiates another bench.
 //
 //   tb_pic          PIC feature bench (bands, nesting, spurious, deadline, sw)
+//   tb_pic_sched    PIC scheduling corners: CPU mask, edge-at-claim, bump, key
 //   tb_pic_reset    PIC reset values, X-freedom, asynchronous reset
 //   tb_pic_ro       PIC read-only registers and reserved bits
 //   tb_pic_status   PIC SRCx_STATUS, field by field
@@ -24,6 +25,7 @@
 +incdir+../../hdl
 
 ../hdl/tb_pic.v
+../hdl/tb_pic_sched.v
 ../hdl/tb_pic_reset.v
 ../hdl/tb_pic_ro.v
 ../hdl/tb_pic_status.v

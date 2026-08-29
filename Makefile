@@ -2,8 +2,8 @@
 # this just wires them up for one-command runs and for CI.
 #
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
-#   make modelsim   full 14-run ModelSim CPU regression (needs vsim; local)
-#   make soc        SoC regression: 9 runs over four bus timings (needs vsim)
+#   make modelsim   full 15-run ModelSim CPU regression (needs vsim; local)
+#   make soc        SoC regression: 10 runs over four bus timings (needs vsim)
 #   make soc-sva    SoC lint + SVA assertion run on Verilator
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
@@ -30,24 +30,26 @@ verilator: asm
 
 test: verilator
 
-# Full regression on ModelSim, 14 runs from one compile:
+# Full regression on ModelSim, 15 runs from one compile:
 #   1-4  single-core system bench under four bus-timing configurations
 #   5    dual-core shared memory
 #   6    PIC feature bench
-#   7-9  PIC reset / read-only / SRCx_STATUS block benches
-#   10   machine-timer registers
-#   11   CSR read-only, WARL and reset
-#   12   one directed test per trap cause
-#   13   branch predictor: BTB/BHT, RAS boundaries, reset
-#   14   ALU operation decode and operand boundaries
+#   7    PIC scheduling corners: CPU mask, edge-at-claim, bump, keyed trigger
+#   8-10 PIC reset / read-only / SRCx_STATUS block benches
+#   11   machine-timer registers
+#   12   CSR read-only, WARL and reset
+#   13   one directed test per trap cause
+#   14   branch predictor: BTB/BHT, RAS boundaries, reset
+#   15   ALU operation decode and operand boundaries
 modelsim: asm
 	cd $(SIM) && vsim -c -do "do regress.do; quit -f"
 
-# SoC regression, 9 runs from one compile:
-#   1    AXI4-Full to AXI4-Lite burst bridge, block level
-#   2-5  full system under four bus timings: CPU programs the DMA, sleeps on
+# SoC regression, 10 runs from one compile:
+#   1    address map: every window is the size of its block, so nothing aliases
+#   2    AXI4-Full to AXI4-Lite burst bridge, block level
+#   3-6  full system under four bus timings: CPU programs the DMA, sleeps on
 #        WFI, DMA fills the dual-port SRAM, completion returns through the PIC
-#   6-9  the same system under the same four timings with the CPU working the
+#   7-10 the same system under the same four timings with the CPU working the
 #        bus throughout: arbiter under contention, both SRAM ports at once,
 #        real collisions, DECERR
 soc: asm

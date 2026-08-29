@@ -31,6 +31,7 @@ module pic_sva #(
     input [3:0]  res_id_i,
     input [9:0]  res_key_i,
     input [15:0] req_i,
+    input [15:0] cpu_mask_i,
     input [15:0] active_i,
     input [4:0]  depth_i,
     input [4:0]  nest_max_i,
@@ -67,6 +68,13 @@ vec_is_registered_offer: assert property (@(posedge clk_i) disable iff (!rst_n_i
 offer_is_pending: assert property (@(posedge clk_i) disable iff (!rst_n_i)
     offer_val_i |-> (req_i[res_id_i] && !active_i[res_id_i]))
     else $error("[pic] offered source is not a pending request");
+
+// The CPU's own per-source mask takes part in the resolution. If it did not,
+// the resolver would keep offering a source the core will never claim and
+// every less urgent source would starve behind it.
+offer_is_unmasked: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    offer_val_i |-> cpu_mask_i[res_id_i])
+    else $error("pic_sva: a CPU-masked source was offered (id %0d)", res_id_i);
 
 preemption_is_strict: assert property (@(posedge clk_i) disable iff (!rst_n_i)
     (offer_val_i && has_active_i) |-> (res_key_i > top_key_i))

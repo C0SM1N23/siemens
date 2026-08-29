@@ -1,4 +1,4 @@
-# SoC regression: one compile, nine runs.
+# SoC regression: one compile, ten runs.
 #
 #   vsim -c -do "do regress.do; quit -f"
 #
@@ -6,13 +6,17 @@
 # convention the CPU block's regression uses, so a log can be checked by
 # counting banners rather than by trusting an exit code.
 #
-# THE THREE BENCHES
-# Run 1 is the block bench for the burst bridge, the only piece of new RTL the
-# whole SoC data path runs through. Runs 2-5 are the system bench: real
-# software on the real CPU driving a real DMA transfer, with the CPU asleep
-# while it happens. Runs 6-9 run the same system with the CPU working the bus
-# throughout, which is what reaches the contention logic - the arbiter under
-# load, both SRAM ports at once, and the decoder's error path.
+# THE FOUR BENCHES
+# Run 1 checks the address map against the decoder that implements it: every
+# window is exactly the size of its block, so an address inside the window but
+# past the block cannot alias back onto it. That property is invisible to the
+# runs below, because working software never issues such an address. Run 2 is
+# the block bench for the burst bridge, the only piece of new RTL the whole SoC
+# data path runs through. Runs 3-6 are the system bench: real software on the
+# real CPU driving a real DMA transfer, with the CPU asleep while it happens.
+# Runs 7-10 run the same system with the CPU working the bus throughout, which
+# is what reaches the contention logic - the arbiter under load, both SRAM
+# ports at once, and the decoder's error path.
 #
 # The stress bench exists because a coverage probe on the system bench showed
 # it never contended the arbiter, never drove both SRAM ports in one cycle and
@@ -44,18 +48,23 @@
 
 do compile.do
 
-echo "=== run 1/9: AXI4-Full to AXI4-Lite burst bridge ==="
+echo "=== run 1/10: SoC address map, windows and aliasing ==="
+vsim -onfinish stop -voptargs=+acc work.tb_addr_map
+run -all
+quit -sim
+
+echo "=== run 2/10: AXI4-Full to AXI4-Lite burst bridge ==="
 vsim -onfinish stop -voptargs=+acc work.tb_full2lite
 run -all
 quit -sim
 
-echo "=== run 2/9: system bench, nominal bus timing ==="
+echo "=== run 3/10: system bench, nominal bus timing ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_top
 echo "cfg: imem RL=[examine -radix dec /tb_soc_top/dut/IMEM_READ_LAT] SP=[examine -radix dec /tb_soc_top/dut/IMEM_STALL_PROB] | dmem RL=[examine -radix dec /tb_soc_top/dut/DMEM_READ_LAT] WL=[examine -radix dec /tb_soc_top/dut/DMEM_WRITE_LAT] SP=[examine -radix dec /tb_soc_top/dut/DMEM_STALL_PROB]"
 run -all
 quit -sim
 
-echo "=== run 3/9: system bench, high fixed memory latency ==="
+echo "=== run 4/10: system bench, high fixed memory latency ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_top \
      -G/tb_soc_top/dut/IMEM_READ_LAT=2 \
      -G/tb_soc_top/dut/DMEM_READ_LAT=3 \
@@ -64,7 +73,7 @@ echo "cfg: imem RL=[examine -radix dec /tb_soc_top/dut/IMEM_READ_LAT] | dmem RL=
 run -all
 quit -sim
 
-echo "=== run 4/9: system bench, random READY backpressure, seed set A ==="
+echo "=== run 5/10: system bench, random READY backpressure, seed set A ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_top \
      -G/tb_soc_top/dut/IMEM_STALL_PROB=25 -G/tb_soc_top/dut/IMEM_SEED=101 \
      -G/tb_soc_top/dut/DMEM_STALL_PROB=35 -G/tb_soc_top/dut/DMEM_SEED=202
@@ -72,7 +81,7 @@ echo "cfg: imem SP=[examine -radix dec /tb_soc_top/dut/IMEM_STALL_PROB] SEED=[ex
 run -all
 quit -sim
 
-echo "=== run 5/9: system bench, random READY backpressure, seed set B ==="
+echo "=== run 6/10: system bench, random READY backpressure, seed set B ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_top \
      -G/tb_soc_top/dut/IMEM_STALL_PROB=40 -G/tb_soc_top/dut/IMEM_SEED=777 \
      -G/tb_soc_top/dut/DMEM_STALL_PROB=20 -G/tb_soc_top/dut/DMEM_SEED=888 \
@@ -81,13 +90,13 @@ echo "cfg: imem SP=[examine -radix dec /tb_soc_top/dut/IMEM_STALL_PROB] SEED=[ex
 run -all
 quit -sim
 
-echo "=== run 6/9: stress bench, nominal timing ==="
+echo "=== run 7/10: stress bench, nominal timing ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_stress
 echo "cfg: gate=[examine -radix dec /tb_soc_stress/COVERAGE_GATE] | dmem RL=[examine -radix dec /tb_soc_stress/dut/DMEM_READ_LAT] SP=[examine -radix dec /tb_soc_stress/dut/DMEM_STALL_PROB]"
 run -all
 quit -sim
 
-echo "=== run 7/9: stress bench, high fixed memory latency ==="
+echo "=== run 8/10: stress bench, high fixed memory latency ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_stress \
      -G/tb_soc_stress/dut/IMEM_READ_LAT=2 \
      -G/tb_soc_stress/dut/DMEM_READ_LAT=3 \
@@ -96,7 +105,7 @@ echo "cfg: gate=[examine -radix dec /tb_soc_stress/COVERAGE_GATE] | imem RL=[exa
 run -all
 quit -sim
 
-echo "=== run 8/9: stress bench, random READY backpressure, seed set A ==="
+echo "=== run 9/10: stress bench, random READY backpressure, seed set A ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_stress \
      -G/tb_soc_stress/dut/IMEM_STALL_PROB=25 -G/tb_soc_stress/dut/IMEM_SEED=101 \
      -G/tb_soc_stress/dut/DMEM_STALL_PROB=35 -G/tb_soc_stress/dut/DMEM_SEED=202
@@ -104,7 +113,7 @@ echo "cfg: gate=[examine -radix dec /tb_soc_stress/COVERAGE_GATE] | imem SP=[exa
 run -all
 quit -sim
 
-echo "=== run 9/9: stress bench, random READY backpressure, seed set B ==="
+echo "=== run 10/10: stress bench, random READY backpressure, seed set B ==="
 vsim -onfinish stop -voptargs=+acc work.tb_soc_stress \
      -G/tb_soc_stress/dut/IMEM_STALL_PROB=40 -G/tb_soc_stress/dut/IMEM_SEED=777 \
      -G/tb_soc_stress/dut/DMEM_STALL_PROB=20 -G/tb_soc_stress/dut/DMEM_SEED=888 \

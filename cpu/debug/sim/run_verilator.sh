@@ -34,7 +34,7 @@ verilator --cc --exe --build --timing --assert --coverage -Wno-fatal \
   sim_main.cpp \
   -f rtl.f -f tb_cpu.f \
   "$SVA"/axi_lite_sva.sv "$SVA"/cpu_core_sva.sv "$SVA"/pic_sva.sv \
-  "$SVA"/cpu_func_cov.sv "$SVA"/bind_sva.sv
+  "$SVA"/cpu_func_cov.sv "$SVA"/bind_core_sva.sv "$SVA"/bind_sva.sv
 
 ./obj_dir/Vtb_cpu_axi | tee sim_run.log
 

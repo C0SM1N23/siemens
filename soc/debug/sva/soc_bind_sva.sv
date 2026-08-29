@@ -7,11 +7,12 @@
 // is forwarded from the target (`#(.N(N))`), so one bind covers instances of
 // different widths.
 //
-// The CPU block's own bind file (cpu/debug/sva/bind_sva.sv) already covers
-// cpu_top's two ports and the PIC and timer slave ports, and it is reused here
-// unchanged. What this file adds is everything the CPU block never saw: the
-// fabric's internal decisions, the DMA's AXI4-Full port, the burst bridge, and
-// the slave ports of the memories and the SRAM.
+// The CPU block's assertion binds (cpu/debug/sva/bind_core_sva.sv) cover
+// cpu_top's two ports, the pipeline invariants, and the PIC and timer slave
+// ports; the SoC flow compiles that file alongside this one. What this file
+// adds is everything the CPU block never saw: the fabric's internal decisions,
+// the DMA's AXI4-Full port, the burst bridge, and the slave ports of the
+// memories and the SRAM.
 
 `timescale 1ns/1ps
 

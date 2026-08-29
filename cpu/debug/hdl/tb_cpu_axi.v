@@ -61,6 +61,8 @@ wire        cpu_irq_eoi;
 wire        cpu_in_trap;
 reg  [15:0] irq_src;        // peripheral lines into the PIC (DMA/SRAM stand-in)
 wire        tmr_irq;
+wire [15:0] cpu_irq_mask;   // mie[31:16] out of the core, into the PIC's resolver
+wire [15:0] pic_pending;    // every pending source, back into the core for mip
 
 cpu_top #(.RESET_PC(`IMEM_BASE)) uut (
     .clk_i              (clk),
@@ -69,6 +71,8 @@ cpu_top #(.RESET_PC(`IMEM_BASE)) uut (
     `AXIL_MST(dbus_axi, db),
     .cpu_irq_i          (cpu_irq),
     .cpu_irq_vec_i      (cpu_irq_vec),
+    .irq_pending_i      (pic_pending),
+    .irq_mask_o         (cpu_irq_mask),
     .cpu_irq_ack_o      (cpu_irq_ack),
     .cpu_irq_eoi_o      (cpu_irq_eoi),
     .cpu_in_trap_o      (cpu_in_trap)
@@ -114,7 +118,8 @@ axi_lite_dec2 #(
 pic pic_inst (
     .clk_i(clk), .rst_n_i(rst_n),
     .irq_src_i({8'b0, tmr_irq, irq_src[6:0]}),
-    .cpu_irq_o(cpu_irq), .cpu_irq_vec_o(cpu_irq_vec),
+    .cpu_mask_i(cpu_irq_mask),
+    .cpu_irq_o(cpu_irq), .cpu_irq_vec_o(cpu_irq_vec), .pending_o(pic_pending),
     .cpu_irq_ack_i(cpu_irq_ack), .cpu_irq_eoi_i(cpu_irq_eoi),
     `AXIL_SLV(s_axi, pp)
 );
