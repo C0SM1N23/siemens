@@ -37,13 +37,21 @@
 `define SOC_SRAM_BASE  32'h1000_0000
 `define SOC_SRAM_MASK  32'hFFFF_FC00
 
-// peripherals, 64 KB apart, CPU data bus only
+// Peripherals, based 64 KB apart but each only 256 B wide, CPU data bus only.
+// The window is the size of the block's register file, not the size of the gap
+// between blocks. All three decode a byte offset of 8 bits and no more - the
+// PIC and the machine timer take addr[7:2] in axi_lite_slave.v, the DMA takes
+// addr[7:0] in its own slave - so a 64 KB window would leave 255 aliases of
+// every register above each block. Writing PIC_BASE+0x100 would land on
+// SRC0_CONFIG and TMR_BASE+0x100 on MTIME_LO, both answering OKAY, which is the
+// one failure mode the decoder exists to prevent. At 256 B those addresses miss
+// every window and come back DECERR.
 `define SOC_PIC_BASE   32'h3000_0000
-`define SOC_PIC_MASK   32'hFFFF_0000
+`define SOC_PIC_MASK   32'hFFFF_FF00
 `define SOC_TMR_BASE   32'h3001_0000
-`define SOC_TMR_MASK   32'hFFFF_0000
+`define SOC_TMR_MASK   32'hFFFF_FF00
 `define SOC_DMA_BASE   32'h3002_0000
-`define SOC_DMA_MASK   32'hFFFF_0000
+`define SOC_DMA_MASK   32'hFFFF_FF00
 
 // PIC hardware source assignment (irq_src_i bit -> device)
 //   0..3  DMA channels 0..3 (done or error)

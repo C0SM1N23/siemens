@@ -58,19 +58,33 @@
 //
 // SOFTWARE TRIGGERS (D-SW) — "Software-Triggered Interrupts"
 //   - SRCx_SW_TRIG: write bit0=1 with key 0xA5A5 in [31:16] to set the channel
-//     (the key guards against an accidental single-bit trigger); write bit0=0
+//     (the key guards against an accidental single-bit trigger, and both key
+//     lanes must be strobed, since an unwritten lane carries whatever the
+//     master left on the bus); write bit0=0
 //     to clear. A software request also auto-clears on claim, so it is consumed
 //     like an edge source. A software trigger on a slot that already has a
 //     hardware request just keeps the slot pending. Software requests take
 //     deadlines / escalation like any other source.
 //
 // CPU HANDSHAKE
+//   cpu_mask_i     the CPU's own per-source mask, mie[31:16]. It takes part in
+//                the resolution rather than filtering the result: a source the
+//                core will not claim must be skipped when the winner is chosen,
+//                or the resolver parks on it and every less urgent source
+//                starves behind it, and a WFI waiting on one of those never
+//                wakes. A masked source stays pending, so its deadline counter
+//                keeps running and it is offered the moment the mask lifts.
 //   cpu_irq_o      registered level request (off the source timing path, D-LAT).
 //   cpu_irq_vec_o  id (0..15) of the source presented in cpu_irq_o.
+//   pending_o      every pending source, not just the offered one. This is what
+//                mip[31:16] reports: mip says what is waiting, and software
+//                reading it has to see the sources queued behind the winner.
 //   cpu_irq_ack_i  claim pulse: CPU entered the handler for cpu_irq_vec_o.
-//   cpu_irq_eoi_i  end-of-interrupt pulse: innermost handler is returning (the
+//   cpu_irq_eoi_i  end-of-interrupt pulse: one handler is returning (the
 //                completion signal the brief's nesting section requires; the
-//                CPU raises it on an interrupt-returning MRET).
+//                CPU raises it on an interrupt-returning MRET, and it knows
+//                which returns are interrupt returns because it keeps one bit
+//                per open trap level).
 //
 // AXI4-Lite (D-AXI): the shared axi_lite_slave owns the handshake; this module
 // is the register file. Unmapped words, and writes to read-only words, SLVERR.
@@ -105,8 +119,10 @@ module pic (
     input      [15:0] irq_src_i,
 
     // CPU side
+    input      [15:0] cpu_mask_i,       // per-source CPU mask (mie[31:16]), 1 = may be offered
     output reg        cpu_irq_o,        // level-sensitive request to the CPU
     output reg [3:0]  cpu_irq_vec_o,    // id of the highest-priority active source
+    output     [15:0] pending_o,        // every pending source, for the CPU's mip
     input             cpu_irq_ack_i,    // claim pulse (enter handler)
     input             cpu_irq_eoi_i,    // end-of-interrupt pulse (return)
 
@@ -220,6 +236,36 @@ function [1:0] band_urg;
     endcase
 endfunction
 
+// One step up the urgency order BAND_CONFIG defines. "Bump one band more
+// urgent" cannot mean band-1: BAND_CONFIG lets software reorder the bands, and
+// after a reorder the numerically lower band can be the less urgent one, so a
+// bump would demote the source it was supposed to rescue. This picks the band
+// with the lowest urgency that is still strictly above the current one - the
+// true next step up - and holds the band when nothing is more urgent. Under the
+// default 0x1B ordering it reduces to band-1, so the natural config is
+// unchanged.
+function [1:0] band_bump;
+    input [1:0] b;
+    input [7:0] bc;
+    reg   [1:0] cur, best;
+    reg         found;
+    integer     k;
+    begin
+        cur       = band_urg(b, bc);
+        best      = 2'd0;
+        found     = 1'b0;
+        band_bump = b;
+        for (k = 0; k < 4; k = k + 1) begin
+            if (band_urg(k[1:0], bc) > cur)
+                if (!found || band_urg(k[1:0], bc) < best) begin
+                    best      = band_urg(k[1:0], bc);
+                    band_bump = k[1:0];
+                    found     = 1'b1;
+                end
+        end
+    end
+endfunction
+
 // Claim / end-of-interrupt (needs depth, nest_max, cpu handshake, req)
 // cpu_irq_ack_i is registered one cycle after the CPU sampled cpu_irq_vec_o, so the
 // vector it acted on is the delayed copy; claiming that keeps the PIC's id in
@@ -254,13 +300,19 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
     wire ddl_hit  = counting && (ddl_cnt[s] + 16'd1 >= cfg_ddl[s]);
     assign escalate_v[s] = ddl_hit && (!escalated[s] || esc_multi);
 
+    // A new edge outranks the claim clear. If the two land in the same cycle
+    // they are two distinct events: the one being claimed is on its way to the
+    // handler, the new one still has to be serviced. Clearing first would drop
+    // it with nothing to show that it ever arrived.
+    wire new_edge = cfg_trig[s] && irq_src_i[s] && !irq_src_q[s];
+
     always @(posedge clk_i or negedge rst_n_i) begin
         if (~rst_n_i)
             edge_pend[s] <= 1'b0;
+        else if (new_edge)
+            edge_pend[s] <= 1'b1;                 // rising edge
         else if (claim_s)
             edge_pend[s] <= 1'b0;                 // consumed
-        else if (cfg_trig[s] && irq_src_i[s] && !irq_src_q[s])
-            edge_pend[s] <= 1'b1;                 // rising edge
     end
 
     always @(posedge clk_i or negedge rst_n_i) begin
@@ -293,7 +345,7 @@ generate for (s = 0; s < NSRC; s = s + 1) begin : g_src
         else if (!waiting)
             eff_band[s] <= cfg_band[s];   // idle: reset to config
         else if (escalate_v[s])                                // deadline miss
-            eff_band[s] <= esc_bump ? (eff_band[s] == 2'd0 ? 2'd0 : eff_band[s] - 2'd1)
+            eff_band[s] <= esc_bump ? band_bump(eff_band[s], band_cfg)
                                     : esc_target;
         else if (!escalated[s])
             eff_band[s] <= cfg_band[s];   // pre-escalation: track config
@@ -307,9 +359,22 @@ always @(posedge clk_i or negedge rst_n_i) begin
         irq_src_q <= irq_src_i;
 end
 
+// Everything pending, whether or not the CPU currently allows it through. This
+// is what mip[31:16] has to show: mip reports what is pending, not what the
+// resolver picked out of it.
+assign pending_o = req & ~active;
+
 // Priority resolver: most-urgent eligible source (combinational)
-// eligible: pending (requesting, not in service) and, when something is already
-// in service, strictly more urgent than the top of the nesting stack.
+// eligible: pending (requesting, not in service), allowed through by the CPU's
+// own per-source mask, and, when something is already in service, strictly more
+// urgent than the top of the nesting stack.
+//
+// cpu_mask_i belongs in the eligibility test and not anywhere else. The CPU
+// masks the offered source a second time with mie[16+vec], so a source the CPU
+// will not take must be excluded here or the resolver parks on it forever and
+// every less urgent source starves behind it - and a WFI never wakes. Masking
+// only the offer keeps the source pending, so its deadline counter keeps
+// running and it is offered the moment software unmasks it.
 integer i;
 reg  [9:0] res_key;
 reg  [3:0] res_id;
@@ -319,7 +384,7 @@ always @(*) begin
     res_id  = 4'd0;
     res_val = 1'b0;
     for (i = 0; i < NSRC; i = i + 1) begin
-        if (req[i] && !active[i] && (!has_active || key[i] > top_key)) begin
+        if (req[i] && cpu_mask_i[i] && !active[i] && (!has_active || key[i] > top_key)) begin
             if (!res_val || key[i] > res_key) begin
                 res_key = key[i];
                 res_id  = i[3:0];
@@ -461,7 +526,11 @@ always @(posedge clk_i or negedge rst_n_i) begin
 end
 
 // SRCx_SW_TRIG (D-SW): keyed set, plain clear, auto-clear on claim
-wire swt_key_ok = (reg_wdata[31:16] == SW_KEY);
+// The key must actually be written, not merely present on the bus: on a byte
+// write the lanes with WSTRB=0 carry whatever the master happened to drive, so
+// checking the value alone lets an unrelated narrow write hit the key by
+// accident. Both key lanes have to be strobed for the write to count as keyed.
+wire swt_key_ok = (reg_wdata[31:16] == SW_KEY) && (reg_wstrb[3:2] == 2'b11);
 wire swt_set    = wr_swt && reg_wstrb[0] &&  reg_wdata[0] && swt_key_ok;
 wire swt_clr    = wr_swt && reg_wstrb[0] && !reg_wdata[0];
 always @(posedge clk_i or negedge rst_n_i) begin
