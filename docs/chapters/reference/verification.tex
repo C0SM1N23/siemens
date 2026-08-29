@@ -441,9 +441,21 @@ RTL & \sig{ARVALID} asserted during reset. The issue logic is combinational and 
 RTL & Illegal load/store encodings issued their AXI transaction before trapping, so an illegal
   store could write memory. Fixed by gating the LSU request with the decoder's \sig{illegal}. &
   Scoreboard check \\
-Integration & A source enabled in the PIC but masked in \reg{mie} starves every less urgent source.
-  Not an RTL defect; documented as an integration rule and respected by the test program. &
-  Channel sweep \\
+RTL & A source enabled in the PIC but masked in \reg{mie} was still selected by the resolver,
+  so it became a standing offer nothing would ever claim and every less urgent source starved
+  behind it; a \sig{WFI} waiting on one of those never woke. First written up as an integration
+  rule, which is what a defect with a workaround looks like. Fixed by exporting \reg{mie}[31:16]
+  to the PIC and skipping masked sources in the resolution. & Channel sweep \\
+RTL & \sig{MRET} could not tell which kind of trap it was returning from, because the core
+  tracked one in-progress bit. An exception taken inside an interrupt handler sent the
+  end-of-interrupt on the exception's return and the outer return sent none. Fixed with a
+  per-level trap-kind stack. & \file{tb\_traps} nesting cases \\
+RTL & The peripheral windows were 64\,KB wide while the blocks behind them decode eight
+  address bits, so every peripheral register was aliased 255 times above itself and answered
+  \sig{OKAY}. Fixed by sizing each window to its register file. & \file{tb\_addr\_map} \\
+RTL & \reg{mtvec}.MODE stored the reserved encodings 2 and 3 and read them back unchanged,
+  telling software the core supports a vectoring mode it does not. Fixed by folding a reserved
+  MODE to direct. & CSR WARL bench \\
 \end{longtable}}
 
 A note on the first row, because it is the clearest argument for the assertion

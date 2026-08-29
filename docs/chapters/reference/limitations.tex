@@ -31,11 +31,13 @@ been made.
 
 \section{Peripheral address decoding}
 
-Both peripheral slaves decode only \sig{addr[7:2]}. Within an interconnect window
-larger than 256\,bytes, higher addresses alias onto the first registers instead of
-producing an error response. Two clean resolutions exist --- exact 256\,byte
-windows in the decoder, or a wider comparison in the shared slave --- and the
-choice belongs with the system memory map, which is not yet fixed.
+The peripheral slaves decode a byte offset of eight bits and no more. The system
+map resolves this with exact 256\,byte windows, so anything above a block's
+register file misses every window and is answered \sig{DECERR}; the alternative,
+a wider comparison inside each shared slave, would have meant editing blocks
+owned by other people. What remains is that a block reached through some other
+interconnect, with a window wider than its register file, would alias silently.
+The window size is a property of the map, not of the block.
 
 \section{Interrupts}
 
@@ -43,16 +45,22 @@ The PIC serves one CPU. Source-to-core targeting for a multi-core configuration
 is undefined, and each core would want its own timer compare register.
 
 The PIC supports preemptive nesting natively, and the feature bench exercises it.
-Through the CPU, however, only one nesting level is exercised, because handlers
-run with \reg{MIE} = 0. Multi-level nesting through the CPU requires handler
-software that re-enables \reg{MIE} after saving \reg{mepc}, \reg{mcause} and
-\reg{mstatus} --- the standard RISC-V sequence. That is a software addition on top
-of the existing end-of-interrupt path, not a hardware gap.
+Reaching a second level through the CPU needs handler software that re-enables
+\reg{MIE} after saving \reg{mepc}, \reg{mcause} and \reg{mstatus} --- the standard
+RISC-V sequence --- because trap entry clears \reg{MIE}.
 
-The two-mask arrangement carries the starvation rule stated in
-Chapter~\ref{ch:soc}: a source enabled in the PIC but masked in \reg{mie} is
-never claimed and starves everything less urgent. Deadline escalation does not
-address this case.
+This was described as a software addition on top of an end-of-interrupt path
+that already worked. It was not: the core tracked one in-progress bit, so
+\sig{MRET} could not tell an interrupt return from an exception return. Two
+nested handlers produced one end-of-interrupt instead of two and left the outer
+level on the PIC's stack forever, and an exception taken inside a handler sent
+its end-of-interrupt early. The core now carries one bit per open trap level and
+\file{tb\_traps} covers both cases, so the remaining part really is software.
+
+The depth of that stack is 16, which is the largest \reg{NEST\_MAX} the PIC
+accepts, so no reachable interrupt nesting can overflow it. Nothing bounds how
+deep a chain of synchronous exceptions inside handlers can go; past 16 open
+levels the outermost level's kind is lost.
 
 \section{Reset}
 

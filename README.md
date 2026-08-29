@@ -140,12 +140,16 @@ answered `DECERR`.
 | imem | `0x0000_0000` | 8 KB | `dec_i` | - | - |
 | dmem | `0x0000_2000` | 8 KB | - | `dec_d` leg 0 -> `arb_dmem` | `dec_x` leg 0 -> `arb_dmem` |
 | dp_sram | `0x1000_0000` | 1 KB | - | `dec_d` leg 1 -> port A | `dec_x` leg 1 -> port B |
-| pic | `0x3000_0000` | 64 KB | - | `dec_d` leg 2 | - |
-| mtimer | `0x3001_0000` | 64 KB | - | `dec_d` leg 3 | - |
-| dma regs | `0x3002_0000` | 64 KB | - | `dec_d` leg 4 | - |
+| pic | `0x3000_0000` | 256 B | - | `dec_d` leg 2 | - |
+| mtimer | `0x3001_0000` | 256 B | - | `dec_d` leg 3 | - |
+| dma regs | `0x3002_0000` | 256 B | - | `dec_d` leg 4 | - |
 
 Each window's mask is exactly its size, so an address past the end of a block
-misses every window and gets `DECERR` instead of aliasing back onto it.
+misses every window and gets `DECERR` instead of aliasing back onto it. The
+peripherals are based 64 KB apart but are only 256 B wide, which is the size of
+their register files: all three decode an 8-bit byte offset and no more, so a
+wider window would repeat each block over and over above itself and answer
+`OKAY` for an address that was never meant to reach it.
 
 ### Interrupt map
 

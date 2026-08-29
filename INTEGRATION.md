@@ -83,10 +83,12 @@ measured as 0 pulses. Now `WIN_W = $clog2(WINDOW_CYCLES)`.
 changes its interface and invalidates its own testbenches. The SoC top level
 connects to the names as they are.
 
-**Everything else that was found.** The remaining defects — including a DMA
-buffer overrun on non-multiple-of-32 transfers and a missing byte-enable on the
-SRAM register bank — were reported, not repaired. They are in
-[TO_MODIFY.md](TO_MODIFY.md).
+**Everything else that was found in someone else's block.** The remaining
+defects - including a DMA buffer overrun on non-multiple-of-32 transfers, a
+missing byte-enable on the SRAM register bank, and eight words of the SRAM array
+with no address - were reported, not repaired. They are in
+[TO_MODIFY.md](TO_MODIFY.md). Defects in the CPU, the PIC and the fabric were
+fixed, and are in section 4 below.
 
 ---
 
@@ -162,7 +164,49 @@ alive in the assembled system.
 
 ---
 
-## 4. Verification
+## 4. What was fixed in the CPU, the PIC and the fabric
+
+A later adversarial review of this side of the SoC found nine defects. They are
+listed here because several of them were previously written up as design
+decisions or integration rules, which is what a defect with a workaround looks
+like from the inside.
+
+| Where | Defect | Fix |
+|---|---|---|
+| `cpu_top.v` | one in-progress bit could not tell an interrupt return from an exception return | one bit per open trap level |
+| `pic.v` + `cpu_top.v` | a source masked in `mie` was still selected, so it starved everything behind it | `mie[31:16]` takes part in the resolution |
+| `pic.v` + `cpu_top.v` | `mip` showed only the offered source | the PIC exports its whole pending set |
+| `soc_addr_map.vh` | 64 KB windows over blocks that decode 8 address bits | 256 B windows, the size of each register file |
+| `pic.v` | bump escalation assumed band 0 is always the most urgent | it steps up the urgency order `BAND_CONFIG` defines |
+| `pic.v` | an edge arriving in the claim cycle was cleared | the edge outranks the claim |
+| `pic.v` | the software-trigger key was compared, not required to be written | both key lanes must be strobed |
+| `csr_file.v` | `mtvec.MODE` stored the reserved encodings 2 and 3 | a reserved MODE folds to direct |
+| `csr_file.v` | `CSRRS`/`CSRRC` on a counter dropped that cycle's event | they apply to the incremented value |
+
+Two of these deserve more than a table row.
+
+**The two interrupt masks did not compose.** The PIC resolved a winner without
+knowing `mie`, and the core applied `mie` to the winner it was handed. A source
+enabled in `INT_ENABLE` but masked in `mie` was therefore selected and never
+claimed: the resolver parked on it, nothing less urgent was ever offered, and a
+`WFI` waiting on one of those sources never woke. This had been documented as an
+integration rule - do not enable a source no handler will service - and the CPU's
+own test program disabled the source in question before its channel sweep, so the
+suite passed by avoiding the case. The core now hands `mie[31:16]` to the PIC and
+the resolver skips masked sources; the sweep leaves the source enabled and masked
+for the whole run, and hangs without the fix.
+
+**`MRET` did not know which trap it was returning from.** The core tracked one
+`in_irq` bit, set on any interrupt and cleared on any `MRET`. Two nested handlers
+sent one end-of-interrupt instead of two, leaving the outer level on the PIC's
+nesting stack with its source active forever; a synchronous exception inside a
+handler sent the end-of-interrupt on the exception's return, popping the
+interrupt while its handler was still running. The core now keeps one bit per
+open trap level, 16 deep, which is the largest `NEST_MAX` the PIC accepts.
+
+---
+
+## 5. Verification
 
 The CPU's existing regression was run before anything changed, so "the merge
 broke nothing" is measured rather than assumed: **14/14**, and 14/14 again
@@ -170,24 +214,36 @@ after the block was relocated.
 
 | Regression | Result |
 |---|---|
-| CPU, 14 runs (`make modelsim`) | all pass |
-| SoC, 9 runs (`make soc`) | all pass |
+| CPU, 15 runs (`make modelsim`) | all pass |
+| SoC, 10 runs (`make soc`) | all pass |
+| CPU lint + SVA + coverage on Verilator (`make test`) | passes, 88/92 bins |
 | SoC lint + SVA on Verilator (`make soc-sva`) | lint clean, all benches pass |
 | DMA block bench | passes |
 | DP-SRAM block bench | 67/67 |
 
-The nine SoC runs are three benches over four bus timings: the burst bridge
-alone, the system with the CPU asleep while the DMA works, and the system with
-the CPU working the bus throughout. The third exists because measuring the
-second showed it never contended the arbiter, never drove both SRAM ports in
-one cycle and never made an unmapped access. The stress bench measures those
-and fails if they did not happen.
+The ten SoC runs are four benches: the address map, the burst bridge, the system
+with the CPU asleep while the DMA works, and the system with the CPU working the
+bus throughout, the last two over four bus timings each. The stress bench exists
+because measuring the plain system bench showed it never contended the arbiter,
+never drove both SRAM ports in one cycle and never made an unmapped access; it
+measures those and fails if they did not happen. The address-map bench exists for
+the opposite reason: its property is one no working program can exercise, since a
+correct program never issues an address that should not decode.
 
 An SVA layer under `soc/debug/sva/` is bound to the fabric and runs on
 Verilator, since ModelSim ASE cannot compile assertions. It checks AXI4-Lite
 and AXI4-Full protocol on every port, plus the fabric's own decisions: disjoint
 address windows, one-hot grants, a grant held until its response beat, a parked
-master that sees nothing, and a burst whose beat counter and `RLAST` agree.
+master that sees nothing, and a burst whose beat counter and `RLAST` agree. The
+CPU block's own assertion binds - the pipeline invariants and the PIC's - are
+compiled into the SoC flow too; until they were split out of the coverage bind
+they were dark in every SoC run.
+
+Every defect in section 4 has a test that fails without its fix. The three PIC
+ones are in `cpu/debug/hdl/tb_pic_sched.v`, the two nesting ones in
+`cpu/debug/hdl/tb_traps.v`, the address map in `soc/debug/hdl/tb_addr_map.v`,
+`mtvec.MODE` in `cpu/debug/hdl/tb_csr_ro.v`, and the interrupt mask in the
+channel sweep of `cpu/debug/sim/program_axi.s`.
 
 Details, including mutation testing and the list of what no test covers, are in
 [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).

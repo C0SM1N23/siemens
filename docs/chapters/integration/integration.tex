@@ -167,11 +167,21 @@ may reach the CPU''; \reg{mie} in the CPU says ``current software cares''. They
 are independent, which is what allows software to mask a class of interrupts
 without reconfiguring the controller.
 
-The failure mode of that arrangement was found during verification and is stated
-in Chapter~\ref{ch:soc}: a source enabled in the PIC but masked in \reg{mie} is
-never claimed, so it remains the PIC's offer forever and starves everything less
-urgent. This is not an RTL defect --- both masks behave as specified --- but it is
-an integration rule the system must respect.
+Stacking them naively does not work, and the first version of this design got it
+wrong. The PIC resolved the winner without knowing \reg{mie}, and the core then
+applied \reg{mie} to the winner it had been handed. A source enabled in the PIC
+but masked in \reg{mie} was therefore selected and never claimed: the controller
+parked on it and every less urgent source starved behind it, and a \sig{WFI}
+waiting on one of those sources never woke. It was written up at the time as an
+integration rule --- do not enable a source no handler will service --- but a rule
+that forbids using a per-source mask for what it is for is not a rule, it is a
+defect with a workaround.
+
+The core now exports \reg{mie}[31:16] to the PIC as \sig{cpu\_mask\_i}, and the
+resolver skips a masked source when it chooses. The source stays pending, so its
+deadline counter keeps running and it is offered the moment software unmasks it;
+the core still re-checks the mask on the offer it receives, which covers the
+cycle in which \reg{mie} changes. Both masks now do what their names say.
 
 \section{Multi-core behaviour}
 

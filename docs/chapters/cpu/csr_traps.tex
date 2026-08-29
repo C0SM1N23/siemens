@@ -67,12 +67,13 @@ others   & ---  & Not implemented, read 0. \\
 \end{table}
 
 \begin{deviation}
-\textbf{Deviation --- \reg{mtvec.MODE} is not WARL-constrained.} MODE is a WARL
-field, so a write of \texttt{10} or \texttt{11} should read back as a legal
-value. The implementation stores the written value verbatim and returns it on a
-read. The trap behaviour for those encodings is that of direct mode, so there is
-no functional risk, but the read does not follow the letter of WARL.
-Fix would be a single masking term on the \reg{mtvec} write path.
+\textbf{\reg{mtvec.MODE} is WARL-constrained on the write path.} MODE is a WARL
+field with only two defined encodings, \texttt{00} and \texttt{01}. An earlier
+version stored a written \texttt{10} or \texttt{11} verbatim and returned it on a
+read. The trap behaviour was direct mode either way, so nothing misbehaved, but
+software that probes \reg{mtvec} to discover which modes the core implements was
+told it supports one it does not. A reserved MODE is now folded to \texttt{00} at
+the write, and the CSR WARL bench checks all four encodings.
 \end{deviation}
 
 \subsection{Counters}
@@ -86,14 +87,20 @@ either half. The update rule is shared by all of them
 \begin{minipage}{0.80\linewidth}
 \ttfamily\small
 inc = cur + ev;\\
-if (wr\_lo)      next = \{ inc[63:32], new\_value(cur[31:0])  \};\\
-else if (wr\_hi) next = \{ new\_value(cur[63:32]), inc[31:0] \};\\
+if (wr\_lo)      next = \{ inc[63:32], new\_value(inc[31:0])  \};\\
+else if (wr\_hi) next = \{ new\_value(inc[63:32]), inc[31:0] \};\\
 else             next = inc;
 \end{minipage}
 \end{center}
 
-The half being written takes the software value while the other half still takes
-the increment, so an event landing in the same cycle as a write is not lost.
+The half not being written always takes the increment, so a carry out of the
+written half is still counted. Within the written half the CSR operation
+decides. \sig{CSRRW} replaces the value outright and the event of that cycle is
+genuinely gone, which is what writing a counter means. \sig{CSRRS} and
+\sig{CSRRC} set and clear bits on top of the incremented value, so they keep it.
+An earlier version applied all three to the pre-increment value and the
+documentation claimed no event was ever lost, which was true only when the write
+happened to carry.
 
 \begin{table}[H]
 \centering
@@ -190,12 +197,14 @@ They are separate because they answer different questions.
 \toprule
 \textbf{Flag} & \textbf{Purpose} \\
 \midrule
-\sig{in\_irq}      & Set when an \emph{interrupt} is taken, cleared on \sig{MRET}. Gates
-  \sig{cpu\_irq\_eoi}, so an \sig{MRET} closing a synchronous trap does not pop a PIC
-  nesting level. \\
-\sig{cpu\_in\_trap} & Set on \emph{any} trap entry, cleared on \sig{MRET}. A nested
-  synchronous trap inside a handler keeps it high. Exported for observability and
-  assertions only; the PIC does not consume it. \\
+\sig{trap\_kind\_q} & One bit per open trap level, 1 if that level was an interrupt.
+  Pushed on every accepted trap, popped on every \sig{MRET}. Gates
+  \sig{cpu\_irq\_eoi}, so an \sig{MRET} closing a synchronous trap pops no PIC nesting
+  level and each nested interrupt handler returns its own end-of-interrupt.
+  Depth 16, the largest \reg{NEST\_MAX} the PIC accepts. \\
+\sig{cpu\_in\_trap} & High while any trap level is open; it drops on the \sig{MRET}
+  that closes the last one, so a nested trap inside a handler keeps it high.
+  Exported for observability and assertions only; the PIC does not consume it. \\
 \bottomrule
 \end{tabular}
 \end{table}
