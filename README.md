@@ -19,7 +19,6 @@ verification.
 | [dma/](dma/) | 4-channel DMA, AXI4-Full master, scatter-gather | `DMA` |
 | [sram/](sram/) | dual-port SRAM, collision detection | `SDRAM` |
 | [soc/](soc/) | interconnect, SoC top level, system verification | new |
-| [docs/](docs/) | engineering documentation (LaTeX) | `RISCV` |
 
 - [INTEGRATION.md](INTEGRATION.md) — what changed in the three blocks, and how
   they were joined.
@@ -29,7 +28,9 @@ verification.
   file and line.
 
 The core keeps its own docs: [cpu/README.md](cpu/README.md) and
-[cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md).
+[cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md). The LaTeX engineering report covers
+the CPU, the PIC and the machine timer, so it lives on the `RISCV` branch under
+`docs/` rather than here.
 
 ## The system
 
