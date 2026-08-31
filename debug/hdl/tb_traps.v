@@ -73,9 +73,11 @@ localparam [31:0] NOP    = 32'h0000_0013;       // addi x0, x0, 0
 localparam [31:0] ECALL  = 32'h0000_0073;
 localparam [31:0] EBREAK = 32'h0010_0073;
 localparam [31:0] BAD_IW = 32'hFFFF_FFFF;       // undefined opcode 1111111
+localparam [31:0] MRET   = 32'h3020_0073;
 
 // ---- CSR numbers used by the test programs ----
-localparam [11:0] CSR_MSTATUS = 12'h300, CSR_MTVEC = 12'h305, CSR_MIE = 12'h304;
+localparam [11:0] CSR_MSTATUS = 12'h300, CSR_MTVEC = 12'h305, CSR_MIE = 12'h304,
+                  CSR_MEPC    = 12'h341;
 
 // ---- clock / reset ----
 reg clk   = 1'b0;
@@ -121,6 +123,7 @@ cpu_top #(.RESET_PC(IMEM_BASE)) dut (
     .dbus_axi_rdata_i(db_rdata), .dbus_axi_rresp_i(db_rresp),
     .dbus_axi_rvalid_i(db_rvalid), .dbus_axi_rready_o(db_rready),
     .cpu_irq_i(cpu_irq), .cpu_irq_vec_i(cpu_irq_vec),
+    .irq_pending_i(16'b0), .irq_mask_o(),
     .cpu_irq_ack_o(cpu_irq_ack), .cpu_irq_eoi_o(cpu_irq_eoi), .cpu_in_trap_o(cpu_in_trap)
 );
 
@@ -150,16 +153,33 @@ axi_lite_mem_model #(.WORDS(256), .BASE(DMEM_BASE), .READ_LAT(1), .WRITE_LAT(1),
 // illegal store must never write memory; both are negative properties, so they
 // need a witness that counts what did happen rather than what did not.
 // ---------------------------------------------------------------------------
-integer db_ar_cnt, db_aw_cnt, ack_cnt;
+integer db_ar_cnt, db_aw_cnt, ack_cnt, eoi_cnt;
+
+// eoi_at_marker samples the EOI count at the instant a handler stores to the
+// marker word. The nesting cases below need to know not just how many EOIs the
+// core sent but WHEN: an EOI sent one MRET too early and an EOI sent at the
+// right time both leave the same total behind.
+localparam [31:0] MARK_ADDR = DMEM_BASE + 32'd0;
+integer eoi_at_marker;
+reg     marker_seen;
+
 always @(posedge clk) begin
     if (!rst_n) begin
-        db_ar_cnt <= 0;
-        db_aw_cnt <= 0;
-        ack_cnt   <= 0;
+        db_ar_cnt     <= 0;
+        db_aw_cnt     <= 0;
+        ack_cnt       <= 0;
+        eoi_cnt       <= 0;
+        eoi_at_marker <= -1;
+        marker_seen   <= 1'b0;
     end else begin
         if (db_arvalid && db_arready) db_ar_cnt <= db_ar_cnt + 1;
         if (db_awvalid && db_awready) db_aw_cnt <= db_aw_cnt + 1;
         if (cpu_irq_ack)              ack_cnt   <= ack_cnt + 1;
+        if (cpu_irq_eoi)              eoi_cnt   <= eoi_cnt + 1;
+        if (db_awvalid && db_awready && db_awaddr == MARK_ADDR && !marker_seen) begin
+            eoi_at_marker <= eoi_cnt;
+            marker_seen   <= 1'b1;
+        end
     end
 end
 
@@ -207,6 +227,8 @@ function [31:0] I_CSRRW; input [4:0] rd; input [11:0] csr; input [4:0] rs1;
     I_CSRRW = enc_i(csr, rs1, 3'b001, rd, OP_SYSTEM); endfunction
 function [31:0] I_CSRRSI; input [4:0] rd; input [11:0] csr; input [4:0] uimm;
     I_CSRRSI = enc_i(csr, uimm, 3'b110, rd, OP_SYSTEM); endfunction
+function [31:0] I_CSRRS;  input [4:0] rd; input [11:0] csr; input [4:0] rs1;
+    I_CSRRS = enc_i(csr, rs1, 3'b010, rd, OP_SYSTEM); endfunction
 
 // ---------------------------------------------------------------------------
 // case scaffolding
@@ -610,6 +632,113 @@ initial begin
     $display("   step 3: vectoring applies to interrupts only, so the handler");
     $display("           entry must be BASE = 0x%08h, NOT BASE + 44", HANDLER);
     expect_trap(32'd11, 32'h0000_0008, 32'h0000_0000, HANDLER);
+
+    // =====================================================================
+    // Nesting: which trap level an MRET is returning from
+    //
+    // MRET is one instruction for two different returns. Returning from an
+    // interrupt handler owes the PIC an EOI; returning from a synchronous
+    // exception owes it nothing. A core that tracks "an interrupt is in
+    // progress" as a single flag cannot tell the two apart, and both cases
+    // below are where that shows.
+    // =====================================================================
+
+    // --- a synchronous exception taken inside an interrupt handler -------
+    //
+    // Vectored mtvec, BASE = 0x80. Interrupt vector 0 is cause 16, so the
+    // interrupt handler entry is BASE + 64 = 0xC0; a synchronous exception
+    // still enters at BASE = 0x80.
+    //
+    //   0xC0  ECALL                 the interrupt handler faults
+    //   0x80  mepc += 4; MRET       the exception handler returns past it
+    //   0xC4  SW marker             back in the interrupt handler
+    //   0xC8  MRET                  the interrupt handler returns
+    //
+    // The exception's MRET must send no EOI: its interrupt is still being
+    // handled. The count is therefore sampled at the marker store, which the
+    // core only reaches after that MRET has retired, and it has to be 0 there.
+    prog_init;
+    prog[0]  = I_ADDI (5'd3, 5'd0, HANDLER[11:0] | 12'd1);   // BASE | MODE=1
+    prog[1]  = I_CSRRW(5'd0, CSR_MTVEC, 5'd3);
+    prog[2]  = I_LUI  (5'd3, 20'h00010);                     // mie bit 16 = vec 0
+    prog[3]  = I_CSRRW(5'd0, CSR_MIE, 5'd3);
+    prog[4]  = I_LUI  (5'd5, MARK_ADDR[31:12]);              // x5 = marker base
+    prog[5]  = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);            // mstatus.MIE = 1
+    prog[6]  = I_JAL  (5'd0, 21'd0);                         // spin until the irq
+    prog[32] = I_CSRRS(5'd4, CSR_MEPC, 5'd0);                // 0x80: exception handler
+    prog[33] = I_ADDI (5'd4, 5'd4, 12'd4);                   //   mepc += 4
+    prog[34] = I_CSRRW(5'd0, CSR_MEPC, 5'd4);
+    prog[35] = MRET;                                         //   return past the ECALL
+    prog[48] = ECALL;                                        // 0xC0: interrupt handler
+    prog[49] = I_SW   (5'd0, 5'd5, 12'd0);                   // 0xC4: marker store
+    prog[50] = MRET;                                         // 0xC8: return from the irq
+
+    start_case("nesting - an exception inside an interrupt handler sends no EOI");
+    $display("   step 1: vectored mtvec, interrupt vector 0 enters at 0x%08h",
+             HANDLER + 32'd64);
+    $display("   step 2: the interrupt handler executes ECALL, so a synchronous");
+    $display("           trap opens on top of an interrupt that is still open");
+    $display("   step 3: the exception's MRET must send no EOI - the interrupt");
+    $display("           has not returned yet and its source must stay in service");
+    run_irq_case(4'd0);
+    while (!marker_seen) @(posedge clk);
+    check(32'd0, eoi_at_marker[31:0],
+          "  no EOI had been sent when the exception's MRET had retired");
+    check(32'd1, {31'b0, cpu_in_trap},
+          "  cpu_in_trap still set: the interrupt level is still open");
+    cpu_irq = 1'b0;
+    repeat (40) @(posedge clk);
+    check(32'd1, eoi_cnt[31:0],  "  the interrupt handler's MRET sent the one EOI");
+    check(32'd1, ack_cnt[31:0],  "  exactly one claim was made");
+    check(32'd0, {31'b0, cpu_in_trap}, "  cpu_in_trap released on the last MRET");
+
+    // --- two nested interrupt handlers -----------------------------------
+    //
+    //   0xC0  JAL h0        vector 0 entry
+    //   0xC4  JAL h1        vector 1 entry
+    //   0x100 h0: mstatus.MIE = 1; NOP x4; SW marker; MRET
+    //   0x120 h1: MRET
+    //
+    // h0 re-enables interrupts and is preempted by vector 1. Two claims are
+    // made, so two EOIs have to come back: one per handler return.
+    prog_init;
+    prog[0]  = I_ADDI (5'd3, 5'd0, HANDLER[11:0] | 12'd1);
+    prog[1]  = I_CSRRW(5'd0, CSR_MTVEC, 5'd3);
+    prog[2]  = I_LUI  (5'd3, 20'h00030);                     // mie bits 16 and 17
+    prog[3]  = I_CSRRW(5'd0, CSR_MIE, 5'd3);
+    prog[4]  = I_LUI  (5'd5, MARK_ADDR[31:12]);              // x5 = marker base
+    prog[5]  = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);
+    prog[6]  = I_JAL  (5'd0, 21'd0);
+    prog[48] = I_JAL  (5'd0, 21'd64);                        // 0xC0 -> 0x100
+    prog[49] = I_JAL  (5'd0, 21'd92);                        // 0xC4 -> 0x120
+    prog[64] = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);            // 0x100: h0 re-enables MIE
+    prog[65] = NOP;                                          //   preemption window
+    prog[66] = NOP;
+    prog[67] = NOP;
+    prog[68] = NOP;
+    prog[69] = I_SW   (5'd0, 5'd5, 12'd0);                   //   marker: h1 has returned
+    prog[70] = MRET;
+    prog[72] = MRET;                                         // 0x120: h1 returns at once
+
+    start_case("nesting - each nested interrupt handler returns its own EOI");
+    $display("   step 1: vector 0 is taken and its handler re-enables mstatus.MIE");
+    $display("   step 2: vector 1 preempts it, so two claims are outstanding");
+    $display("   step 3: both MRETs must send an EOI, one per open level");
+    run_irq_case(4'd0);
+    while (ack_cnt != 1) @(posedge clk);
+    cpu_irq = 1'b0;
+    repeat (6) @(posedge clk);
+    cpu_irq_vec = 4'd1;                                      // preempt
+    cpu_irq     = 1'b1;
+    while (ack_cnt != 2) @(posedge clk);
+    cpu_irq = 1'b0;
+    while (!marker_seen) @(posedge clk);
+    check(32'd1, eoi_at_marker[31:0],
+          "  the inner handler's MRET sent exactly one EOI");
+    repeat (40) @(posedge clk);
+    check(32'd2, ack_cnt[31:0], "  two claims were made");
+    check(32'd2, eoi_cnt[31:0], "  two EOIs came back, one per level");
+    check(32'd0, {31'b0, cpu_in_trap}, "  cpu_in_trap released only at the end");
 
     // ---- done ----
     repeat (10) @(posedge clk);

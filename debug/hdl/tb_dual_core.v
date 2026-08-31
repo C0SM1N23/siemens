@@ -47,6 +47,8 @@ cpu_top #(.HART_ID(0)) cpu0 (
     `AXIL_MST(dbus_axi, db0),
     .cpu_irq_i     (1'b0),
     .cpu_irq_vec_i (4'b0),
+    .irq_pending_i (16'b0),
+    .irq_mask_o    (),
     .cpu_irq_ack_o (ack[0]),
     .cpu_irq_eoi_o (eoi[0]),
     .cpu_in_trap_o (intrap[0])
@@ -59,6 +61,8 @@ cpu_top #(.HART_ID(1)) cpu1 (
     `AXIL_MST(dbus_axi, db1),
     .cpu_irq_i     (1'b0),
     .cpu_irq_vec_i (4'b0),
+    .irq_pending_i (16'b0),
+    .irq_mask_o    (),
     .cpu_irq_ack_o (ack[1]),
     .cpu_irq_eoi_o (eoi[1]),
     .cpu_in_trap_o (intrap[1])

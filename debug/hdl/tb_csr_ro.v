@@ -292,12 +292,22 @@ initial begin
     csr_read_chk(MEPC, 32'h0000_1000, "  mepc[1:0] forced to 0 again");
     check(32'h0000_1000, mepc_out,    "  the mepc output matches the stored value");
 
-    $display("   step 4: mtvec and mscratch are fully writable - the control case");
-    $display("           that shows steps 1..3 masked fields rather than dropping writes");
-    csr_write(MTVEC, 32'hDEAD_BEEF, 1'b0, "  mtvec write is accepted");
-    csr_read_chk(MTVEC, 32'hDEAD_BEEF, "  mtvec keeps all 32 bits");
+    $display("   step 4: mscratch is fully writable - the control case that shows");
+    $display("           steps 1..3 masked fields rather than dropping writes");
     csr_write(MSCRATCH, 32'hA5A5_5A5A, 1'b0, "  mscratch write is accepted");
     csr_read_chk(MSCRATCH, 32'hA5A5_5A5A, "  mscratch keeps all 32 bits");
+
+    $display("   step 5: mtvec BASE is fully writable, MODE is WARL");
+    $display("           only 0 (direct) and 1 (vectored) exist; 2 and 3 are");
+    $display("           reserved and must not read back as if they worked");
+    csr_write(MTVEC, 32'hDEAD_BEEC, 1'b0, "  mtvec MODE=0 write accepted");
+    csr_read_chk(MTVEC, 32'hDEAD_BEEC, "  BASE kept, MODE direct");
+    csr_write(MTVEC, 32'hDEAD_BEED, 1'b0, "  mtvec MODE=1 write accepted");
+    csr_read_chk(MTVEC, 32'hDEAD_BEED, "  BASE kept, MODE vectored");
+    csr_write(MTVEC, 32'hDEAD_BEEE, 1'b0, "  mtvec MODE=2 write accepted");
+    csr_read_chk(MTVEC, 32'hDEAD_BEEC, "  reserved MODE=2 reads back as direct");
+    csr_write(MTVEC, 32'hDEAD_BEEF, 1'b0, "  mtvec MODE=3 write accepted");
+    csr_read_chk(MTVEC, 32'hDEAD_BEEC, "  reserved MODE=3 reads back as direct");
     csr_write(MTVEC, 32'h0000_0000, 1'b0, "  mtvec restored");
 
     // =====================================================================

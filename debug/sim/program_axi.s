@@ -150,11 +150,11 @@ ff_resume:
     lw   x30, 0xDC(x28)      # INT_STATUS: no spurious/escalation/overflow yet
     sw   x30, 188(x14)       # [188] = 0x0
 
-    # with MIE still 0 only the masked src5 is pending, so the PIC's single
-    # offer names it: mip[21] set, everything else clear (the one-hot the CPU
-    # builds from cpu_irq_vec). Read it here, before any lower source is raised.
+    # mip is the PIC's pending set, not its offer: src5 is PIC-enabled and
+    # asserted, so mip[21] reads 1 even though mie masks it and the PIC will
+    # never offer it. Read here, before any lower source is raised.
     csrrs x30, mip, x0
-    sw   x30, 136(x14)       # [136] = mip: masked src5 offered = 0x00200000
+    sw   x30, 136(x14)       # [136] = mip: src5 pending = 0x00200000
 
     addi x28, x0, vec_base
     ori  x28, x28, 1         # MODE = 01 (vectored)
@@ -393,18 +393,22 @@ jl_tgt:
 
 # ---- PIC channel sweep: every channel taken once (ch5 excepted) ----------
 # The TB raises src0/1/4/6 in order, one per trigger store to [248], and
-# drops each line on its claim. ch5 is PIC-disabled first: a pending channel
-# that is mie-masked would sit as the PIC's offer (never claimed) and starve
-# the others — the same reason the real SoC must not leave a routed-but-
-# unhandled source enabled.
+# drops each line on its claim. src5 is left PIC-enabled and is asserted for
+# the whole run while mie masks it forever, which is the case that has to work:
+# the PIC is given mie[31:16] and skips a source this core will not take, so ch5
+# stays pending in mip without ever being offered and without holding up the
+# channels behind it. ch6 is what proves it, since its key sits below ch5's: a
+# resolver that parked on ch5 would never reach ch6 and the sweep would hang.
 .org 0xA00
 phase_h:
     sw   x31, 200(x14)       # [200] = irq #3 mcause, before the sweep moves x31
     lui  x28, 0x30000
-    addi x30, x0, 0xDF
-    sw   x30, 0xD8(x28)      # INT_ENABLE = 0xDF (all but src5)
+    addi x30, x0, 0xFF
+    sw   x30, 0xD8(x28)      # INT_ENABLE = 0xFF (src5 included, mie-masked)
     lui  x28, 0xDF0
-    csrrs x0, mie, x28       # mie |= ch0,1,4,6,7 (ch5 stays masked forever)
+    csrrs x0, mie, x28       # mie |= ch0,1,4,6,7 (ch5 stays masked forever);
+                             # src5 is PIC-enabled but masked here, so the sweep
+                             # only completes if the PIC honours the CPU mask
     addi x28, x0, 8
     csrrs x0, mstatus, x28   # mstatus.MIE = 1
     addi x31, x0, 0
