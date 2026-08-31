@@ -37,6 +37,8 @@ cov_annotated/
 *.lof
 *.lot
 *.synctex.gz
+*.fls
+*.fdb_latexmk
 
 # editor / OS noise
 .veritrace/
