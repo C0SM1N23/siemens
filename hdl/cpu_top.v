@@ -93,9 +93,14 @@ module cpu_top #(
     input             dbus_axi_rvalid_i,
     output            dbus_axi_rready_o,
 
-    // PIC interface (see D3): single request + 4-bit vector, claim/eoi pulses
+    // PIC interface (see D3): single request + 4-bit vector, claim/eoi pulses.
+    // irq_pending_i is the PIC's full pending mask and feeds mip[31:16];
+    // irq_mask_o is mie[31:16] going back the other way, so the PIC's resolver
+    // never picks a source this core has masked off.
     input             cpu_irq_i,
     input      [3:0]  cpu_irq_vec_i,
+    input      [15:0] irq_pending_i,
+    output     [15:0] irq_mask_o,
     output reg        cpu_irq_ack_o,
     output reg        cpu_irq_eoi_o,
     output reg        cpu_in_trap_o
@@ -292,13 +297,19 @@ wire        lsu_busy, lsu_done, lsu_err, lsu_active;
 wire        mie_global;
 wire [15:0] irq_enable;
 
-// the PIC offers one prioritised source; the CPU still masks it per-source with
-// mie[16+vec] (independent of the PIC's own INT_ENABLE) and globally with MIE
+// The PIC offers one prioritised source. mie[31:16] is handed to the PIC so the
+// resolver skips sources this core has masked; the check is repeated here on
+// the offer because mie can change in the cycle between the two, and globally
+// with MIE.
+assign irq_mask_o = irq_enable;
+
 wire irq_deliverable = cpu_irq_i && irq_enable[cpu_irq_vec_i];
 wire irq_take = ifdx_valid_q && !lsu_active && mie_global && irq_deliverable;
 
-// the offered source as a one-hot for mip[31:16] (the machine external window)
-wire [15:0] irq_onehot = cpu_irq_i ? (16'b1 << cpu_irq_vec_i) : 16'b0;
+// mip[31:16] (the machine external window) shows everything the PIC has
+// pending, not just the source it chose to offer: mip reports what is waiting,
+// and software reading it has to see the sources queued behind the winner.
+wire [15:0] irq_lines = irq_pending_i;
 
 // instruction actually executes: not preempted, and the fetch was clean
 wire dec_live = ifdx_valid_q && !irq_take && !ifdx_fault_q;
@@ -383,7 +394,7 @@ csr_file #(.HART_ID(HART_ID)) csr_file_inst (
     .trap_pc_i     (irq_take && ctrl_wfi && !ifdx_fault_q ? s2_pc4 : ifdx_pc_q),
     .trap_val_i    (trap_val),
     .mret_i        (mret_exec),
-    .irq_lines_i   (irq_onehot),
+    .irq_lines_i   (irq_lines),
     .irq_enable_o  (irq_enable),
     .mie_global_o  (mie_global),
     .trap_vector_o (trap_vector),
@@ -505,17 +516,48 @@ hazard_unit hazard_unit_inst (
     .fwd_rs2_o      (fwd_rs2)
 );
 
-// interrupt-in-progress flag: set when an interrupt trap is accepted, cleared on
-// MRET. It drives cpu_irq_eoi_o so the PIC pops exactly one nesting level per
-// interrupt-handler return. One level is exact for the integrated CPU (handlers
-// run with MIE=0 and take no synchronous trap of their own); the PIC verifies
-// deeper hardware nesting standalone in tb_pic, driven by the ack/eoi pulses.
-reg in_irq;
+// Open-trap stack: one bit per trap level currently open, 1 if that level was
+// an interrupt (and so owes the PIC an EOI on return), 0 if it was a
+// synchronous exception (and owes nothing). Pushed on every accepted trap,
+// popped on every MRET.
+//
+// A single in-progress flag is not enough, because MRET is the same instruction
+// for both kinds of return and both kinds of trap can be open at once:
+//
+//   - two nested interrupt handlers: the inner MRET would clear the flag, the
+//     outer MRET would then send no EOI, and the outer level would sit on the
+//     PIC's nesting stack forever with its source stuck active.
+//   - a synchronous exception taken inside an interrupt handler: its MRET would
+//     find the flag set and send an EOI, popping the interrupt out of the PIC
+//     while its handler is still running.
+//
+// Both disappear once the return knows which kind of trap it is returning from,
+// which is exactly one bit per level. TRAP_DEPTH matches the PIC's largest
+// NEST_MAX, so no reachable interrupt nesting can overflow it.
+localparam TRAP_DEPTH = 16;
+
+reg  [TRAP_DEPTH-1:0] trap_kind_q;    // bit 0 = innermost open level
+reg  [4:0]            trap_depth_q;   // 0..TRAP_DEPTH
+
+wire trap_push = trap_take && s2_advance;
+wire trap_pop  = mret_exec && s2_advance && (trap_depth_q != 5'd0);
+
 always @(posedge clk_i or negedge rst_n_i) begin
-    if (~rst_n_i)                       in_irq <= 1'b0;
-    else if (irq_take && s2_advance)  in_irq <= 1'b1;
-    else if (mret_exec && s2_advance) in_irq <= 1'b0;
+    if (~rst_n_i) begin
+        trap_kind_q  <= {TRAP_DEPTH{1'b0}};
+        trap_depth_q <= 5'd0;
+    end else if (trap_push) begin
+        trap_kind_q  <= {trap_kind_q[TRAP_DEPTH-2:0], irq_take};
+        if (trap_depth_q != TRAP_DEPTH[4:0])
+            trap_depth_q <= trap_depth_q + 5'd1;
+    end else if (trap_pop) begin
+        trap_kind_q  <= {1'b0, trap_kind_q[TRAP_DEPTH-1:1]};
+        trap_depth_q <= trap_depth_q - 5'd1;
+    end
 end
+
+// the level this MRET is returning from was an interrupt
+wire mret_from_irq = trap_pop && trap_kind_q[0];
 
 // claim pulses one cycle at acceptance (REQ4)
 always @(posedge clk_i or negedge rst_n_i) begin
@@ -525,22 +567,26 @@ always @(posedge clk_i or negedge rst_n_i) begin
         cpu_irq_ack_o <= irq_take && s2_advance;
 end
 
-// eoi pulses one cycle when an interrupt handler returns (REQ4)
+// eoi pulses one cycle when an interrupt handler returns (REQ4). An MRET that
+// returns from a synchronous exception sends nothing, even if an interrupt
+// handler is open underneath it.
 always @(posedge clk_i or negedge rst_n_i) begin
     if (~rst_n_i)
         cpu_irq_eoi_o <= 1'b0;
     else
-        cpu_irq_eoi_o <= mret_exec && s2_advance && in_irq;
+        cpu_irq_eoi_o <= mret_from_irq;
 end
 
-// cpu_in_trap_o holds until MRET; a nested sync trap in the handler keeps it up (REQ4)
+// cpu_in_trap_o is "some trap level is still open", so a nested trap inside a
+// handler really does keep it up: it drops only on the MRET that closes the
+// last level (REQ4).
 always @(posedge clk_i or negedge rst_n_i) begin
     if (~rst_n_i)
         cpu_in_trap_o <= 1'b0;
-    else if (trap_take && s2_advance)
+    else if (trap_push)
         cpu_in_trap_o <= 1'b1;
-    else if (mret_exec && s2_advance)
-        cpu_in_trap_o <= 1'b0;
+    else if (trap_pop)
+        cpu_in_trap_o <= (trap_depth_q > 5'd1);
 end
 
 // DX/WB valid, with trap squash: the offending instruction never commits (D3).

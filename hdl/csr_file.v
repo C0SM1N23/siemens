@@ -181,6 +181,17 @@ assign trap_vector_o = (mtvec_q[1:0] == 2'b01 && trap_is_irq_i)
                      ? tvec_base + {25'b0, trap_code_i, 2'b00}
                      : tvec_base;
 
+// mtvec.MODE is WARL and only two encodings are defined, 0 (direct) and 1
+// (vectored); 2 and 3 are reserved. WARL means an implementation may hold any
+// legal value, not that it may hold an illegal one, so a reserved encoding is
+// folded back to direct here rather than stored and read back as if it were
+// supported. Without this, software that probes mtvec to discover which modes
+// the core implements is told the core supports a mode it does not.
+function [31:0] mtvec_warl;
+    input [31:0] v;
+    mtvec_warl = {v[31:2], v[1] ? 2'b00 : v[1:0]};
+endfunction
+
 // new value per CSR op type
 function [31:0] csr_new_val;
     input [31:0] old_val;
@@ -194,9 +205,12 @@ function [31:0] csr_new_val;
     endcase
 endfunction
 
-// One 64-bit counter step. The half being written takes the software value;
-// the other half still takes the increment, so the event that happened in the
-// same cycle as the write is never lost.
+// One 64-bit counter step. The half not being written always takes the
+// increment, so a carry out of the written half is still counted. Within the
+// written half the CSR op decides: CSRRW replaces the value outright and the
+// event of that cycle is genuinely gone, which is what a write to a counter
+// means; CSRRS/CSRRC set and clear bits on top of the incremented value, so
+// they keep the event instead of quietly dropping it.
 function [63:0] cnt_next;
     input [63:0] cur;
     input        ev;
@@ -208,9 +222,9 @@ function [63:0] cnt_next;
     begin
         inc = cur + {63'b0, ev};
         if (wr_lo)
-            cnt_next = { inc[63:32], csr_new_val(cur[31:0],  wdata, op) };
+            cnt_next = { inc[63:32], csr_new_val(inc[31:0],  wdata, op) };
         else if (wr_hi)
-            cnt_next = { csr_new_val(cur[63:32], wdata, op), inc[31:0] };
+            cnt_next = { csr_new_val(inc[63:32], wdata, op), inc[31:0] };
         else
             cnt_next = inc;
     end
@@ -309,7 +323,7 @@ always @(posedge clk_i or negedge rst_n_i) begin
     if (~rst_n_i)
         mtvec_q <= 32'b0;
     else if (wr_mtvec)
-        mtvec_q <= csr_new_val(mtvec_q, csr_wdata_i, csr_op_i);
+        mtvec_q <= mtvec_warl(csr_new_val(mtvec_q, csr_wdata_i, csr_op_i));
 end
 
 always @(posedge clk_i or negedge rst_n_i) begin
