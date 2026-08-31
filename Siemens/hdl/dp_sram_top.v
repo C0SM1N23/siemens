@@ -110,6 +110,7 @@ module dp_sram_top #(
     wire        a_reg_valid_w = a_mem_valid & a_is_reg;   // to regfile
     wire [2:0]  a_reg_addr_w  = a_word_addr[2:0];
     wire [31:0] a_reg_rdata_w;
+    wire        a_reg_error_w;
 
     wire        a_mem_valid_bk = a_mem_valid & !a_is_reg; // collision_det does not receive register addresses
     wire        a_mem_write_bk = a_mem_write & !a_is_reg;
@@ -117,7 +118,7 @@ module dp_sram_top #(
     wire        a_mem_error_bk;
     wire [31:0] a_mem_rdata_bk;
 
-    assign a_mem_error_final = a_is_reg ? 1'b0          : a_mem_error_bk;
+    assign a_mem_error_final = a_is_reg ? a_reg_error_w : a_mem_error_bk;
     assign a_mem_rdata_final = a_is_reg ? a_reg_rdata_w : a_mem_rdata_bk;
 
     // register vs memory for Port B
@@ -127,6 +128,7 @@ module dp_sram_top #(
     wire        b_reg_valid_w = b_mem_valid & b_is_reg;
     wire [2:0]  b_reg_addr_w  = b_word_addr[2:0];
     wire [31:0] b_reg_rdata_w;
+    wire        b_reg_error_w;
 
     wire        b_mem_valid_bk = b_mem_valid & !b_is_reg;
     wire        b_mem_write_bk = b_mem_write & !b_is_reg;
@@ -134,7 +136,7 @@ module dp_sram_top #(
     wire        b_mem_error_bk;
     wire [31:0] b_mem_rdata_bk;
 
-    assign b_mem_error_final = b_is_reg ? 1'b0          : b_mem_error_bk;
+    assign b_mem_error_final = b_is_reg ? b_reg_error_w : b_mem_error_bk;
     assign b_mem_rdata_final = b_is_reg ? b_reg_rdata_w : b_mem_rdata_bk;
 
     // collision_det.v -- only sees requests from the data region
@@ -167,12 +169,14 @@ module dp_sram_top #(
     );
 
     // regfile.v -- only sees requests from the register region
-    regfile #(.REG_ADDR_W(3)) u_regfile (
+    dp_sram_regfile #(.REG_ADDR_W(3)) u_regfile (
         .clk_i(clk_i), .rst_n_i(rst_n_i),
         .a_reg_valid_i(a_reg_valid_w), .a_reg_addr_i(a_reg_addr_w),
-        .a_reg_write_i(a_mem_write), .a_reg_wdata_i(a_mem_wdata), .a_reg_rdata_o(a_reg_rdata_w),
+        .a_reg_write_i(a_mem_write), .a_reg_wdata_i(a_mem_wdata), .a_reg_wstrb_i(a_mem_wstrb),
+        .a_reg_rdata_o(a_reg_rdata_w), .a_reg_error_o(a_reg_error_w),
         .b_reg_valid_i(b_reg_valid_w), .b_reg_addr_i(b_reg_addr_w),
-        .b_reg_write_i(b_mem_write), .b_reg_wdata_i(b_mem_wdata), .b_reg_rdata_o(b_reg_rdata_w),
+        .b_reg_write_i(b_mem_write), .b_reg_wdata_i(b_mem_wdata), .b_reg_wstrb_i(b_mem_wstrb),
+        .b_reg_rdata_o(b_reg_rdata_w), .b_reg_error_o(b_reg_error_w),
         .collision_event_i(collision_event_w), .cooldown_event_i(cooldown_event_w),
         .a_mem_valid_i(a_mem_valid_bk), .b_mem_valid_i(b_mem_valid_bk),
         .force_priority_o(force_priority_w),

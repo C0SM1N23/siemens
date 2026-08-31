@@ -38,7 +38,7 @@ module mem_array #(
     assign a_rdata_o = mem[a_word_addr]; // combinational read Port A
     assign b_rdata_o = mem[b_word_addr]; // combinational read Port B
 
-    //write
+    //write (single always block, so the synthesizer infers one true dual-port memory)
     always @(posedge clk_i) begin
         if (a_write_grant_i) begin
             if (a_wstrb_i[0]) mem[a_word_addr][7:0]   <= a_wdata_i[7:0];   // byte 0

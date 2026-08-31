@@ -1,29 +1,29 @@
 REM =============================================================================
 REM regfile_test_vectors.txt
 REM
-REM Vectori de test pentru regfile.v, interpretati de tb_regfile.v
+REM Test vectors for regfile.v, interpreted by tb_regfile.v
 REM
-REM Format: fiecare linie are exact 4 campuri, separate prin spatiu:
-REM   COMANDA  ARG1  ARG2  ARG3
-REM Campurile nefolosite se completeaza cu "-"
-REM Liniile de comentariu incep cu REM (parserul Verilog nu recunoaste "#")
-REM Liniile goale sunt ignorate
+REM Format: each line has exactly 4 fields, separated by spaces:
+REM   COMMAND  ARG1  ARG2  ARG3
+REM Unused fields are filled with "-"
+REM Comment lines start with REM (the Verilog parser does not recognize "#")
+REM Empty lines are ignored
 REM
-REM Comenzi disponibile:
-REM   REM      -              -           -       comentariu, nicio actiune
-REM   RESET    -              -           -       aplica reset (3 cicluri) apoi il elibereaza
-REM   WRITE    <A|B>          <reg>       <hex>   scrie <hex> in <reg> prin portul <A|B>
-REM   READ     <A|B>          <reg>       <hex>   citeste <reg> prin portul <A|B>, compara cu <hex>
-REM   CONFLICT <reg>          <hexA>      <hexB>  scriere simultana A+B pe <reg>; verifica ca A castiga
-REM   EVENT    <col|cd>       -           -       impuls de 1 ciclu pe collision_event / cooldown_event
-REM   ACTIVITY <A|B>          <cicluri>   -       tine a_mem_valid/b_mem_valid sus <cicluri> cicluri
-REM   WAIT     <cicluri>      -           -       avanseaza <cicluri> cicluri, fara alta actiune
-REM   CHECKOUT <irq|fp|th|cd> <hex>       -       verifica o iesire directa a modulului
+REM Available commands:
+REM   REM      -              -           -       comment, no action
+REM   RESET    -              -           -       applies reset (3 cycles) then releases it
+REM   WRITE    <A|B>          <reg>       <hex>   writes <hex> to <reg> via port <A|B>
+REM   READ     <A|B>          <reg>       <hex>   reads <reg> via port <A|B>, compares with <hex>
+REM   CONFLICT <reg>          <hexA>      <hexB>  simultaneous A+B write to <reg>; checks that A wins
+REM   EVENT    <col|cd>       -           -       1-cycle pulse on collision_event / cooldown_event
+REM   ACTIVITY <A|B>          <cycles>    -       holds a_mem_valid/b_mem_valid high for <cycles> cycles
+REM   WAIT     <cycles>       -           -       advances <cycles> cycles, no other action
+REM   CHECKOUT <irq|fp|th|cd> <hex>       -       checks a direct output of the module
 REM
-REM Registre valide pentru WRITE/READ: STATUS ENABLE PRIORITY BWA BWB THRESH COOLD
+REM Valid registers for WRITE/READ: STATUS ENABLE PRIORITY BWA BWB THRESH COOLD
 REM =============================================================================
 
-REM ==================== Grup 1: valori implicite dupa reset ====================
+REM ==================== Group 1: default values after reset ====================
 RESET    -   -   -
 READ  A  STATUS   0
 READ  A  ENABLE   0
@@ -37,7 +37,7 @@ CHECKOUT fp  0
 CHECKOUT th  4
 CHECKOUT cd  4
 
-REM ==================== Grup 2: scriere/citire simpla pe registre R/W ====================
+REM ==================== Group 2: simple write/read on R/W registers ====================
 WRITE A  ENABLE   3
 READ  A  ENABLE   3
 WRITE B  ENABLE   7
@@ -51,7 +51,7 @@ READ  A  COOLD    10
 CHECKOUT cd  10
 WRITE A  ENABLE   0
 
-REM ==================== Grup 3: FORCE_PRIORITY pastreaza doar bitul 0 ====================
+REM ==================== Group 3: FORCE_PRIORITY keeps only bit 0 ====================
 WRITE A  PRIORITY FFFFFFFF
 READ  A  PRIORITY 1
 CHECKOUT fp 1
@@ -59,13 +59,13 @@ WRITE A  PRIORITY 0
 READ  A  PRIORITY 0
 CHECKOUT fp 0
 
-REM ==================== Grup 4: BWA/BWB sunt RO, scrierile sunt ignorate ====================
+REM ==================== Group 4: BWA/BWB are RO, writes are ignored ====================
 WRITE A  BWA      DEADBEEF
 READ  A  BWA      0
 WRITE B  BWB      DEADBEEF
 READ  B  BWB      0
 
-REM ==================== Grup 5: comportament W1C pe INT_STATUS ====================
+REM ==================== Group 5: W1C behavior on INT_STATUS ====================
 EVENT col   -   -
 READ  A  STATUS   1
 WRITE A  STATUS   0
@@ -77,7 +77,7 @@ READ  A  STATUS   2
 WRITE A  STATUS   2
 READ  A  STATUS   0
 
-REM ==================== Grup 6: generare irq din STATUS & ENABLE ====================
+REM ==================== Group 6: irq generation from STATUS & ENABLE ====================
 WRITE A  ENABLE   1
 EVENT col   -   -
 CHECKOUT irq 1
@@ -89,12 +89,12 @@ CHECKOUT irq 0
 WRITE A  STATUS   1
 WRITE A  ENABLE   0
 
-REM ==================== Grup 7: scriere simultana A/B pe acelasi registru -- A castiga ====================
+REM ==================== Group 7: simultaneous A/B write to the same register -- A wins ====================
 CONFLICT ENABLE  5  A
 READ  A  ENABLE   5
 WRITE A  ENABLE   0
 
-REM ==================== Grup 8: numaratoarea BANDWIDTH_A/B pe o fereastra ====================
+REM ==================== Group 8: BANDWIDTH_A/B counting over one window ====================
 RESET    -   -   -
 ACTIVITY A   8   -
 WAIT     20  -   -
