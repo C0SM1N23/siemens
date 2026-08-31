@@ -35,15 +35,21 @@ paid, so the trade was taken deliberately.
 \centering
 \resizebox{\linewidth}{!}{%
 \begin{tikzpicture}[x=1mm,y=1mm,font=\small]
+  % Routing rules for this figure: no line crosses a box or a label, and every
+  % arrow ends on a block or on a junction rail. The two return paths along the
+  % bottom cross each other once, at (58,-64) in open space - the predictor
+  % update is tapped right of the forwarding return but lands left of it, so
+  % one crossing is unavoidable.
+
   % --- stage bands -------------------------------------------------------
   \begin{scope}[on background layer]
-    \fill[boxbg]     (-16,-64) rectangle (22,12);
-    \fill[boxbg!55]  (26,-64)  rectangle (128,12);
-    \fill[boxbg]     (132,-64) rectangle (168,12);
+    \fill[boxbg]     (-16,-72) rectangle (22,13);
+    \fill[boxbg!55]  (26,-72)  rectangle (128,13);
+    \fill[boxbg]     (132,-72) rectangle (183,13);
   \end{scope}
-  \node[font=\small\bfseries,color=accent] at (3,7)   {S1 fetch};
-  \node[font=\small\bfseries,color=accent] at (77,7)  {S2 decode + execute};
-  \node[font=\small\bfseries,color=accent] at (150,7) {S3 writeback};
+  \node[font=\small\bfseries,color=accent] at (3,9)   {S1 fetch};
+  \node[font=\small\bfseries,color=accent] at (77,9)  {S2 decode + execute};
+  \node[font=\small\bfseries,color=accent] at (159,9) {S3 writeback};
 
   % --- S1 ----------------------------------------------------------------
   \node[blk,minimum width=32,minimum height=12] (fu) at (3,-6)
@@ -52,10 +58,12 @@ paid, so the trade was taken deliberately.
         {branch\_predictor\\\scriptsize BTB/BHT + RAS};
 
   % --- pipeline registers ------------------------------------------------
-  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=68,inner sep=0] (ifdx) at (24,-28) {};
-  \node[rotate=90,font=\tiny] at (24,-28) {IF/DX};
-  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=68,inner sep=0] (dxwb) at (130,-28) {};
-  \node[rotate=90,font=\tiny] at (130,-28) {DX/WB};
+  % Topped at y = 2 so the redirect path can run above them at y = 5 without
+  % passing through either bar.
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=64,inner sep=0] (ifdx) at (24,-30) {};
+  \node[rotate=90,font=\tiny] at (24,-30) {IF/DX};
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=64,inner sep=0] (dxwb) at (133,-30) {};
+  \node[rotate=90,font=\tiny] at (133,-30) {DX/WB};
 
   % --- S2 datapath, left to right ----------------------------------------
   \node[blk,minimum width=24,minimum height=12] (dec) at (42,-6)
@@ -77,7 +85,7 @@ paid, so the trade was taken deliberately.
   \node[blkf,minimum width=30,minimum height=9] (exc) at (76,-46) {exception\_unit};
 
   % --- S3 ----------------------------------------------------------------
-  \node[blk,minimum width=30,minimum height=10] (wb) at (150,-22) {writeback\_mux};
+  \node[blk,minimum width=30,minimum height=10] (wb) at (161,-22) {writeback\_mux};
 
   % --- S1 into IF/DX, IF/DX into S2 --------------------------------------
   \draw[flow] (fu.east) -- (ifdx.west|-fu);
@@ -93,29 +101,42 @@ paid, so the trade was taken deliberately.
   \draw[thick,draw=accent] (94,-6) -- (94,-56);
   \foreach \y in {-6,-22,-40,-56} \draw[flow] (94,\y) -- (99,\y);
 
-  % --- S2 results into DX/WB, one arrow out to S3 ------------------------
+  % --- S2 results into DX/WB --------------------------------------------
   \draw[flow] (alu.east) -- (dxwb.west|-alu);
   \draw[flow] (bu.east)  -- (dxwb.west|-bu);
   \draw[flow] (lsu.east) -- (dxwb.west|-lsu);
   \draw[flow] (csr.east) -- (dxwb.west|-csr);
-  \draw[flow] (dxwb.east|-wb) -- (wb.west);
+
+  % --- result rail: the four candidates the mux selects between ----------
+  % Each result leaves DX/WB and meets the others on the rail, so every one of
+  % them ends somewhere instead of stopping at the register edge.
+  \draw[flow,-] (dxwb.east|-alu) -- (141,-6);
+  \draw[flow,-] (dxwb.east|-bu)  -- (141,-22);
+  \draw[flow,-] (dxwb.east|-lsu) -- (141,-40);
+  \draw[flow,-] (dxwb.east|-csr) -- (141,-56);
+  \draw[thick,draw=accent] (141,-6) -- (141,-56);
+  \draw[flow] (141,-22) -- (wb.west);
 
   % --- predictor: lookup up into S1, update back along the bottom --------
   \draw[flow] (bp.north) -- (fu.south) node[lbl,midway,right=1mm]{predict};
-  \draw[flow] (126,-22) -- (126,-64) -- (3,-64) -- (bp.south)
-        node[lbl,pos=0.55,above]{update at commit};
+  \draw[flow] (127,-22) -- (127,-64) -- (3,-64) -- (bp.south);
+  \node[lbl,above=0.5mm] at (30,-64) {update at commit};
 
-  % --- redirect: leaves branch_unit downward, climbs in the gap between the
-  %     operand rail and the alu column, then runs above every block --------
-  \draw[flowd] (bu.north) -- (112,-14) -- (96,-14) -- (96,4) -- (3,4) -- (fu.north)
-        node[lbl,pos=0.62,above]{redirect};
+  % --- redirect: out of branch_unit, up the gap between the operand rail
+  %     and the alu column, then above both pipeline registers ------------
+  \draw[flowd] (bu.north) -- (112,-14) -- (96,-14) -- (96,5) -- (3,5) -- (fu.north);
+  % clear of the "S2 decode + execute" heading, which is centred at x = 77
+  \node[lbl,above=0.5mm] at (34,5) {redirect};
 
   % --- writeback value back into the forwarding mux ----------------------
-  \draw[flow] (wb.south) -- (150,-31) -- (61,-31) -- (61,-24) -- (fwd.west);
-  \node[lbl,below=0.5mm] at (78,-31) {S3$\to$S2 forwarding};
+  % Along the bottom. The direct path would run at y = -31, straight through
+  % the DX/WB register and across the operand rail.
+  \draw[flow] (wb.south) -- (161,-68) -- (58,-68) -- (58,-24) -- (fwd.west);
+  \node[lbl,above=0.5mm] at (100,-68) {S3$\to$S2 forwarding};
 \end{tikzpicture}}
 
-\caption{CPU block structure. Each box is a module in \file{hdl/}.}
+\caption{CPU block structure. Each box is a module in \file{hdl/}, except the
+forwarding mux, which is inline logic in \file{cpu\_top.v}.}
 \label{fig:cpu}
 \end{figure}
 

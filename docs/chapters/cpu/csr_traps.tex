@@ -186,8 +186,9 @@ re-offer itself.
 
 \section{Trap-tracking flags}
 
-Two flags in \file{cpu\_top.v} track where the core is with respect to a trap.
-They are separate because they answer different questions.
+Trap tracking in \file{cpu\_top.v} is a stack rather than a pair of flags: one
+bit per open trap level, recording whether that level was an interrupt, plus a
+single signal saying whether any level is open at all.
 
 \begin{table}[H]
 \centering
@@ -212,36 +213,32 @@ They are separate because they answer different questions.
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
-  \node[stbi] (run) at (0,0)    {RUNNING};
-  \node[stb]  (exc) at (78,20)  {IN\_TRAP};
-  \node[stb]  (irq) at (78,-24) {IN\_TRAP + IN\_IRQ};
+  \node[stbi] (run)  at (0,0)   {RUNNING\\\scriptsize depth $=0$};
+  \node[stb]  (open) at (92,0)  {TRAP OPEN\\\scriptsize depth $\ge 1$};
 
-  % synchronous exception leg
-  \draw[->,draw=accent] (run) to[bend left=13]
-    node[lbl,pos=0.42,above left=0mm and -6mm,align=center]
-    {synchronous exception\\
-     \scriptsize trap\_take \&\ !irq\_take \&\ s2\_advance} (exc);
-  \draw[->,draw=accent] (exc) to[bend left=13]
-    node[lbl,pos=0.35,below right=0mm and -5mm,align=center]
-    {MRET\\\scriptsize no eoi pulse} (run);
+  % entry: one transition, because the two trap kinds differ only in the bit
+  % that is pushed - not in what the pipeline does
+  \draw[->,draw=accent] (run) to[bend left=16]
+    node[lbl,pos=0.5,above,align=center]
+    {trap taken: push its kind\\
+     \scriptsize 1 for an interrupt, 0 for a synchronous trap} (open);
 
-  % interrupt leg
-  \draw[->,draw=accent] (run) to[bend right=13]
-    node[lbl,pos=0.42,below left=0mm and -6mm,align=center]
-    {interrupt taken\\\scriptsize irq\_take \&\ s2\_advance} (irq);
-  \draw[->,draw=accent] (irq) to[bend right=13]
-    node[lbl,pos=0.35,above right=0mm and -5mm,align=center]
-    {MRET\\\scriptsize emits cpu\_irq\_eoi\_o} (run);
+  % the return that closes the last open level
+  \draw[->,draw=accent] (open) to[bend left=16]
+    node[lbl,pos=0.5,below,align=center]
+    {MRET at depth 1: pop\\
+     \scriptsize eoi pulses only if the popped bit is 1} (run);
 
-  \draw[->,draw=accent,loop right,looseness=7,out=35,in=-35] (exc) to
-    node[lbl,right=1mm,align=left]{nested synchronous\\\scriptsize trap: stays high} (exc);
-  \draw[->,draw=accent,loop right,looseness=7,out=35,in=-35] (irq) to
-    node[lbl,right=1mm,align=left]{nested synchronous\\\scriptsize trap: both stay high} (irq);
+  \draw[->,draw=accent,looseness=6,out=125,in=55] (open) to
+    node[lbl,above=0.5mm,align=center]{nested trap: push again} (open);
+
+  \draw[->,draw=accent,looseness=6,out=-55,in=-125] (open) to
+    node[lbl,below=0.5mm,align=center]{MRET at depth $>1$: pop, stay open} (open);
 \end{tikzpicture}
-\caption{CPU trap tracking. Only \sig{in\_irq} gates the end-of-interrupt
-pulse, so exactly one is emitted per interrupt and none for an exception. Both
-flags are cleared by the same \sig{MRET}, and a synchronous trap taken inside
-either handler leaves them where they are.}
+\caption{CPU trap tracking. The open trap levels are a stack of kind bits, not a
+pair of flags: every trap pushes one bit and every \sig{MRET} pops one, so a
+synchronous trap taken inside an interrupt handler returns without an
+end-of-interrupt, and each nested interrupt handler emits its own.}
 \label{fig:trapfsm}
 \end{figure}
 
