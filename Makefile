@@ -22,6 +22,7 @@ asm:
 	cd $(SIM) && $(PY) asm.py program_dual.s program_dual.hex
 	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_soc.s    program_soc.hex
 	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_stress.s program_stress.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_dma_len.s program_dma_len.hex
 
 # SVA + functional-coverage run on Verilator (free, CI-runnable). The script
 # exits non-zero if the TB checks or the coverage gate fail.

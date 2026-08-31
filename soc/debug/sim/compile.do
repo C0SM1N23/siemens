@@ -22,3 +22,4 @@ vlog +incdir+../../../cpu/debug/hdl +incdir+../../hdl ../hdl/tb_addr_map.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/tb_full2lite.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/tb_soc_top.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/tb_soc_stress.v
+vlog +incdir+../../../cpu/debug/hdl ../hdl/tb_soc_dma_len.v

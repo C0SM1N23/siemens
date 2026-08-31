@@ -116,7 +116,8 @@ status=0
 run_bench tb_addr_map   || status=1
 run_bench tb_full2lite  || status=1
 run_bench tb_soc_top    || status=1
-run_bench tb_soc_stress || status=1
+run_bench tb_soc_stress  || status=1
+run_bench tb_soc_dma_len || status=1
 
 echo
 if [ $status -eq 0 ]; then
