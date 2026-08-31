@@ -224,18 +224,42 @@ the handler produces a one-cycle \sig{cpu\_irq\_ack} pulse --- the PIC's
 \sig{cpu\_irq\_vec\_o[3:0]} $\to$ \sig{cpu\_irq\_vec\_i} & PIC $\to$ CPU & Identifier of the offered source; becomes trap cause $16+v$. \\
 \sig{cpu\_irq\_ack\_o} $\to$ \sig{cpu\_irq\_ack\_i} & CPU $\to$ PIC & One-cycle claim pulse, asserted when the CPU commits to the handler. \\
 \sig{cpu\_irq\_eoi\_o} $\to$ \sig{cpu\_irq\_eoi\_i} & CPU $\to$ PIC & One-cycle pulse on an interrupt-returning \sig{MRET}; pops one nesting level. \\
-\sig{cpu\_in\_trap\_o} & CPU $\to$ observer & High from trap entry until \sig{MRET}. Not used by the PIC; kept for observability and assertions. \\
+\sig{irq\_mask\_o[15:0]} $\to$ \sig{cpu\_mask\_i} & CPU $\to$ PIC & \reg{mie}[31:16], the core's per-source mask. The resolver will not offer a source this core has masked. \\
+\sig{pending\_o[15:0]} $\to$ \sig{irq\_pending\_i} & PIC $\to$ CPU & Every pending source, not just the offered one. Drives \reg{mip}[31:16]. \\
+\sig{cpu\_in\_trap\_o} & CPU $\to$ observer & High while any trap level is open. Not used by the PIC; kept for observability and assertions. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The design carries a consequence worth flagging at system level: a source that is
-enabled in the PIC but masked in the CPU's \reg{mie} stays the PIC's offer
-indefinitely, because nothing ever claims it, and starves every less urgent
-source behind it. Deadline escalation (Section~\ref{sec:deadline}) does not help
-here --- the problem is that nobody claims, not that the source is insufficiently
-urgent. The integration rule is therefore: do not route a source into the PIC
-unless some handler will service it.
+\begin{deviation}
+\textbf{This interface supersedes the one in the CPU brief.} The CPU brief
+specifies \sig{cpu\_irq[7:0]}, a one-hot \sig{cpu\_irq\_ack[7:0]} and a 3-bit
+\sig{cpu\_irq\_id}: eight channels. The PIC brief specifies sixteen sources. The
+two cannot both be met --- sixteen identifiers do not fit in three bits --- so the
+PIC brief wins on width and the interface carries one request line, a 4-bit
+vector, and single-cycle claim and end-of-interrupt pulses instead of one-hot
+acknowledge lines. The end-of-interrupt has no counterpart in either brief; the
+PIC's nesting stack needs a return event, and \sig{cpu\_in\_trap} cannot serve as
+one because it does not say which level closed.
+
+The PIC brief in turn says the acknowledge ``clears active interrupt state''.
+Here the claim pushes and the end-of-interrupt pops, which is what preemptive
+nesting requires: a claim that cleared the state would end the level it was
+supposed to open. \sig{cpu\_mask\_i} and \sig{pending\_o} are additions to both
+briefs and are described above.
+
+None of this is traceable to a written requirement, and it should be recorded as
+a superseding decision before the interface is signed off.
+\end{deviation}
+
+The two masks are wired to compose. The core exports \reg{mie}[31:16] to the PIC
+as \sig{cpu\_mask\_i} and the resolver skips a masked source, so a source enabled
+in the PIC but masked in the core does not become a standing offer that nothing
+ever claims. Without that link the source would starve every less urgent source
+behind it, and deadline escalation (Section~\ref{sec:deadline}) would not help:
+the problem is that nobody claims, not that the source is insufficiently urgent.
+In the other direction the PIC exports \sig{pending\_o}, everything pending
+rather than only the winner, which is what \reg{mip} reports.
 
 \section{Address map used in verification}
 
@@ -259,7 +283,10 @@ Machine timer      & \texttt{0x3001\_0000} & 4 mapped words. \\
 \end{tabular}
 \end{table}
 
-Both peripheral slaves decode only \sig{addr[7:2]}. Inside an interconnect window
-larger than 256\,bytes, higher addresses therefore alias onto the first registers
-instead of producing a decode error. This is recorded as a limitation in
-Chapter~\ref{ch:limits}.
+Both peripheral slaves decode only \sig{addr[7:2]}, and the DMA's register slave
+only \sig{addr[7:0]}. The interconnect windows are therefore 256\,bytes wide,
+exactly the size of each register file, even though the blocks are based
+64\,KB apart. An earlier map gave them the full 64\,KB and every register was
+aliased 255 times above itself, answering \sig{OKAY} for an address that was
+never meant to reach it. \file{tb\_addr\_map} checks each window's first and last
+register and the first address past it.

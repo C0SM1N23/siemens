@@ -250,13 +250,16 @@ path; step 7 happens in the CPU, not the controller.}
 \end{table}
 
 \begin{deviation}
-\textbf{Integration rule, not a defect.} A source enabled in \reg{INT\_ENABLE}
-but masked in \reg{mie} stops at step 7, \emph{after} winning step 4. It
-therefore remains the controller's standing offer and starves every less urgent
-source. The two masks are independent by design, so the discipline is: a source
-that software does not want should be disabled in \reg{INT\_ENABLE}, not merely
-masked in \reg{mie}. The test program respects this and the effect is verified
-in the channel sweep.
+\textbf{The CPU mask takes part in the resolution.} A source enabled in
+\reg{INT\_ENABLE} but masked in \reg{mie} used to stop at step 7, \emph{after}
+winning step 4: it stayed the controller's standing offer and starved every less
+urgent source. The core now hands \reg{mie}[31:16] to the controller as
+\sig{cpu\_mask\_i} and step 4 skips a masked source, so the two masks compose
+instead of deadlocking. A masked source is still pending --- it appears in
+\sig{pending\_o} and therefore in \reg{mip}, and its deadline counter keeps
+running --- it is simply not offered until the mask lifts. The channel sweep in
+the system program leaves such a source enabled and asserted for the whole run
+and checks that the channels behind it are still served.
 \end{deviation}
 
 \section{Per-source lifecycle}
