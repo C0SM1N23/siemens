@@ -6,8 +6,8 @@ module axi4_full_master (
     // Write Address Channel
     output reg  [31:0]  m_axi_awaddr,
     output reg  [7:0]   m_axi_awlen,
-    output reg  [2:0]   m_axi_awsize,
-    output reg  [1:0]   m_axi_awburst,
+    output      [2:0]   m_axi_awsize,
+    output      [1:0]   m_axi_awburst,
     output reg          m_axi_awvalid,
     input               m_axi_awready,
     
@@ -26,8 +26,8 @@ module axi4_full_master (
     // Read Address Channel
     output reg  [31:0]  m_axi_araddr,
     output reg  [7:0]   m_axi_arlen,
-    output reg  [2:0]   m_axi_arsize,
-    output reg  [1:0]   m_axi_arburst,
+    output      [2:0]   m_axi_arsize,
+    output      [1:0]   m_axi_arburst,
     output reg          m_axi_arvalid,
     input               m_axi_arready,
     
@@ -58,6 +58,11 @@ module axi4_full_master (
     localparam STATE_WRITE_ADDR = 3'd3;
     localparam STATE_WRITE_DATA = 3'd4;
     localparam STATE_WRITE_RESP = 3'd5;
+
+    assign m_axi_arsize  = 3'b010; // 4 bytes per beat
+    assign m_axi_arburst = 2'b01;  // INCR burst type
+    assign m_axi_awsize  = 3'b010; 
+    assign m_axi_awburst = 2'b01;
 
     reg [2:0] state;
     reg [7:0] burst_cnt;
@@ -167,16 +172,6 @@ module axi4_full_master (
             m_axi_arlen <= master_req_len;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_arsize <= 3'b010; // 4 bytes per beat
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_arburst <= 2'b01; // INCR burst type
-    end
-
     // 5. Read Data Channel (R)
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
@@ -204,11 +199,15 @@ module axi4_full_master (
             fetch_data_out <= m_axi_rdata;
     end
 
+    integer c, w;
     always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            data_fifo[active_ch_id][burst_cnt[2:0]] <= 32'h0;
-        else if (state == STATE_READ_DATA && m_axi_rvalid)
+        if (~rst_n) begin
+            for (c = 0; c < 4; c = c + 1)
+                for (w = 0; w < 8; w = w + 1)
+                    data_fifo[c][w] <= 32'h0;
+        end else if (state == STATE_READ_DATA && m_axi_rvalid) begin
             data_fifo[active_ch_id][burst_cnt[2:0]] <= m_axi_rdata;
+        end
     end
 
     // 6. Write Address Channel (AW)
@@ -233,16 +232,6 @@ module axi4_full_master (
             m_axi_awlen <= 8'h0;
         else if (state == STATE_IDLE && master_req_valid)
             m_axi_awlen <= master_req_len;
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_awsize <= 3'b010; 
-    end
-
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_awburst <= 2'b01; 
     end
 
     // 7. Write Data Channel (W)

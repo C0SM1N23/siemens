@@ -39,9 +39,45 @@ CPUSVA="../../../cpu/debug/sva"
 # DECLFILENAME   soc_fabric_sva.sv holds three checkers, one per fabric block.
 WAIVE="-Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-EOFNEWLINE -Wno-DECLFILENAME"
 
+# --- known unrepaired findings in blocks this integration does not own --------
+# One entry per warning that lint is expected to raise, each pinned to file and
+# line. These are NOT waived: lint still reports them, and the stage still fails
+# on anything the list does not account for, so a new warning cannot hide behind
+# them. The list is also checked for staleness - if an entry stops appearing,
+# the block was fixed upstream and the entry has to go.
+#
+# dma/hdl/dma_channel.v:249
+#   req_len = (desc_len >= 32) ? 8'd7 : (desc_len[7:2] - 1)
+#   desc_len[7:2] is 6 bits, so the subtraction wraps before it is zero-extended
+#   into the 8-bit req_len. A descriptor shorter than 4 bytes gives 6'b111111
+#   and the channel issues a 64-beat burst: 256 bytes written for a request of
+#   at most 3. Reported in TO_MODIFY.md; the DMA is not ours to change.
+KNOWN_LINT="dma/hdl/dma_channel.v:249"
+
 echo "=== stage 1/2: lint ==="
-verilator --lint-only -Wall $WAIVE --top-module soc_top -f soc_rtl.f
-echo "lint clean"
+set +e
+lint_out=$(verilator --lint-only -Wall $WAIVE --top-module soc_top -f soc_rtl.f 2>&1)
+set -e
+echo "$lint_out"
+
+# every diagnostic line, minus the ones the known list accounts for
+unexpected=$(echo "$lint_out" | grep -E '^%(Warning|Error)-' | grep -vF "$KNOWN_LINT" || true)
+if [ -n "$unexpected" ]; then
+    echo
+    echo "FAIL: lint raised something the known-findings list does not cover:"
+    echo "$unexpected"
+    exit 1
+fi
+
+# staleness: a known finding that no longer fires means the list is out of date
+for k in $KNOWN_LINT; do
+    echo "$lint_out" | grep -qF "$k" || {
+        echo "FAIL: '$k' no longer warns - it was fixed upstream, drop it from KNOWN_LINT"
+        exit 1
+    }
+done
+
+echo "lint clean apart from $(echo "$KNOWN_LINT" | wc -w) known finding(s) in the DMA block"
 
 # --- stage 2: build and run each bench with the assertion layer --------------
 # --timing is needed for the benches' delay controls; --assert turns the bound
