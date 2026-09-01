@@ -47,7 +47,7 @@
 ../../../sram/hdl/axi4lite_slave_fsm.v
 ../../../sram/hdl/collision_det.v
 ../../../sram/hdl/mem_array.v
-../../../sram/hdl/sram_regfile.v
+../../../sram/hdl/dp_sram_regfile.v
 
 // --- L0: interconnect -------------------------------------------------------
 ../../hdl/axi_lite_dec.v      // 1 master -> N slaves, DECERR on a miss
@@ -59,7 +59,7 @@
 ../../../cpu/hdl/alu_top.v        // -> alu
 ../../../cpu/hdl/mtimer.v         // -> axi_lite_slave
 ../../../cpu/hdl/pic.v            // -> axi_lite_slave
-../../../sram/hdl/dp_sram_top.v   // -> slave_fsm, collision_det, mem_array, sram_regfile
+../../../sram/hdl/dp_sram_top.v   // -> slave_fsm, collision_det, mem_array, dp_sram_regfile
 
 // --- L2: block tops ---------------------------------------------------------
 ../../../cpu/hdl/cpu_top.v

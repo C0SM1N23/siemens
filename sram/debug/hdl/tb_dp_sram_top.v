@@ -121,6 +121,19 @@ module tb_dp_sram_top;
         end
     endfunction
 
+    function [3:0] str_to_wstrb;
+        input [8*16-1:0] s;
+        reg   [31:0] v;
+        begin
+            if (s == "-")
+                str_to_wstrb = 4'hF; // implicit: cuvant intreg, ca inainte
+            else begin
+                v = str_to_hex(s);
+                str_to_wstrb = v[3:0];
+            end
+        end
+    endfunction
+
     task report_check;
         input [31:0]      actual;
         input [31:0]      expected;
@@ -154,15 +167,16 @@ module tb_dp_sram_top;
         input [8*16-1:0] port;
         input [9:0]      addr;
         input [31:0]     data;
+        input [3:0]      wstrb;
         reg   [1:0] resp;
         begin
             if (port == "A") begin
                 a_awvalid = 1'b1; a_awaddr = addr;
-                a_wvalid  = 1'b1; a_wdata  = data; a_wstrb = 4'hF;
+                a_wvalid  = 1'b1; a_wdata  = data; a_wstrb = wstrb;
                 a_bready  = 1'b1;
             end else begin
                 b_awvalid = 1'b1; b_awaddr = addr;
-                b_wvalid  = 1'b1; b_wdata  = data; b_wstrb = 4'hF;
+                b_wvalid  = 1'b1; b_wdata  = data; b_wstrb = wstrb;
                 b_bready  = 1'b1;
             end
 
@@ -261,6 +275,69 @@ module tb_dp_sram_top;
     endtask
 
 
+    // -------------------------------------------------------------------
+    // do_dualwrite: Port A si Port B scriu simultan la DOUA ADRESE
+    // DIFERITE (nu se asteapta nicio coliziune -- ambele trebuie sa
+    // primeasca OKAY). Verifica separat, dupa aceea, ca fiecare adresa
+    // contine data scrisa de portul ei.
+    // -------------------------------------------------------------------
+    task do_dualwrite;
+        input [9:0]  addr_a;
+        input [31:0] data_a;
+        input [9:0]  addr_b;
+        input [31:0] data_b;
+        reg [1:0]  resp_a, resp_b;
+        reg [31:0] readback_a, readback_b;
+        begin
+            a_awvalid = 1'b1; a_awaddr = addr_a; a_wvalid = 1'b1; a_wdata = data_a; a_wstrb = 4'hF; a_bready = 1'b1;
+            b_awvalid = 1'b1; b_awaddr = addr_b; b_wvalid = 1'b1; b_wdata = data_b; b_wstrb = 4'hF; b_bready = 1'b1;
+
+            fork
+                begin
+                    @(posedge clk);
+                    while (!a_awready) @(posedge clk);
+                    a_awvalid <= 1'b0; a_wvalid <= 1'b0;
+                end
+                begin
+                    @(posedge clk);
+                    while (!b_awready) @(posedge clk);
+                    b_awvalid <= 1'b0; b_wvalid <= 1'b0;
+                end
+            join
+
+            @(posedge clk);
+            resp_a = a_bresp; a_bready <= 1'b0;
+            resp_b = b_bresp; b_bready <= 1'b0;
+
+            report_check({30'd0, resp_a}, {30'd0, 2'b00}, "DUALWRITE: Port A -> OKAY");
+            report_check({30'd0, resp_b}, {30'd0, 2'b00}, "DUALWRITE: Port B -> OKAY");
+
+            // citire de verificare prin Port A, adresa A
+            a_arvalid = 1'b1; a_araddr = addr_a; a_rready = 1'b1;
+            @(posedge clk);
+            while (!a_arready) @(posedge clk);
+            a_arvalid <= 1'b0;
+            @(posedge clk);
+            readback_a = a_rdata;
+            a_rready <= 1'b0;
+
+            @(posedge clk); // sincronizare curata inainte de a doua citire interna -- vezi nota din tb_dp_sram_top.v
+
+            // citire de verificare prin Port A, adresa B
+            a_arvalid = 1'b1; a_araddr = addr_b; a_rready = 1'b1;
+            @(posedge clk);
+            while (!a_arready) @(posedge clk);
+            a_arvalid <= 1'b0;
+            @(posedge clk);
+            readback_b = a_rdata;
+            a_rready <= 1'b0;
+
+            report_check(readback_a, data_a, "DUALWRITE: adresa A are data lui A");
+            report_check(readback_b, data_b, "DUALWRITE: adresa B are data lui B");
+        end
+    endtask
+
+
     task do_rwconflict;
         input [9:0]      addr;
         input [8*16-1:0] writer;
@@ -309,6 +386,294 @@ module tb_dp_sram_top;
 
             report_check({30'd0, resp_writer}, {30'd0, 2'b00}, "RWCONFLICT: scriitorul -> OKAY");
             report_check({30'd0, resp_reader}, {30'd0, 2'b10}, "RWCONFLICT: cititorul -> SLVERR");
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_slowwrite: scriere AXI4-Lite simpla, dar BREADY e tinut jos
+    // <delay> cicluri suplimentare dupa ce BVALID apare, inainte sa fie
+    // asertat. Testeaza toleranta la un master lent pe canalul de raspuns.
+    // -------------------------------------------------------------------
+    task do_slowwrite;
+        input [8*16-1:0] port;
+        input [9:0]      addr;
+        input [31:0]     data;
+        input [31:0]     delay;
+        integer i;
+        reg   [1:0] resp;
+        begin
+            if (port == "A") begin
+                a_awvalid = 1'b1; a_awaddr = addr;
+                a_wvalid  = 1'b1; a_wdata  = data; a_wstrb = 4'hF;
+                a_bready  = 1'b0;
+            end else begin
+                b_awvalid = 1'b1; b_awaddr = addr;
+                b_wvalid  = 1'b1; b_wdata  = data; b_wstrb = 4'hF;
+                b_bready  = 1'b0;
+            end
+
+            @(posedge clk);
+            if (port == "A") while (!a_awready) @(posedge clk);
+            else              while (!b_awready) @(posedge clk);
+
+            if (port == "A") begin a_awvalid <= 1'b0; a_wvalid <= 1'b0; end
+            else              begin b_awvalid <= 1'b0; b_wvalid <= 1'b0; end
+
+            @(posedge clk); // BVALID e valid acum pe portul folosit; BREADY inca 0
+
+            for (i = 0; i < delay; i = i + 1) @(posedge clk); // BREADY ramane 0 aici
+
+            if (port == "A") a_bready <= 1'b1; else b_bready <= 1'b1;
+
+            @(posedge clk); // abia acum BREADY devine vizibil -- tranzactia se incheie aici
+            if (port == "A") begin resp = a_bresp; a_bready <= 1'b0; end
+            else              begin resp = b_bresp; b_bready <= 1'b0; end
+
+            report_check({30'd0, resp}, {30'd0, 2'b00}, "SLOWWRITE: raspuns OKAY dupa BREADY intarziat");
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_slowread: citire AXI4-Lite simpla, dar RREADY e tinut jos
+    // <delay> cicluri suplimentare dupa ce RVALID apare. Esantioneaza
+    // RDATA in fiecare ciclu al asteptarii si confirma ca ramane stabil.
+    // -------------------------------------------------------------------
+    task do_slowread;
+        input [8*16-1:0] port;
+        input [9:0]      addr;
+        input [31:0]     expected;
+        input [31:0]     delay;
+        integer i;
+        reg   [31:0] sampled, actual;
+        reg   [1:0]  resp;
+        begin
+            if (port == "A") begin
+                a_arvalid = 1'b1; a_araddr = addr; a_rready = 1'b0;
+            end else begin
+                b_arvalid = 1'b1; b_araddr = addr; b_rready = 1'b0;
+            end
+
+            @(posedge clk);
+            if (port == "A") while (!a_arready) @(posedge clk);
+            else              while (!b_arready) @(posedge clk);
+
+            if (port == "A") a_arvalid <= 1'b0;
+            else              b_arvalid <= 1'b0;
+
+            @(posedge clk); // RVALID/RDATA valide acum; RREADY inca 0
+            sampled = (port == "A") ? a_rdata : b_rdata;
+
+            for (i = 0; i < delay; i = i + 1) begin
+                @(posedge clk);
+                actual = (port == "A") ? a_rdata : b_rdata;
+                report_check(actual, sampled, "SLOWREAD: RDATA stabil pe parcursul asteptarii");
+            end
+
+            if (port == "A") a_rready <= 1'b1; else b_rready <= 1'b1;
+
+            @(posedge clk); // abia acum RREADY devine vizibil -- tranzactia se incheie aici
+            if (port == "A") begin actual = a_rdata; resp = a_rresp; a_rready <= 1'b0; end
+            else              begin actual = b_rdata; resp = b_rresp; b_rready <= 1'b0; end
+
+            report_check({30'd0, resp}, {30'd0, 2'b00}, "SLOWREAD: raspuns OKAY dupa RREADY intarziat");
+            report_check(actual, expected, "SLOWREAD: date corecte dupa RREADY intarziat");
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_status_slowclear: Port A scrie INT_STATUS=<clear_mask> (W1C) si
+    // tine BREADY jos <delay> cicluri; in acest timp, Port B citeste
+    // INT_STATUS in fiecare ciclu, ca sa confirme ca stergerea s-a aplicat
+    // prompt (la primul ciclu din WR_RESP) si ramane stabila. NU distinge
+    // codul vechi (cu bug) de cel nou -- vezi nota din planul de teste --
+    // doar confirma corectitudinea functionala sub BREADY intarziat.
+    // -------------------------------------------------------------------
+    task do_status_slowclear;
+        input [31:0] clear_mask;
+        input [31:0] delay;
+        integer i;
+        reg   [1:0]  resp;
+        reg   [31:0] peek;
+        begin
+            a_awvalid = 1'b1; a_awaddr = 10'h000;
+            a_wvalid  = 1'b1; a_wdata  = clear_mask; a_wstrb = 4'hF;
+            a_bready  = 1'b0;
+
+            @(posedge clk);
+            while (!a_awready) @(posedge clk);
+            a_awvalid <= 1'b0; a_wvalid <= 1'b0;
+
+            @(posedge clk); // BVALID valid pe Port A; BREADY inca 0
+
+            for (i = 0; i < delay; i = i + 1) begin
+                b_arvalid = 1'b1; b_araddr = 10'h000; b_rready = 1'b1;
+                @(posedge clk);
+                while (!b_arready) @(posedge clk);
+                b_arvalid <= 1'b0;
+                @(posedge clk);
+                peek = b_rdata;
+                b_rready <= 1'b0;
+                report_check(peek & clear_mask, 32'd0, "SLOWCLEAR: bit sters, stabil");
+                @(posedge clk); // sincronizare curata inainte de urmatoarea citire interna
+            end
+
+            a_bready <= 1'b1;
+            @(posedge clk);
+            resp = a_bresp; a_bready <= 1'b0;
+            report_check({30'd0, resp}, {30'd0, 2'b00}, "SLOWCLEAR: raspuns OKAY pe Port A");
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_staggered_write: asiguraem AW si W la momente diferite (5 cicluri
+    // intre ele), nu simultan. Verifica in acelasi timp ca ARREADY ramane
+    // 0 pe tot parcursul ferestrei (o citire nu poate "sari inaintea"
+    // scrierii partial asamblate). mode="AW" -> AW primul; mode="W" -> W primul.
+    // -------------------------------------------------------------------
+    task do_staggered_write;
+        input [8*16-1:0] port;
+        input [8*16-1:0] mode;
+        input [9:0]      addr;
+        input [31:0]     data;
+        integer i;
+        reg [1:0] resp;
+        begin
+            if (mode == "AW") begin
+                if (port == "A") begin a_awvalid = 1'b1; a_awaddr = addr; a_bready = 1'b1; end
+                else              begin b_awvalid = 1'b1; b_awaddr = addr; b_bready = 1'b1; end
+
+                @(posedge clk);
+                if (port == "A") while (!a_awready) @(posedge clk);
+                else              while (!b_awready) @(posedge clk);
+                if (port == "A") a_awvalid <= 1'b0; else b_awvalid <= 1'b0;
+            end else begin
+                if (port == "A") begin a_wvalid = 1'b1; a_wdata = data; a_wstrb = 4'hF; a_bready = 1'b1; end
+                else              begin b_wvalid = 1'b1; b_wdata = data; b_wstrb = 4'hF; b_bready = 1'b1; end
+
+                @(posedge clk);
+                if (port == "A") while (!a_wready) @(posedge clk);
+                else              while (!b_wready) @(posedge clk);
+                if (port == "A") a_wvalid <= 1'b0; else b_wvalid <= 1'b0;
+            end
+
+            // 5 cicluri de asteptare, verificand ca ARREADY ramane 0 pe acest port
+            if (port == "A") a_araddr = 10'h020; else b_araddr = 10'h020; // adresa de sonda, oricare valida
+            for (i = 0; i < 5; i = i + 1) begin
+                if (port == "A") a_arvalid = 1'b1; else b_arvalid = 1'b1;
+                @(posedge clk);
+                if (port == "A") report_check({31'd0, a_arready}, 32'd0, "STAGGER: ARREADY=0 in asteptare");
+                else              report_check({31'd0, b_arready}, 32'd0, "STAGGER: ARREADY=0 in asteptare");
+            end
+            if (port == "A") a_arvalid = 1'b0; else b_arvalid = 1'b0;
+
+            // acum cealalta jumatate
+            if (mode == "AW") begin
+                if (port == "A") begin a_wvalid = 1'b1; a_wdata = data; a_wstrb = 4'hF; end
+                else              begin b_wvalid = 1'b1; b_wdata = data; b_wstrb = 4'hF; end
+
+                @(posedge clk);
+                if (port == "A") while (!a_wready) @(posedge clk);
+                else              while (!b_wready) @(posedge clk);
+                if (port == "A") a_wvalid <= 1'b0; else b_wvalid <= 1'b0;
+            end else begin
+                if (port == "A") begin a_awvalid = 1'b1; a_awaddr = addr; end
+                else              begin b_awvalid = 1'b1; b_awaddr = addr; end
+
+                @(posedge clk);
+                if (port == "A") while (!a_awready) @(posedge clk);
+                else              while (!b_awready) @(posedge clk);
+                if (port == "A") a_awvalid <= 1'b0; else b_awvalid <= 1'b0;
+            end
+
+            @(posedge clk); // BVALID valid acum
+            if (port == "A") begin resp = a_bresp; a_bready <= 1'b0; end
+            else              begin resp = b_bresp; b_bready <= 1'b0; end
+            report_check({30'd0, resp}, {30'd0, 2'b00}, "STAGGER: raspuns OKAY dupa AW/W esalonate");
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_reg_read_during_write: Port A scrie <new_value> pe <addr>, Port B
+    // citeste simultan aceeasi adresa. Spre deosebire de RWCONFLICT
+    // (memorie), aici NU exista SLVERR -- ambele trebuie sa primeasca
+    // OKAY, iar cititorul trebuie sa vada valoarea VECHE (registrul se
+    // actualizeaza abia pe frontul urmator).
+    // -------------------------------------------------------------------
+    task do_reg_read_during_write;
+        input [9:0]  addr;
+        input [31:0] old_value;
+        input [31:0] new_value;
+        reg [1:0]  resp_w, resp_r;
+        reg [31:0] read_data;
+        begin
+            a_awvalid = 1'b1; a_awaddr = addr; a_wvalid = 1'b1; a_wdata = new_value; a_wstrb = 4'hF; a_bready = 1'b1;
+            b_arvalid = 1'b1; b_araddr = addr; b_rready = 1'b1;
+
+            fork
+                begin
+                    @(posedge clk);
+                    while (!a_awready) @(posedge clk);
+                    a_awvalid <= 1'b0; a_wvalid <= 1'b0;
+                end
+                begin
+                    @(posedge clk);
+                    while (!b_arready) @(posedge clk);
+                    b_arvalid <= 1'b0;
+                end
+            join
+
+            @(posedge clk);
+            resp_w = a_bresp; a_bready <= 1'b0;
+            resp_r = b_rresp; read_data = b_rdata; b_rready <= 1'b0;
+
+            report_check({30'd0, resp_w}, {30'd0, 2'b00}, "REGRW: scriitorul (A) -> OKAY");
+            report_check({30'd0, resp_r}, {30'd0, 2'b00}, "REGRW: cititorul (B) -> OKAY, nu SLVERR");
+            report_check(read_data, old_value, "REGRW: cititorul vede valoarea veche");
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_reset_midtransaction: porneste o scriere pe Port A, o lasa in
+    // WR_RESP (BVALID activ, BREADY tinut jos deliberat), apoi injecteaza
+    // reset in timp ce tranzactia e blocata acolo. Dupa eliberare,
+    // confirma revenire curata printr-o scriere noua, completa.
+    // -------------------------------------------------------------------
+    task do_reset_midtransaction;
+        reg [1:0] resp;
+        begin
+            a_awvalid = 1'b1; a_awaddr = 10'h004; a_wvalid = 1'b1; a_wdata = 32'hFFFFFFFF; a_wstrb = 4'hF;
+            a_bready = 1'b0; // deliberat -- nu se consuma niciodata inainte de reset
+
+            @(posedge clk);
+            while (!a_awready) @(posedge clk);
+            a_awvalid <= 1'b0; a_wvalid <= 1'b0;
+
+            @(posedge clk); // acum in WR_RESP, BVALID activ, BREADY inca 0
+
+            rst_n = 1'b0;
+            @(posedge clk);
+            @(posedge clk);
+            @(posedge clk);
+            rst_n <= 1'b1;
+
+            @(posedge clk); // lasam reset-ul sa se aseze complet
+
+            // scriere noua, completa, ca sa confirmam revenirea curata
+            a_awvalid = 1'b1; a_awaddr = 10'h004; a_wvalid = 1'b1; a_wdata = 32'h00000002; a_wstrb = 4'hF; a_bready = 1'b1;
+
+            @(posedge clk);
+            while (!a_awready) @(posedge clk);
+            a_awvalid <= 1'b0; a_wvalid <= 1'b0;
+
+            @(posedge clk);
+            resp = a_bresp; a_bready <= 1'b0;
+            report_check({30'd0, resp}, {30'd0, 2'b00}, "RESETMID: scriere noua dupa reset -> OKAY");
         end
     endtask
 
@@ -404,13 +769,34 @@ module tb_dp_sram_top;
                         do_reset;
                     end
                     else if (cmd == "WRITE") begin
-                        do_write(arg1, str_to_addr(arg2), str_to_hex(arg3));
+                        do_write(arg1, str_to_addr(arg2), str_to_hex(arg3), str_to_wstrb(arg4));
                     end
                     else if (cmd == "READ") begin
                         do_read(arg1, str_to_addr(arg2), str_to_hex(arg3));
                     end
                     else if (cmd == "WWCONFLICT") begin
                         do_wwconflict(str_to_addr(arg1), str_to_hex(arg2), str_to_hex(arg3), arg4);
+                    end
+                    else if (cmd == "DUALWRITE") begin
+                        do_dualwrite(str_to_addr(arg1), str_to_hex(arg2), str_to_addr(arg3), str_to_hex(arg4));
+                    end
+                    else if (cmd == "SLOWWRITE") begin
+                        do_slowwrite(arg1, str_to_addr(arg2), str_to_hex(arg3), str_to_dec(arg4));
+                    end
+                    else if (cmd == "SLOWREAD") begin
+                        do_slowread(arg1, str_to_addr(arg2), str_to_hex(arg3), str_to_dec(arg4));
+                    end
+                    else if (cmd == "SLOWCLEAR") begin
+                        do_status_slowclear(str_to_hex(arg1), str_to_dec(arg2));
+                    end
+                    else if (cmd == "STAGGERWRITE") begin
+                        do_staggered_write(arg1, arg2, str_to_addr(arg3), str_to_hex(arg4));
+                    end
+                    else if (cmd == "REGRW") begin
+                        do_reg_read_during_write(str_to_addr(arg1), str_to_hex(arg2), str_to_hex(arg3));
+                    end
+                    else if (cmd == "RESETMID") begin
+                        do_reset_midtransaction;
                     end
                     else if (cmd == "RWCONFLICT") begin
                         do_rwconflict(str_to_addr(arg1), arg2, str_to_hex(arg3));

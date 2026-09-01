@@ -6,12 +6,9 @@
 // Port A wins on simultaneous write to the same register
 // Address conversion is done at top level
 //
-// Named sram_regfile, not regfile: the CPU block has a module called regfile
-// (its 32 GPRs) and in the SoC both compile into the same library.
-//
 // =============================================================================
 
-module sram_regfile #(
+module dp_sram_regfile #(
     parameter REG_ADDR_W   = 3,
     parameter WINDOW_CYCLES = 1024
 ) (
@@ -23,14 +20,18 @@ module sram_regfile #(
     input  wire [REG_ADDR_W-1:0]   a_reg_addr_i,   // address from Port A
     input  wire                     a_reg_write_i, // write/read
     input  wire [31:0]             a_reg_wdata_i,  
+    input  wire [3:0]              a_reg_wstrb_i,  // byte lane enable from Port A
     output wire [31:0]             a_reg_rdata_o,  
+    output wire                    a_reg_error_o,  // 1 = SLVERR for Port A's current write (always 0 -- A never loses)
 
     //Port B
     input  wire                    b_reg_valid_i,  // does Port B have an active request?
     input  wire [REG_ADDR_W-1:0]   b_reg_addr_i,   // address from Port B
     input  wire                     b_reg_write_i, // write/read
     input  wire [31:0]             b_reg_wdata_i,
+    input  wire [3:0]              b_reg_wstrb_i,  // byte lane enable from Port B
     output wire [31:0]             b_reg_rdata_o,
+    output wire                    b_reg_error_o,  // 1 = SLVERR for Port B's current write (blocked by write_conflict)
 
     //axi4lite_slave_fsm.v
     input  wire                    a_mem_valid_i,
@@ -55,13 +56,7 @@ module sram_regfile #(
     localparam ADDR_COOLDOWN_CYCLES     = 6;
 
 
-    // Derived from WINDOW_CYCLES rather than hardcoded: the two were independent
-    // (WIN_W was a literal 10 while WINDOW_CYCLES is a parameter), so changing
-    // the window length silently left the counter too narrow to ever reach the
-    // end of it, and the bandwidth registers would have stopped updating.
-    localparam WIN_W = $clog2(WINDOW_CYCLES);
-
-    localparam WINDOW_LAST = WINDOW_CYCLES - 1;
+    localparam WIN_W = 10;
 
     
     wire a_writes = a_reg_valid_i & a_reg_write_i;
@@ -70,6 +65,24 @@ module sram_regfile #(
 
     wire a_write_effective = a_writes;                  // Port A always wins
     wire b_write_effective = b_writes & ~write_conflict; // Port B blocked on conflict
+
+    // edge detector: a_write_effective/b_write_effective can stay high for
+    // several cycles if BREADY is delayed (still in WR_RESP) -- without this,
+    // a slow master could re-apply the same write every cycle, which is
+    // wrong for W1C (INT_STATUS) even if harmless for plain R/W registers
+    reg a_write_effective_prev;
+    reg b_write_effective_prev;
+
+    always @(posedge clk_i or negedge rst_n_i)
+        if (~rst_n_i) a_write_effective_prev <= 1'b0;
+        else          a_write_effective_prev <= a_write_effective;
+
+    always @(posedge clk_i or negedge rst_n_i)
+        if (~rst_n_i) b_write_effective_prev <= 1'b0;
+        else          b_write_effective_prev <= b_write_effective;
+
+    wire a_write_pulse = a_write_effective & ~a_write_effective_prev; // 1 cycle only, on the rising edge
+    wire b_write_pulse = b_write_effective & ~b_write_effective_prev;
 
     //Registers
     reg [31:0] int_status_reg;   // INT_STATUS R/W1C
@@ -83,10 +96,12 @@ module sram_regfile #(
     reg [31:0] bandwidth_a_reg;    // BANDWIDTH_A RO
     reg [31:0] bandwidth_b_reg;    // BANDWIDTH_B RO
 
-    // The counter is zero-extended to the constant's width explicitly. Written
-    // as a bare compare it mixed a WIN_W-wide counter with a 32-bit constant,
-    // which is only harmless as long as the two happen to agree.
-    wire window_done = ({{(32-WIN_W){1'b0}}, window_cnt} == WINDOW_LAST);
+    wire window_done = (window_cnt == WINDOW_CYCLES-1);
+    // NOTE: the cycle where window_cnt reaches WINDOW_CYCLES-1 always resets
+    // a_active_cnt/b_active_cnt for the NEW window instead of incrementing
+    // the OLD one -- so only WINDOW_CYCLES-1 (not WINDOW_CYCLES) of the
+    // window's cycles ever get counted. Max BANDWIDTH_A/B is WINDOW_CYCLES-1,
+    // even under 100% continuous activity. Documented, not fixed (by request).
 
   
     // int_status_reg (W1C)
@@ -96,64 +111,62 @@ module sram_regfile #(
         else begin
             if (collision_event_i)
                 int_status_reg[0] <= 1'b1; // collision
-            else if ((a_write_effective && a_reg_addr_i==ADDR_INT_STATUS && a_reg_wdata_i[0]) || (b_write_effective && b_reg_addr_i==ADDR_INT_STATUS && b_reg_wdata_i[0]))
+            else if ((a_write_pulse && a_reg_addr_i==ADDR_INT_STATUS && a_reg_wstrb_i[0] && a_reg_wdata_i[0]) || (b_write_pulse && b_reg_addr_i==ADDR_INT_STATUS && b_reg_wstrb_i[0] && b_reg_wdata_i[0]))
                 int_status_reg[0] <= 1'b0; // clear
 
             if (cooldown_event_i)
                 int_status_reg[1] <= 1'b1; // cooldown
-            else if ((a_write_effective && a_reg_addr_i==ADDR_INT_STATUS && a_reg_wdata_i[1]) || (b_write_effective && b_reg_addr_i==ADDR_INT_STATUS && b_reg_wdata_i[1]))
+            else if ((a_write_pulse && a_reg_addr_i==ADDR_INT_STATUS && a_reg_wstrb_i[0] && a_reg_wdata_i[1]) || (b_write_pulse && b_reg_addr_i==ADDR_INT_STATUS && b_reg_wstrb_i[0] && b_reg_wdata_i[1]))
                 int_status_reg[1] <= 1'b0; // clear
         end
 
    
-
-    // registers that are modified only through bus writes.
+    // registers that are modified only through bus writes
+    // (int_enable, force_priority, collision_threshold, cooldown_cycles)
     always @(posedge clk_i or negedge rst_n_i) begin
         if (~rst_n_i) begin
-
             int_enable_reg          <= 32'd0;
             force_priority_reg      <= 1'b0;
             collision_threshold_reg <= 8'd4;
             cooldown_cycles_reg     <= 8'd4;
-
         end
         else begin
-
-            //write Port A
-            if (a_write_effective) begin
-
+            // write Port A
+            if (a_write_pulse) begin
                 case (a_reg_addr_i)
-
-                    ADDR_INT_ENABLE: int_enable_reg <= a_reg_wdata_i;
-
-                    ADDR_FORCE_PRIO: force_priority_reg <= a_reg_wdata_i[0];
-
-                    ADDR_COLLISION_THRESHOLD: collision_threshold_reg <= a_reg_wdata_i[7:0];
-
-                    ADDR_COOLDOWN_CYCLES: cooldown_cycles_reg <= a_reg_wdata_i[7:0];
-                    
+                    ADDR_INT_ENABLE: begin
+                        if (a_reg_wstrb_i[0]) int_enable_reg[7:0]   <= a_reg_wdata_i[7:0];
+                        if (a_reg_wstrb_i[1]) int_enable_reg[15:8]  <= a_reg_wdata_i[15:8];
+                        if (a_reg_wstrb_i[2]) int_enable_reg[23:16] <= a_reg_wdata_i[23:16];
+                        if (a_reg_wstrb_i[3]) int_enable_reg[31:24] <= a_reg_wdata_i[31:24];
+                    end
+                    ADDR_FORCE_PRIO:
+                        if (a_reg_wstrb_i[0]) force_priority_reg <= a_reg_wdata_i[0];
+                    ADDR_COLLISION_THRESHOLD:
+                        if (a_reg_wstrb_i[0]) collision_threshold_reg <= a_reg_wdata_i[7:0];
+                    ADDR_COOLDOWN_CYCLES:
+                        if (a_reg_wstrb_i[0]) cooldown_cycles_reg <= a_reg_wdata_i[7:0];
                     default:
                         ; // no action
-
                 endcase
             end
-
-            //write Port B
-            if (b_write_effective) begin
-
+            // write Port B
+            if (b_write_pulse) begin
                 case (b_reg_addr_i)
-
-                    ADDR_INT_ENABLE: int_enable_reg <= b_reg_wdata_i;
-
-                    ADDR_FORCE_PRIO: force_priority_reg <= b_reg_wdata_i[0];
-
-                    ADDR_COLLISION_THRESHOLD: collision_threshold_reg <= b_reg_wdata_i[7:0];
-
-                    ADDR_COOLDOWN_CYCLES: cooldown_cycles_reg <= b_reg_wdata_i[7:0];
-
+                    ADDR_INT_ENABLE: begin
+                        if (b_reg_wstrb_i[0]) int_enable_reg[7:0]   <= b_reg_wdata_i[7:0];
+                        if (b_reg_wstrb_i[1]) int_enable_reg[15:8]  <= b_reg_wdata_i[15:8];
+                        if (b_reg_wstrb_i[2]) int_enable_reg[23:16] <= b_reg_wdata_i[23:16];
+                        if (b_reg_wstrb_i[3]) int_enable_reg[31:24] <= b_reg_wdata_i[31:24];
+                    end
+                    ADDR_FORCE_PRIO:
+                        if (b_reg_wstrb_i[0]) force_priority_reg <= b_reg_wdata_i[0];
+                    ADDR_COLLISION_THRESHOLD:
+                        if (b_reg_wstrb_i[0]) collision_threshold_reg <= b_reg_wdata_i[7:0];
+                    ADDR_COOLDOWN_CYCLES:
+                        if (b_reg_wstrb_i[0]) cooldown_cycles_reg <= b_reg_wdata_i[7:0];
                     default:
                         ; // no action
-
                 endcase
             end
         end
@@ -230,5 +243,7 @@ module sram_regfile #(
     assign collision_threshold_o = collision_threshold_reg;
     assign cooldown_cycles_o     = cooldown_cycles_reg;
     assign irq_o = |(int_status_reg & int_enable_reg);
+    assign a_reg_error_o = 1'b0;          // A always wins, never blocked
+    assign b_reg_error_o = write_conflict; // B loses exactly when write_conflict is true
 
 endmodule

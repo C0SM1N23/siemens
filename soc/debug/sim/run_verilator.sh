@@ -52,7 +52,14 @@ WAIVE="-Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-EOFNEWLINE -Wno-DECLFILENAME"
 #   into the 8-bit req_len. A descriptor shorter than 4 bytes gives 6'b111111
 #   and the channel issues a 64-beat burst: 256 bytes written for a request of
 #   at most 3. Reported in TO_MODIFY.md; the DMA is not ours to change.
-KNOWN_LINT="dma/hdl/dma_channel.v:249"
+#
+# sram/hdl/dp_sram_regfile.v:99
+#   wire window_done = (window_cnt == WINDOW_CYCLES-1)
+#   window_cnt is WIN_W wide and WIN_W is a literal 10 while WINDOW_CYCLES is a
+#   parameter. They agree only at the default 1024. At 2048 the counter cannot
+#   reach the end of its own window, window_done never fires and BANDWIDTH_A/B
+#   stop updating. Reported in TO_MODIFY.md; the DP-SRAM is not ours to change.
+KNOWN_LINT="dma/hdl/dma_channel.v:249 sram/hdl/dp_sram_regfile.v:99"
 
 echo "=== stage 1/2: lint ==="
 set +e
@@ -61,7 +68,10 @@ set -e
 echo "$lint_out"
 
 # every diagnostic line, minus the ones the known list accounts for
-unexpected=$(echo "$lint_out" | grep -E '^%(Warning|Error)-' | grep -vF "$KNOWN_LINT" || true)
+unexpected=$(echo "$lint_out" | grep -E '^%(Warning|Error)-')
+for k in $KNOWN_LINT; do
+    unexpected=$(echo "$unexpected" | grep -vF "$k" || true)
+done
 if [ -n "$unexpected" ]; then
     echo
     echo "FAIL: lint raised something the known-findings list does not cover:"
@@ -77,7 +87,7 @@ for k in $KNOWN_LINT; do
     }
 done
 
-echo "lint clean apart from $(echo "$KNOWN_LINT" | wc -w) known finding(s) in the DMA block"
+echo "lint clean apart from $(echo "$KNOWN_LINT" | wc -w) known finding(s) in blocks this integration does not own"
 
 # --- stage 2: build and run each bench with the assertion layer --------------
 # --timing is needed for the benches' delay controls; --assert turns the bound

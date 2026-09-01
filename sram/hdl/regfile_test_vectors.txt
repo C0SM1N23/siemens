@@ -1,0 +1,102 @@
+REM =============================================================================
+REM regfile_test_vectors.txt
+REM
+REM Test vectors for regfile.v, interpreted by tb_regfile.v
+REM
+REM Format: each line has exactly 4 fields, separated by spaces:
+REM   COMMAND  ARG1  ARG2  ARG3
+REM Unused fields are filled with "-"
+REM Comment lines start with REM (the Verilog parser does not recognize "#")
+REM Empty lines are ignored
+REM
+REM Available commands:
+REM   REM      -              -           -       comment, no action
+REM   RESET    -              -           -       applies reset (3 cycles) then releases it
+REM   WRITE    <A|B>          <reg>       <hex>   writes <hex> to <reg> via port <A|B>
+REM   READ     <A|B>          <reg>       <hex>   reads <reg> via port <A|B>, compares with <hex>
+REM   CONFLICT <reg>          <hexA>      <hexB>  simultaneous A+B write to <reg>; checks that A wins
+REM   EVENT    <col|cd>       -           -       1-cycle pulse on collision_event / cooldown_event
+REM   ACTIVITY <A|B>          <cycles>    -       holds a_mem_valid/b_mem_valid high for <cycles> cycles
+REM   WAIT     <cycles>       -           -       advances <cycles> cycles, no other action
+REM   CHECKOUT <irq|fp|th|cd> <hex>       -       checks a direct output of the module
+REM
+REM Valid registers for WRITE/READ: STATUS ENABLE PRIORITY BWA BWB THRESH COOLD
+REM =============================================================================
+
+REM ==================== Group 1: default values after reset ====================
+RESET    -   -   -
+READ  A  STATUS   0
+READ  A  ENABLE   0
+READ  A  PRIORITY 0
+READ  A  BWA      0
+READ  A  BWB      0
+READ  A  THRESH   4
+READ  A  COOLD    4
+CHECKOUT irq 0
+CHECKOUT fp  0
+CHECKOUT th  4
+CHECKOUT cd  4
+
+REM ==================== Group 2: simple write/read on R/W registers ====================
+WRITE A  ENABLE   3
+READ  A  ENABLE   3
+WRITE B  ENABLE   7
+READ  B  ENABLE   7
+READ  A  ENABLE   7
+WRITE A  THRESH   A
+READ  A  THRESH   A
+CHECKOUT th  A
+WRITE A  COOLD    10
+READ  A  COOLD    10
+CHECKOUT cd  10
+WRITE A  ENABLE   0
+
+REM ==================== Group 3: FORCE_PRIORITY keeps only bit 0 ====================
+WRITE A  PRIORITY FFFFFFFF
+READ  A  PRIORITY 1
+CHECKOUT fp 1
+WRITE A  PRIORITY 0
+READ  A  PRIORITY 0
+CHECKOUT fp 0
+
+REM ==================== Group 4: BWA/BWB are RO, writes are ignored ====================
+WRITE A  BWA      DEADBEEF
+READ  A  BWA      0
+WRITE B  BWB      DEADBEEF
+READ  B  BWB      0
+
+REM ==================== Group 5: W1C behavior on INT_STATUS ====================
+EVENT col   -   -
+READ  A  STATUS   1
+WRITE A  STATUS   0
+READ  A  STATUS   1
+WRITE A  STATUS   1
+READ  A  STATUS   0
+EVENT cd    -   -
+READ  A  STATUS   2
+WRITE A  STATUS   2
+READ  A  STATUS   0
+
+REM ==================== Group 6: irq generation from STATUS & ENABLE ====================
+WRITE A  ENABLE   1
+EVENT col   -   -
+CHECKOUT irq 1
+WRITE A  STATUS   1
+CHECKOUT irq 0
+WRITE A  ENABLE   0
+EVENT col   -   -
+CHECKOUT irq 0
+WRITE A  STATUS   1
+WRITE A  ENABLE   0
+
+REM ==================== Group 7: simultaneous A/B write to the same register -- A wins ====================
+CONFLICT ENABLE  5  A
+READ  A  ENABLE   5
+WRITE A  ENABLE   0
+
+REM ==================== Group 8: BANDWIDTH_A/B counting over one window ====================
+RESET    -   -   -
+ACTIVITY A   8   -
+WAIT     20  -   -
+READ  A  BWA      8
+READ  A  BWB      0

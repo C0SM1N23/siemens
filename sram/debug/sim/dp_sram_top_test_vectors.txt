@@ -1,81 +1,654 @@
 REM =============================================================================
-REM dp_sram_top_test_vectors.txt
+REM dp_sram_top_stress_test_vectors.txt
 REM
-REM Vectori de test pentru dp_sram_top.v, interpretati de tb_dp_sram_top.v.
-REM Spre deosebire de regfile_test_vectors.txt, aici comenzile vorbesc AXI4-Lite
-REM real (adrese de byte) si pot declansa coliziuni reale intre Port A si Port B.
+REM Stress/exhaustive test vectors for dp_sram_top.v, matching
+REM dp_sram_stress_test_plan.md. Interpreted by tb_dp_sram_top.v.
 REM
-REM Format: fiecare linie are exact 5 campuri, separate prin spatiu:
-REM   COMANDA  ARG1  ARG2  ARG3  ARG4
-REM Campurile nefolosite se completeaza cu "-"
-REM Liniile de comentariu incep cu REM. Liniile goale sunt ignorate.
-REM
-REM Comenzi disponibile:
-REM   REM         -      -       -       -       comentariu, nicio actiune
-REM   RESET       -      -       -       -       aplica reset (3 cicluri) apoi il elibereaza
-REM   WRITE       <A|B>  <addr>  <data>  -        scrie <data> (hex) la <addr> (hex, byte); asteapta BRESP=OKAY
-REM   READ        <A|B>  <addr>  <data>  -        citeste <addr>; verifica <data> si RRESP=OKAY
-REM   WWCONFLICT  <addr> <dataA> <dataB> <winner> Port A si Port B scriu simultan <addr>; <winner>=A|B
-REM   RWCONFLICT  <addr> <writer><data>  -        <writer> (A|B) scrie <data>; celalalt citeste simultan <addr>
-REM   WAIT        <cicluri> -   -       -        avanseaza <cicluri> cicluri
-REM   CHECKIRQ    <0|1>  -      -       -        verifica iesirea irq
-REM
-REM Harta locala de adrese (byte): cuvant 0..7 = registre (0x00-0x1C), cuvant 8+ = memorie (0x20+)
-REM   0x00=STATUS 0x04=ENABLE 0x08=PRIORITY 0x0C=BWA(RO) 0x10=BWB(RO) 0x14=THRESH 0x18=COOLD 0x1C=nemapat
+REM IMPORTANT: not every test from the plan can be expressed with the
+REM current command set (RESET/WRITE/READ/WWCONFLICT/RWCONFLICT/WAIT/CHECKIRQ).
+REM Tests that need a new testbench command are marked BLOCKED below, with the
+REM exact capability that is missing -- they are NOT silently approximated.
 REM =============================================================================
 
-REM ==================== Grup 1: reset + acces simplu la registre prin AXI real ====================
-RESET       -      -          -          -
-READ  A  000  00000000  -
-READ  A  004  00000000  -
-WRITE A  004  0000000F  -
-READ  A  004  0000000F  -
-READ  B  004  0000000F  -
-WRITE A  004  00000000  -
+REM ==================== Section 1: AXI4-Lite Write Channel Timing ====================
 
-REM ==================== Grup 2: acces simplu la memorie prin AXI real ====================
-WRITE A  020  DEADBEEF  -
-READ  A  020  DEADBEEF  -
-READ  B  020  DEADBEEF  -
-WRITE B  024  12345678  -
-READ  A  024  12345678  -
-READ  A  020  DEADBEEF  -
+REM ---- Test 1.1: write address held before write data ----
+RESET          -  -   -    -
+STAGGERWRITE   A  AW  004  00000005
+READ           A  004  00000005  -
+WRITE          A  004  00000000  -
 
-REM ==================== Grup 3: granita regiunilor (cuvant 7 vs cuvant 8) ====================
-READ  A  01C  00000000  -
-WRITE A  008  FFFFFFFF  -
-READ  A  020  DEADBEEF  -
-WRITE A  008  00000000  -
+REM ---- Test 1.2: write data held before write address ----
+STAGGERWRITE   A  W   004  00000007
+READ           A  004  00000007  -
+WRITE          A  004  00000000  -
 
-REM ==================== Grup 4: coliziune Read/Write -- scriitorul castiga mereu ====================
-RWCONFLICT  020  A  11111111  -
-READ  A  020  11111111  -
-RWCONFLICT  020  B  22222222  -
-READ  A  020  22222222  -
+REM ---- Test 1.3: back-to-back writes with zero idle cycles -- RELAXED ----
+REM The main loop inserts one @(posedge clk) between every instruction, so two
+REM WRITE lines in a row cannot exercise the true zero-gap case. Relaxed version
+REM below (still useful: confirms no leftover aw_have/w_have state, just not
+REM on the exact same clock edge as the previous transaction's completion).
+RESET      -        -        -        -
+WRITE      A        004      00000001 -
+WRITE      A        008      00000001 -
+READ       A        004      00000001 -
+READ       A        008      00000001 -
+WRITE      A        004      00000000 -
+WRITE      A        008      00000000 -
 
-REM ==================== Grup 5: coliziune Write/Write, prioritate implicita (Port A) ====================
-WWCONFLICT  020  AAAAAAAA  BBBBBBBB  A
-READ  A  020  AAAAAAAA  -
+REM ---- Test 1.4: read arriving while a write is half-assembled ----
+REM Covered by the same STAGGERWRITE task above -- it already checks
+REM ARREADY=0 on every cycle of the 5-cycle wait between AW and W.
+REM (See tests 1.1/1.2 above; no separate vectors needed.)
 
-REM ==================== Grup 6: FORCE_PRIORITY schimba castigatorul la Write/Write ====================
-WRITE A  008  00000001  -
-WWCONFLICT  020  11110000  22220000  B
-READ  A  020  22220000  -
-WRITE A  008  00000000  -
+REM ==================== Section 2: Delayed Response Handshake ====================
 
-REM ==================== Grup 7: irq de la coliziune reala pana la INT_STATUS ====================
-WRITE A  004  00000001  -
-RWCONFLICT  020  A  33330000  -
-CHECKIRQ  1  -  -  -
-WRITE A  000  00000001  -
-CHECKIRQ  0  -  -  -
-WRITE A  004  00000000  -
+REM ---- Test 2.1: delayed BREADY on INT_STATUS, adjusted scope ----
+REM NOTE: the originally-planned scenario (inject a NEW real collision
+REM while Port A's write to INT_STATUS is pending) is structurally
+REM unreachable -- collision_det.v never sees register-region traffic
+REM (a_mem_valid_bk is forced 0 while a_is_reg=1), and a collision needs
+REM BOTH ports active on the memory region. This adjusted version confirms
+REM the W1C clear applies promptly (visible from the first peek cycle) and
+REM stays stable for the whole delayed-BREADY window, using Port B to peek
+REM at INT_STATUS while Port A's write sits in WR_RESP. It does NOT
+REM distinguish pre-fix from post-fix behavior (no re-triggering event is
+REM injected), only functional correctness under an extended response window.
+RESET       -         -    -   -
+WRITE       A         004  00000003  -
+RWCONFLICT  020       A    11111111  -
+READ        A         000  00000001  -
+SLOWCLEAR   00000001  5    -   -
+READ        A         000  00000000  -
+WRITE       A         004  00000000  -
 
-REM ==================== Grup 8: COLLISION_THRESHOLD (implicit 4) -> COOLDOWN dupa a 4-a coliziune reala ====================
-RESET       -      -          -          -
-WWCONFLICT  020  00000001  00000002  A
-WWCONFLICT  020  00000003  00000004  A
-WWCONFLICT  020  00000005  00000006  A
-WWCONFLICT  020  00000007  00000008  A
-READ  A  000  00000003  -
-RESET       -      -          -          -
+REM ---- Test 2.2: delayed BREADY on a plain R/W register ----
+RESET      -  -    -         -
+SLOWWRITE  A  004  00000001  5
+READ       A  004  00000001  -
+WRITE      A  004  00000000  -
+
+REM ---- Test 2.3: delayed RREADY, sampling RDATA/RRESP stability ----
+RESET      -  -    -         -
+WRITE      A  020  CAFEBABE  -
+SLOWREAD   A  020  CAFEBABE  5
+
+REM ==================== Section 3: Byte Strobe (WSTRB) Coverage ====================
+
+REM ---- Test 3.1: single-byte writes ----
+RESET       -    -         -    -
+WRITE       A    020  FFFFFFFF  F
+WRITE       A    020  000000AA  1
+READ        A    020  FFFFFFAA  -
+WRITE       A    020  0000BB00  2
+READ        A    020  FFFFBBAA  -
+WRITE       A    020  00CC0000  4
+READ        A    020  FFCCBBAA  -
+WRITE       A    020  DD000000  8
+READ        A    020  DDCCBBAA  -
+
+REM ---- Test 3.2: WSTRB = 0x0 (no byte selected) ----
+RESET       -    -         -    -
+WRITE       A    020  12345678  F
+WRITE       A    020  FFFFFFFF  0
+READ        A    020  12345678  -
+
+REM ---- Test 3.3: WSTRB = 0xF (maximum, all byte lanes) ----
+RESET      -        -        -        -
+WRITE      A        020      A5A55A5A -
+READ       A        020      A5A55A5A -
+
+REM ---- Test 3.4: complementary partial writes merge correctly ----
+RESET       -    -         -    -
+WRITE       A    020  00001122  3
+WRITE       A    020  33440000  C
+READ        A    020  33441122  -
+
+REM ==================== Section 4: Collision Arbitration ====================
+
+REM ---- Test 4.1: mixed collision-type sequence ----
+RESET      -        -        -        -
+RWCONFLICT 020      A        11111111 -
+WWCONFLICT 020      22222222 33333333 A
+RWCONFLICT 020      A        44444444 -
+WWCONFLICT 020      55555555 66666666 A
+READ       A        000      00000003 -
+WAIT       10       -        -        -
+
+REM ---- Test 4.2: real collision exactly as COOLDOWN ends ----
+REM THRESHOLD=2, COOLDOWN_CYCLES=4. WAIT value below was chosen to land near
+REM the boundary and was checked by simulation -- adjust if RTL timing changes.
+RESET      -        -        -        -
+WRITE      A        014      00000002 -
+WRITE      A        018      00000004 -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+READ       A        000      00000003 -
+WRITE      A        000      00000003 -
+WAIT       4        -        -        -
+WWCONFLICT 020      5        6        A
+READ       A        000      00000001 -
+WAIT       10       -        -        -
+WRITE      A        014      00000004 -
+WRITE      A        018      00000004 -
+
+REM ---- Test 4.3: second full COOLDOWN cycle (repeatability) ----
+RESET      -        -        -        -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+WWCONFLICT 020      5        6        A
+WWCONFLICT 020      7        8        A
+READ       A        000      00000003 -
+WAIT       10       -        -        -
+WRITE      A        020      AAAAAAAA -
+READ       A        020      AAAAAAAA -
+WRITE      A        000      00000003 -
+WWCONFLICT 020      9        A        A
+WWCONFLICT 020      B        C        A
+WWCONFLICT 020      D        E        A
+WWCONFLICT 020      F        10       A
+READ       A        000      00000003 -
+WAIT       10       -        -        -
+
+REM ---- Test 4.4a: COLLISION_THRESHOLD = 1 (minimum) ----
+RESET      -        -        -        -
+WRITE      A        014      00000001 -
+WWCONFLICT 020      1        2        A
+READ       A        000      00000003 -
+WAIT       10       -        -        -
+
+REM ---- Test 4.4b: COLLISION_THRESHOLD = 16 (mid-range) ----
+RESET      -        -        -        -
+WRITE      A        014      00000010 -
+WWCONFLICT 020      1        64       A
+WWCONFLICT 020      2        65       A
+WWCONFLICT 020      3        66       A
+WWCONFLICT 020      4        67       A
+WWCONFLICT 020      5        68       A
+WWCONFLICT 020      6        69       A
+WWCONFLICT 020      7        6A       A
+WWCONFLICT 020      8        6B       A
+WWCONFLICT 020      9        6C       A
+WWCONFLICT 020      A        6D       A
+WWCONFLICT 020      B        6E       A
+WWCONFLICT 020      C        6F       A
+WWCONFLICT 020      D        70       A
+WWCONFLICT 020      E        71       A
+WWCONFLICT 020      F        72       A
+READ       A        000      00000001 -
+WWCONFLICT 020      FF       FE       A
+READ       A        000      00000003 -
+WAIT       10       -        -        -
+WRITE      A        014      00000004 -
+
+REM ---- Test 4.4c: COLLISION_THRESHOLD = 255 (maximum) ----
+REM Generated (254 non-triggering collisions + 1 triggering) -- see plan doc 4.4.
+RESET      -        -        -        -
+WRITE      A        014      000000FF -
+WWCONFLICT 020      1        1        A
+WWCONFLICT 020      2        8        A
+WWCONFLICT 020      3        F        A
+WWCONFLICT 020      4        16       A
+WWCONFLICT 020      5        1D       A
+WWCONFLICT 020      6        24       A
+WWCONFLICT 020      7        2B       A
+WWCONFLICT 020      8        32       A
+WWCONFLICT 020      9        39       A
+WWCONFLICT 020      A        40       A
+WWCONFLICT 020      B        47       A
+WWCONFLICT 020      C        4E       A
+WWCONFLICT 020      D        55       A
+WWCONFLICT 020      E        5C       A
+WWCONFLICT 020      F        63       A
+WWCONFLICT 020      10       6A       A
+WWCONFLICT 020      11       71       A
+WWCONFLICT 020      12       78       A
+WWCONFLICT 020      13       7F       A
+WWCONFLICT 020      14       86       A
+WWCONFLICT 020      15       8D       A
+WWCONFLICT 020      16       94       A
+WWCONFLICT 020      17       9B       A
+WWCONFLICT 020      18       A2       A
+WWCONFLICT 020      19       A9       A
+WWCONFLICT 020      1A       B0       A
+WWCONFLICT 020      1B       B7       A
+WWCONFLICT 020      1C       BE       A
+WWCONFLICT 020      1D       C5       A
+WWCONFLICT 020      1E       CC       A
+WWCONFLICT 020      1F       D3       A
+WWCONFLICT 020      20       DA       A
+WWCONFLICT 020      21       E1       A
+WWCONFLICT 020      22       E8       A
+WWCONFLICT 020      23       EF       A
+WWCONFLICT 020      24       F6       A
+WWCONFLICT 020      25       FD       A
+WWCONFLICT 020      26       5        A
+WWCONFLICT 020      27       C        A
+WWCONFLICT 020      28       13       A
+WWCONFLICT 020      29       1A       A
+WWCONFLICT 020      2A       21       A
+WWCONFLICT 020      2B       28       A
+WWCONFLICT 020      2C       2F       A
+WWCONFLICT 020      2D       36       A
+WWCONFLICT 020      2E       3D       A
+WWCONFLICT 020      2F       44       A
+WWCONFLICT 020      30       4B       A
+WWCONFLICT 020      31       52       A
+WWCONFLICT 020      32       59       A
+WWCONFLICT 020      33       60       A
+WWCONFLICT 020      34       67       A
+WWCONFLICT 020      35       6E       A
+WWCONFLICT 020      36       75       A
+WWCONFLICT 020      37       7C       A
+WWCONFLICT 020      38       83       A
+WWCONFLICT 020      39       8A       A
+WWCONFLICT 020      3A       91       A
+WWCONFLICT 020      3B       98       A
+WWCONFLICT 020      3C       9F       A
+WWCONFLICT 020      3D       A6       A
+WWCONFLICT 020      3E       AD       A
+WWCONFLICT 020      3F       B4       A
+WWCONFLICT 020      40       BB       A
+WWCONFLICT 020      41       C2       A
+WWCONFLICT 020      42       C9       A
+WWCONFLICT 020      43       D0       A
+WWCONFLICT 020      44       D7       A
+WWCONFLICT 020      45       DE       A
+WWCONFLICT 020      46       E5       A
+WWCONFLICT 020      47       EC       A
+WWCONFLICT 020      48       F3       A
+WWCONFLICT 020      49       FA       A
+WWCONFLICT 020      4A       2        A
+WWCONFLICT 020      4B       9        A
+WWCONFLICT 020      4C       10       A
+WWCONFLICT 020      4D       17       A
+WWCONFLICT 020      4E       1E       A
+WWCONFLICT 020      4F       25       A
+WWCONFLICT 020      50       2C       A
+WWCONFLICT 020      51       33       A
+WWCONFLICT 020      52       3A       A
+WWCONFLICT 020      53       41       A
+WWCONFLICT 020      54       48       A
+WWCONFLICT 020      55       4F       A
+WWCONFLICT 020      56       56       A
+WWCONFLICT 020      57       5D       A
+WWCONFLICT 020      58       64       A
+WWCONFLICT 020      59       6B       A
+WWCONFLICT 020      5A       72       A
+WWCONFLICT 020      5B       79       A
+WWCONFLICT 020      5C       80       A
+WWCONFLICT 020      5D       87       A
+WWCONFLICT 020      5E       8E       A
+WWCONFLICT 020      5F       95       A
+WWCONFLICT 020      60       9C       A
+WWCONFLICT 020      61       A3       A
+WWCONFLICT 020      62       AA       A
+WWCONFLICT 020      63       B1       A
+WWCONFLICT 020      64       B8       A
+WWCONFLICT 020      65       BF       A
+WWCONFLICT 020      66       C6       A
+WWCONFLICT 020      67       CD       A
+WWCONFLICT 020      68       D4       A
+WWCONFLICT 020      69       DB       A
+WWCONFLICT 020      6A       E2       A
+WWCONFLICT 020      6B       E9       A
+WWCONFLICT 020      6C       F0       A
+WWCONFLICT 020      6D       F7       A
+WWCONFLICT 020      6E       FE       A
+WWCONFLICT 020      6F       6        A
+WWCONFLICT 020      70       D        A
+WWCONFLICT 020      71       14       A
+WWCONFLICT 020      72       1B       A
+WWCONFLICT 020      73       22       A
+WWCONFLICT 020      74       29       A
+WWCONFLICT 020      75       30       A
+WWCONFLICT 020      76       37       A
+WWCONFLICT 020      77       3E       A
+WWCONFLICT 020      78       45       A
+WWCONFLICT 020      79       4C       A
+WWCONFLICT 020      7A       53       A
+WWCONFLICT 020      7B       5A       A
+WWCONFLICT 020      7C       61       A
+WWCONFLICT 020      7D       68       A
+WWCONFLICT 020      7E       6F       A
+WWCONFLICT 020      7F       76       A
+WWCONFLICT 020      80       7D       A
+WWCONFLICT 020      81       84       A
+WWCONFLICT 020      82       8B       A
+WWCONFLICT 020      83       92       A
+WWCONFLICT 020      84       99       A
+WWCONFLICT 020      85       A0       A
+WWCONFLICT 020      86       A7       A
+WWCONFLICT 020      87       AE       A
+WWCONFLICT 020      88       B5       A
+WWCONFLICT 020      89       BC       A
+WWCONFLICT 020      8A       C3       A
+WWCONFLICT 020      8B       CA       A
+WWCONFLICT 020      8C       D1       A
+WWCONFLICT 020      8D       D8       A
+WWCONFLICT 020      8E       DF       A
+WWCONFLICT 020      8F       E6       A
+WWCONFLICT 020      90       ED       A
+WWCONFLICT 020      91       F4       A
+WWCONFLICT 020      92       FB       A
+WWCONFLICT 020      93       3        A
+WWCONFLICT 020      94       A        A
+WWCONFLICT 020      95       11       A
+WWCONFLICT 020      96       18       A
+WWCONFLICT 020      97       1F       A
+WWCONFLICT 020      98       26       A
+WWCONFLICT 020      99       2D       A
+WWCONFLICT 020      9A       34       A
+WWCONFLICT 020      9B       3B       A
+WWCONFLICT 020      9C       42       A
+WWCONFLICT 020      9D       49       A
+WWCONFLICT 020      9E       50       A
+WWCONFLICT 020      9F       57       A
+WWCONFLICT 020      A0       5E       A
+WWCONFLICT 020      A1       65       A
+WWCONFLICT 020      A2       6C       A
+WWCONFLICT 020      A3       73       A
+WWCONFLICT 020      A4       7A       A
+WWCONFLICT 020      A5       81       A
+WWCONFLICT 020      A6       88       A
+WWCONFLICT 020      A7       8F       A
+WWCONFLICT 020      A8       96       A
+WWCONFLICT 020      A9       9D       A
+WWCONFLICT 020      AA       A4       A
+WWCONFLICT 020      AB       AB       A
+WWCONFLICT 020      AC       B2       A
+WWCONFLICT 020      AD       B9       A
+WWCONFLICT 020      AE       C0       A
+WWCONFLICT 020      AF       C7       A
+WWCONFLICT 020      B0       CE       A
+WWCONFLICT 020      B1       D5       A
+WWCONFLICT 020      B2       DC       A
+WWCONFLICT 020      B3       E3       A
+WWCONFLICT 020      B4       EA       A
+WWCONFLICT 020      B5       F1       A
+WWCONFLICT 020      B6       F8       A
+WWCONFLICT 020      B7       FF       A
+WWCONFLICT 020      B8       7        A
+WWCONFLICT 020      B9       E        A
+WWCONFLICT 020      BA       15       A
+WWCONFLICT 020      BB       1C       A
+WWCONFLICT 020      BC       23       A
+WWCONFLICT 020      BD       2A       A
+WWCONFLICT 020      BE       31       A
+WWCONFLICT 020      BF       38       A
+WWCONFLICT 020      C0       3F       A
+WWCONFLICT 020      C1       46       A
+WWCONFLICT 020      C2       4D       A
+WWCONFLICT 020      C3       54       A
+WWCONFLICT 020      C4       5B       A
+WWCONFLICT 020      C5       62       A
+WWCONFLICT 020      C6       69       A
+WWCONFLICT 020      C7       70       A
+WWCONFLICT 020      C8       77       A
+WWCONFLICT 020      C9       7E       A
+WWCONFLICT 020      CA       85       A
+WWCONFLICT 020      CB       8C       A
+WWCONFLICT 020      CC       93       A
+WWCONFLICT 020      CD       9A       A
+WWCONFLICT 020      CE       A1       A
+WWCONFLICT 020      CF       A8       A
+WWCONFLICT 020      D0       AF       A
+WWCONFLICT 020      D1       B6       A
+WWCONFLICT 020      D2       BD       A
+WWCONFLICT 020      D3       C4       A
+WWCONFLICT 020      D4       CB       A
+WWCONFLICT 020      D5       D2       A
+WWCONFLICT 020      D6       D9       A
+WWCONFLICT 020      D7       E0       A
+WWCONFLICT 020      D8       E7       A
+WWCONFLICT 020      D9       EE       A
+WWCONFLICT 020      DA       F5       A
+WWCONFLICT 020      DB       FC       A
+WWCONFLICT 020      DC       4        A
+WWCONFLICT 020      DD       B        A
+WWCONFLICT 020      DE       12       A
+WWCONFLICT 020      DF       19       A
+WWCONFLICT 020      E0       20       A
+WWCONFLICT 020      E1       27       A
+WWCONFLICT 020      E2       2E       A
+WWCONFLICT 020      E3       35       A
+WWCONFLICT 020      E4       3C       A
+WWCONFLICT 020      E5       43       A
+WWCONFLICT 020      E6       4A       A
+WWCONFLICT 020      E7       51       A
+WWCONFLICT 020      E8       58       A
+WWCONFLICT 020      E9       5F       A
+WWCONFLICT 020      EA       66       A
+WWCONFLICT 020      EB       6D       A
+WWCONFLICT 020      EC       74       A
+WWCONFLICT 020      ED       7B       A
+WWCONFLICT 020      EE       82       A
+WWCONFLICT 020      EF       89       A
+WWCONFLICT 020      F0       90       A
+WWCONFLICT 020      F1       97       A
+WWCONFLICT 020      F2       9E       A
+WWCONFLICT 020      F3       A5       A
+WWCONFLICT 020      F4       AC       A
+WWCONFLICT 020      F5       B3       A
+WWCONFLICT 020      F6       BA       A
+WWCONFLICT 020      F7       C1       A
+WWCONFLICT 020      F8       C8       A
+WWCONFLICT 020      F9       CF       A
+WWCONFLICT 020      FA       D6       A
+WWCONFLICT 020      FB       DD       A
+WWCONFLICT 020      FC       E4       A
+WWCONFLICT 020      FD       EB       A
+WWCONFLICT 020      FE       F2       A
+READ       A        000      00000001 -
+WWCONFLICT 020      AB       CD       A
+READ       A        000      00000003 -
+WAIT       10       -        -        -
+WRITE      A        014      00000004 -
+
+REM ---- Test 4.5a: COOLDOWN_CYCLES = 1 (minimum) ----
+RESET      -        -        -        -
+WRITE      A        018      00000001 -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+WWCONFLICT 020      5        6        A
+WWCONFLICT 020      7        8        A
+READ       A        000      00000003 -
+WRITE      A        020      12121212 -
+READ       A        020      12121212 -
+WAIT       5        -        -        -
+WRITE      A        018      00000004 -
+
+REM ---- Test 4.5b: COOLDOWN_CYCLES = 16 (mid-range) ----
+RESET      -        -        -        -
+WRITE      A        018      00000010 -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+WWCONFLICT 020      5        6        A
+WWCONFLICT 020      7        8        A
+READ       A        000      00000003 -
+WRITE      A        020      34343434 -
+READ       A        020      34343434 -
+WAIT       20       -        -        -
+WRITE      A        018      00000004 -
+
+REM ---- Test 4.5c: COOLDOWN_CYCLES = 255 (maximum) ----
+REM NOTE: this checks functional correctness (write eventually succeeds after
+REM a long stall), not the exact cycle count -- WRITE polls until ready, so it
+REM cannot assert "blocked for exactly N cycles" with current commands.
+RESET      -        -        -        -
+WRITE      A        018      000000FF -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+WWCONFLICT 020      5        6        A
+WWCONFLICT 020      7        8        A
+READ       A        000      00000003 -
+WRITE      A        020      56565656 -
+READ       A        020      56565656 -
+WAIT       10       -        -        -
+WRITE      A        018      00000004 -
+
+REM ---- Test 4.6: FORCE_PRIORITY updated immediately before a W/W collision ----
+RESET      -        -        -        -
+READ       A        008      00000000 -
+WRITE      A        008      00000001 -
+WWCONFLICT 020      11110000 22220000 B
+READ       A        020      22220000 -
+WRITE      A        008      00000000 -
+
+REM ---- Test 4.7: simultaneous register-region + memory-region access ----
+RESET      -    -         -    -
+DUALWRITE  004  00000005  020  DEAD0000
+READ       A    004       00000005  -
+READ       A    020       DEAD0000  -
+WRITE      A    004       00000000  -
+
+REM ==================== Section 5: dp_sram_regfile.v -- Additional Cases ====================
+
+REM ---- Test 5.1: simultaneous writes to different registers ----
+RESET      -    -         -    -
+DUALWRITE  004  00000001  008  00000001
+READ       A    004       00000001  -
+READ       A    008       00000001  -
+WRITE      A    004       00000000  -
+WRITE      A    008       00000000  -
+
+REM ---- Test 5.2: read during a same-cycle write (different port) ----
+RESET   -    -         -         -
+WRITE   A    004       00000005  -
+REGRW   004  00000005  0000000A  -
+READ    A    004       0000000A  -
+WRITE   A    004       00000000  -
+
+REM ---- Test 5.3: blocked write has zero (not partial) effect ----
+REM Unblocked by the SLVERR-on-register-conflict fix -- WWCONFLICT's built-in
+REM OKAY/SLVERR check is now correct for register addresses too (A always wins).
+RESET       -    -         -         -
+WWCONFLICT  004  00000001  FFFFFFFF  A
+READ        A    004       00000001  -
+WRITE       A    004       00000000  -
+
+REM ---- Test 5.4: BANDWIDTH read exactly at window rollover -- SEE NOTE ----
+REM Default WINDOW_CYCLES=1024 in dp_sram_regfile.v; dp_sram_top.v does not
+REM expose WINDOW_CYCLES as a pass-through parameter, so it cannot be shortened
+REM from this top-level testbench. Recommended: run this test against
+REM dp_sram_regfile.v directly (tb_dp_sram_regfile.v), once its port list is
+REM updated to the current _i/_o interface -- that testbench already supports a
+REM shortened WINDOW_CYCLES override and a direct ACTIVITY command for a_mem_valid_i.
+
+REM ---- Test 5.5: rapidly toggling activity within a window -- SEE NOTE ----
+REM Same recommendation as 5.4: better suited to dp_sram_regfile.v unit-level testing.
+
+REM ---- Test 5.6: write to the reserved word (word 7) ----
+RESET      -        -        -        -
+WRITE      A        01C      DEADBEEF -
+READ       A        01C      00000000 -
+
+REM ---- Test 5.7: BANDWIDTH activity-duration boundary/mid-range -- SEE NOTE ----
+REM Same recommendation as 5.4/5.5.
+
+REM ==================== Section 6: System-Level Integration ====================
+
+REM ---- Test 6.1: rapid alternation across register/memory boundary ----
+RESET      -        -        -        -
+READ       A        01C      00000000 -
+WRITE      A        020      10101010 -
+READ       A        01C      00000000 -
+READ       A        020      10101010 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101011 -
+READ       A        01C      00000000 -
+READ       A        020      10101011 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101012 -
+READ       A        01C      00000000 -
+READ       A        020      10101012 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101013 -
+READ       A        01C      00000000 -
+READ       A        020      10101013 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101014 -
+READ       A        01C      00000000 -
+READ       A        020      10101014 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101015 -
+READ       A        01C      00000000 -
+READ       A        020      10101015 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101016 -
+READ       A        01C      00000000 -
+READ       A        020      10101016 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101017 -
+READ       A        01C      00000000 -
+READ       A        020      10101017 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101018 -
+READ       A        01C      00000000 -
+READ       A        020      10101018 -
+READ       A        01C      00000000 -
+WRITE      A        020      10101019 -
+READ       A        01C      00000000 -
+READ       A        020      10101019 -
+
+REM ---- Test 6.2: reset applied mid-transaction ----
+RESETMID   -  -    -    -
+READ       A  004  00000002  -
+WRITE      A  004  00000000  -
+
+REM ---- Test 6.3: sustained mixed workload (loose, sequential approximation) ----
+RESET      -        -        -        -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000000 -
+READ       B        020      B0000000 -
+WRITE      A        004      00000000 -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000001 -
+READ       B        020      B0000001 -
+WRITE      A        004      00000000 -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000002 -
+READ       B        020      B0000002 -
+WRITE      A        004      00000000 -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000003 -
+READ       B        020      B0000003 -
+WRITE      A        004      00000000 -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000004 -
+READ       B        020      B0000004 -
+WRITE      A        004      00000000 -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000005 -
+READ       B        020      B0000005 -
+WRITE      A        004      00000000 -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000006 -
+READ       B        020      B0000006 -
+WRITE      A        004      00000000 -
+WRITE      A        004      00000001 -
+READ       A        000      00000000 -
+WRITE      B        020      B0000007 -
+READ       B        020      B0000007 -
+WRITE      A        004      00000000 -
+
+REM ---- Test 6.4: full address range coverage ----
+RESET      -        -        -        -
+READ       A        000      00000000 -
+WRITE      A        020      11111111 -
+READ       A        020      11111111 -
+WRITE      A        208      22222222 -
+READ       A        208      22222222 -
+WRITE      A        3FC      33333333 -
+READ       A        3FC      33333333 -
+READ       A        020      11111111 -
+READ       A        208      22222222 -
+READ       A        3FC      33333333 -
+
