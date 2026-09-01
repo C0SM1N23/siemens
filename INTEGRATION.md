@@ -15,48 +15,35 @@ independent review see [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).
 
 ## 1. What was changed in the blocks
 
-Five source changes. None of them touches a block's algorithm — no state
+Four source changes, none of which touches a block's algorithm — no state
 machine, no arbitration, no collision detection was modified.
 
 | Block | Change | Why |
 |---|---|---|
-| DMA | `active_master_ch` declared above its use | the block did not compile |
-| DMA | `irq` driven from `INT_STATUS & INT_ENABLE` | two writable registers did nothing |
+| DMA | its bench writes `INT_ENABLE` before checking `irq` | the bench never unmasked the line it asserts on |
 | DP-SRAM | module `regfile` renamed `sram_regfile` | name collision with the CPU |
 | DP-SRAM | its `compile.do` follows the rename | the block bench stopped compiling |
 | DP-SRAM | `WIN_W` derived from `WINDOW_CYCLES` | the two could silently disagree |
 
-### DMA: `active_master_ch` used before it was declared
+### DMA: the RTL is now identical to its own branch
 
-`mc_dma_top.v` read the register in four continuous assignments at line 103 and
-declared it at line 117. Verilog requires declaration before reference, so the
-block did not compile at all:
+Integration originally needed two changes to `mc_dma_top.v` — `active_master_ch`
+was read before it was declared, so the block did not compile, and `irq` was
+driven from the raw channel lines with `INT_STATUS` and `INT_ENABLE` left
+unconnected, so masking did nothing and write-1-to-clear could not release the
+line. Both were reported, and both are now fixed on the `DMA` branch itself. All
+five RTL files under `dma/hdl/` are byte-identical to that branch; nothing in
+the DMA's design is carried here as a local edit.
 
-```
-** Error: (vlog-2730) Undefined variable: 'active_master_ch'.
-** Error: (vlog-2388) 'active_master_ch' already declared in this scope.
-```
-
-The declaration and its `always` block moved above the assignments. Same
-register, same reset value, same update condition.
-
-### DMA: `INT_STATUS` and `INT_ENABLE` were connected to nothing
-
-The register file implements both correctly — `INT_STATUS` sticky and
-write-1-to-clear, `INT_ENABLE` a plain mask — but `mc_dma_top` left both
-outputs unconnected and drove the interrupt from the raw channel lines:
+What does still differ is one line in the block's own bench:
 
 ```verilog
-assign irq = hw_irq;                                  // before
-assign irq = int_status_w[3:0] & int_enable_w[3:0];   // after
+axil_write({24'h0, ADDR_INT_ENABLE}, 32'h0000_000F);
 ```
 
-Masking an interrupt had no effect and clearing `INT_STATUS` did not release
-it. The handler sequence this enables: read `INT_STATUS`, clear that channel's
-`CONTROL.enable`, then write 1 to the status bit.
-
-One line was added to the DMA's own bench, which checked `irq[0]` without ever
-unmasking it.
+`tb_mc_dma_top` checks `irq[0]` but never writes `INT_ENABLE`, which resets to
+zero. Now that `irq` is `INT_STATUS & INT_ENABLE`, the bench cannot pass without
+it. See item 3 of [TO_MODIFY.md](TO_MODIFY.md).
 
 ### DP-SRAM: `regfile` renamed to `sram_regfile`
 
@@ -84,11 +71,11 @@ changes its interface and invalidates its own testbenches. The SoC top level
 connects to the names as they are.
 
 **Everything else that was found in someone else's block.** The remaining
-defects - including a DMA buffer overrun on non-multiple-of-32 transfers, a
-missing byte-enable on the SRAM register bank, and eight words of the SRAM array
-with no address - were reported, not repaired. They are in
-[TO_MODIFY.md](TO_MODIFY.md). Defects in the CPU, the PIC and the fabric were
-fixed, and are in section 4 below.
+defects - including a burst length that overruns the destination for a
+descriptor shorter than four bytes, a missing byte-enable on the SRAM register
+bank, and eight words of the SRAM array with no address - were reported, not
+repaired. They are in [TO_MODIFY.md](TO_MODIFY.md). Defects in the CPU, the PIC
+and the fabric were fixed, and are in section 4 below.
 
 ---
 
@@ -103,6 +90,11 @@ conflict — and were restored explicitly.
 The DMA and the SRAM overlapped the CPU on paths, so each was relocated on a
 temporary staging branch cut from its own tip (`dma-stage`, `sram-stage`) and
 those were merged. The original branches were never modified.
+
+The DMA was merged again later, the same way, when its branch gained the
+transfer-length fix, the interrupt pulse and the `data_fifo` reset. That merge
+took the block's RTL wholesale; the only conflict was `sim.do`, which the branch
+had emptied and `master` still held an unrelated project in.
 
 Every block ends up with the same shape — `hdl/` for the design, `debug/` for
 its verification:
@@ -215,20 +207,25 @@ after the block was relocated.
 | Regression | Result |
 |---|---|
 | CPU, 15 runs (`make modelsim`) | all pass |
-| SoC, 10 runs (`make soc`) | all pass |
+| SoC, 14 runs (`make soc`) | all pass |
 | CPU lint + SVA + coverage on Verilator (`make test`) | passes, 88/92 bins |
 | SoC lint + SVA on Verilator (`make soc-sva`) | lint clean, all benches pass |
 | DMA block bench | passes |
 | DP-SRAM block bench | 67/67 |
 
-The ten SoC runs are four benches: the address map, the burst bridge, the system
-with the CPU asleep while the DMA works, and the system with the CPU working the
-bus throughout, the last two over four bus timings each. The stress bench exists
-because measuring the plain system bench showed it never contended the arbiter,
-never drove both SRAM ports in one cycle and never made an unmapped access; it
-measures those and fails if they did not happen. The address-map bench exists for
-the opposite reason: its property is one no working program can exercise, since a
-correct program never issues an address that should not decode.
+The fourteen SoC runs are five benches: the address map, the burst bridge, the
+system with the CPU asleep while the DMA works, the system with the CPU working
+the bus throughout, and a walk over DMA transfer lengths — the last three over
+four bus timings each. Three of them exist because a working program cannot
+reach what they cover. The stress bench was written after measuring the plain
+system bench, which never contended the arbiter, never drove both SRAM ports in
+one cycle and never made an unmapped access; it measures those and fails if they
+did not happen. The address-map bench checks a property no correct program can
+exercise, since correct software never issues an address that should not decode.
+The length bench moves 64, 40, 20, 8 and 4 bytes, because the other two system
+programs move exact multiples of the DMA's 32-byte burst and so never make the
+channel issue a short final burst — which is where a DMA writes past what it was
+asked to move.
 
 An SVA layer under `soc/debug/sva/` is bound to the fabric and runs on
 Verilator, since ModelSim ASE cannot compile assertions. It checks AXI4-Lite

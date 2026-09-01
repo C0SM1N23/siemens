@@ -262,7 +262,7 @@ sizing was on this list and is not any more.
 
 Not ready for sign-off, for a reason no test can settle: the CPU brief and the
 PIC brief specify different interrupt interfaces, the RTL follows neither
-exactly, and nothing records that as an agreed decision. See item 29 of
+exactly, and nothing records that as an agreed decision. See item 13 of
 [TO_MODIFY.md](TO_MODIFY.md).
 
 ---
@@ -271,7 +271,7 @@ exactly, and nothing records that as an agreed decision. See item 29 of
 
 ```
 make modelsim    # CPU regression, 15 runs
-make soc         # SoC regression, 10 runs over four bus timings
+make soc         # SoC regression, 14 runs over four bus timings
 make test        # CPU lint + SVA + functional coverage on Verilator
 make soc-sva     # SoC lint + SVA assertion run on Verilator
 ```

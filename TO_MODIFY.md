@@ -105,12 +105,16 @@ bank is now covered only indirectly through `tb_dp_sram_top`.
 `cpu/debug/sim/soc_map.vh` and `soc/hdl/soc_addr_map.vh` define the same base
 addresses independently. They agree today and nothing enforces it.
 
-**12. Two injected defects still survive the suite.**
+**12. Three injected defects still survive the suite.**
 
 | Defect | Why nothing catches it |
 |---|---|
 | `BRESP` stickiness removed in the bridge | no test produces an error on a beat inside a burst |
 | `WIN_W` back to a literal | every test runs at `WINDOW_CYCLES = 1024` |
+| `INT_ENABLE` ignored when forming `irq` | the DMA bench unmasks before checking, but never checks that a masked channel stays quiet |
+
+The third closes with the negative case in item 3: set `INT_ENABLE = 0` and
+require `irq` to stay low.
 
 **13. The CPU brief and the PIC brief specify different interrupt interfaces.**
 

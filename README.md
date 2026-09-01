@@ -216,35 +216,47 @@ The full map is in [soc/hdl/soc_addr_map.vh](soc/hdl/soc_addr_map.vh).
 Needs ModelSim (`vsim` on `PATH`) and Python 3.
 
 ```
-make soc         # SoC regression, 9 runs over four bus timings (ModelSim)
+make soc         # SoC regression, 14 runs over four bus timings (ModelSim)
 make soc-sva     # SoC lint + SVA assertion run (Verilator)
-make modelsim    # CPU regression, 14 runs
+make modelsim    # CPU regression, 15 runs
 make test        # CPU Verilator SVA + coverage flow (what CI runs)
 make asm         # rebuild the test program images
 ```
 
-`make soc` runs three benches from one compile, the two system-level ones under
+`make soc` runs five benches from one compile, the three system-level ones under
 four bus timings each (nominal, high fixed latency, two seeds of random READY
 backpressure):
 
-1. **[tb_full2lite](soc/debug/hdl/tb_full2lite.v)** — the burst bridge alone:
+1. **[tb_addr_map](soc/debug/hdl/tb_addr_map.v)** — the address map against the
+   decoder that implements it: every window's first and last register, and the
+   first address past the end of each. No working program can reach this, since
+   correct software never issues an address that should not decode.
+
+2. **[tb_full2lite](soc/debug/hdl/tb_full2lite.v)** — the burst bridge alone:
    8-beat and single-beat bursts, byte strobes, FIXED bursts, `RLAST`
    placement, and the unsupported cases (WRAP, narrow) which must return
    `SLVERR` with memory untouched.
 
-2. **[tb_soc_top](soc/debug/hdl/tb_soc_top.v)** — the whole SoC. The bench
+3. **[tb_soc_top](soc/debug/hdl/tb_soc_top.v)** — the whole SoC. The bench
    supplies a clock, a reset and a program image;
    [program_soc.s](soc/debug/sim/program_soc.s) does the checking: it builds a
    descriptor, programs a DMA channel, sleeps on `WFI`, is woken by the
    completion interrupt through the PIC, and compares what the DMA moved
    against what it was asked to move.
 
-3. **[tb_soc_stress](soc/debug/hdl/tb_soc_stress.v)** — the same SoC with the
+4. **[tb_soc_stress](soc/debug/hdl/tb_soc_stress.v)** — the same SoC with the
    CPU working the bus throughout. This is the run that reaches the contention
    logic: the arbiter with both masters asking, both SRAM ports busy in one
    cycle, real address collisions, and an unmapped access returning `DECERR`.
    It measures each and **fails if they did not happen**. The transfers must
    stay bit-perfect regardless.
+
+5. **[tb_soc_dma_len](soc/debug/hdl/tb_soc_dma_len.v)** — five DMA transfer
+   lengths that are not whole 32-byte bursts: 64, 40, 20, 8 and 4 bytes, each
+   into its own slot over a guard pattern. The other two system programs move
+   exact multiples of the burst size, so nothing else makes the channel issue a
+   short final burst — which is where a DMA writes past what it was asked to
+   move. A word delivered short and a word written past the end both fail.
 
 `make soc-sva` lints the SoC with `-Wall` and re-runs every bench with the
 assertion layer in [soc/debug/sva/](soc/debug/sva/) live: AXI4-Lite and
@@ -256,8 +268,8 @@ burst whose beat counter and `RLAST` agree.
 
 | Regression | Result |
 |---|---|
-| CPU, 14 runs | all pass |
-| SoC, 9 runs | all pass |
+| CPU, 15 runs | all pass |
+| SoC, 14 runs | all pass |
 | SoC lint + SVA (Verilator) | lint clean, all benches pass |
 | DMA block bench | passes |
 | DP-SRAM block bench | 67/67 checks pass |
