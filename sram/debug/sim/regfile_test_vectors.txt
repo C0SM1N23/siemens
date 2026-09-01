@@ -1,0 +1,102 @@
+REM =============================================================================
+REM regfile_test_vectors.txt
+REM
+REM Vectori de test pentru regfile.v, interpretati de tb_regfile.v
+REM
+REM Format: fiecare linie are exact 4 campuri, separate prin spatiu:
+REM   COMANDA  ARG1  ARG2  ARG3
+REM Campurile nefolosite se completeaza cu "-"
+REM Liniile de comentariu incep cu REM (parserul Verilog nu recunoaste "#")
+REM Liniile goale sunt ignorate
+REM
+REM Comenzi disponibile:
+REM   REM      -              -           -       comentariu, nicio actiune
+REM   RESET    -              -           -       aplica reset (3 cicluri) apoi il elibereaza
+REM   WRITE    <A|B>          <reg>       <hex>   scrie <hex> in <reg> prin portul <A|B>
+REM   READ     <A|B>          <reg>       <hex>   citeste <reg> prin portul <A|B>, compara cu <hex>
+REM   CONFLICT <reg>          <hexA>      <hexB>  scriere simultana A+B pe <reg>; verifica ca A castiga
+REM   EVENT    <col|cd>       -           -       impuls de 1 ciclu pe collision_event / cooldown_event
+REM   ACTIVITY <A|B>          <cicluri>   -       tine a_mem_valid/b_mem_valid sus <cicluri> cicluri
+REM   WAIT     <cicluri>      -           -       avanseaza <cicluri> cicluri, fara alta actiune
+REM   CHECKOUT <irq|fp|th|cd> <hex>       -       verifica o iesire directa a modulului
+REM
+REM Registre valide pentru WRITE/READ: STATUS ENABLE PRIORITY BWA BWB THRESH COOLD
+REM =============================================================================
+
+REM ==================== Grup 1: valori implicite dupa reset ====================
+RESET    -   -   -
+READ  A  STATUS   0
+READ  A  ENABLE   0
+READ  A  PRIORITY 0
+READ  A  BWA      0
+READ  A  BWB      0
+READ  A  THRESH   4
+READ  A  COOLD    4
+CHECKOUT irq 0
+CHECKOUT fp  0
+CHECKOUT th  4
+CHECKOUT cd  4
+
+REM ==================== Grup 2: scriere/citire simpla pe registre R/W ====================
+WRITE A  ENABLE   3
+READ  A  ENABLE   3
+WRITE B  ENABLE   7
+READ  B  ENABLE   7
+READ  A  ENABLE   7
+WRITE A  THRESH   A
+READ  A  THRESH   A
+CHECKOUT th  A
+WRITE A  COOLD    10
+READ  A  COOLD    10
+CHECKOUT cd  10
+WRITE A  ENABLE   0
+
+REM ==================== Grup 3: FORCE_PRIORITY pastreaza doar bitul 0 ====================
+WRITE A  PRIORITY FFFFFFFF
+READ  A  PRIORITY 1
+CHECKOUT fp 1
+WRITE A  PRIORITY 0
+READ  A  PRIORITY 0
+CHECKOUT fp 0
+
+REM ==================== Grup 4: BWA/BWB sunt RO, scrierile sunt ignorate ====================
+WRITE A  BWA      DEADBEEF
+READ  A  BWA      0
+WRITE B  BWB      DEADBEEF
+READ  B  BWB      0
+
+REM ==================== Grup 5: comportament W1C pe INT_STATUS ====================
+EVENT col   -   -
+READ  A  STATUS   1
+WRITE A  STATUS   0
+READ  A  STATUS   1
+WRITE A  STATUS   1
+READ  A  STATUS   0
+EVENT cd    -   -
+READ  A  STATUS   2
+WRITE A  STATUS   2
+READ  A  STATUS   0
+
+REM ==================== Grup 6: generare irq din STATUS & ENABLE ====================
+WRITE A  ENABLE   1
+EVENT col   -   -
+CHECKOUT irq 1
+WRITE A  STATUS   1
+CHECKOUT irq 0
+WRITE A  ENABLE   0
+EVENT col   -   -
+CHECKOUT irq 0
+WRITE A  STATUS   1
+WRITE A  ENABLE   0
+
+REM ==================== Grup 7: scriere simultana A/B pe acelasi registru -- A castiga ====================
+CONFLICT ENABLE  5  A
+READ  A  ENABLE   5
+WRITE A  ENABLE   0
+
+REM ==================== Grup 8: numaratoarea BANDWIDTH_A/B pe o fereastra ====================
+RESET    -   -   -
+ACTIVITY A   8   -
+WAIT     20  -   -
+READ  A  BWA      8
+READ  A  BWB      0
