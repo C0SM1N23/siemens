@@ -144,8 +144,11 @@ module axi4_lite_slave (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             ch0_control <= 32'h0;
-        else if (slv_reg_wren && write_addr == ADDR_CH0_CONTROL)
+        else if (slv_reg_wren && write_addr == ADDR_CH0_CONTROL) begin
             ch0_control <= s_axi_wdata;
+            if (s_axi_wdata[1] == 1'b1)
+                ch0_control[2] <= 1'b0;
+        end
     end
 
     // CH0_BW_CAP (R/W) 
@@ -168,8 +171,11 @@ module axi4_lite_slave (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             ch1_control <= 32'h0;
-        else if (slv_reg_wren && write_addr == ADDR_CH1_CONTROL)
+        else if (slv_reg_wren && write_addr == ADDR_CH1_CONTROL) begin
             ch1_control <= s_axi_wdata;
+            if (s_axi_wdata[1] == 1'b1)
+                ch1_control[2] <= 1'b0;
+        end
     end
 
     // CH1_BW_CAP (R/W) 
@@ -192,8 +198,11 @@ module axi4_lite_slave (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             ch2_control <= 32'h0;
-        else if (slv_reg_wren && write_addr == ADDR_CH2_CONTROL)
+        else if (slv_reg_wren && write_addr == ADDR_CH2_CONTROL) begin
             ch2_control <= s_axi_wdata;
+            if (s_axi_wdata[1] == 1'b1)
+                ch2_control[2] <= 1'b0;
+        end
     end
 
     // CH2_BW_CAP (R/W) 
@@ -216,8 +225,11 @@ module axi4_lite_slave (
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             ch3_control <= 32'h0;
-        else if (slv_reg_wren && write_addr == ADDR_CH3_CONTROL)
+        else if (slv_reg_wren && write_addr == ADDR_CH3_CONTROL) begin
             ch3_control <= s_axi_wdata;
+            if (s_axi_wdata[1] == 1'b1)
+                ch3_control[2] <= 1'b0;
+        end
     end
 
     // CH3_BW_CAP (R/W) 
