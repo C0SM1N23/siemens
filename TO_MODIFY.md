@@ -58,43 +58,76 @@ file, so the block has no working ModelSim script.
 
 ## DP-SRAM — `sram/`
 
-**6. The register bank ignores `WSTRB`.**
+**6. `WIN_W` is a literal while `WINDOW_CYCLES` is a parameter.**
 
-`sram/hdl/sram_regfile.v` has no `wstrb` port; `sram/hdl/dp_sram_top.v:173` passes
-only `a_reg_wdata_i`. Most registers survive by luck — the CPU replicates the byte
-across all four lanes (`cpu/hdl/lsu.v:92`) and the bank takes `wdata[7:0]`. The
-exception is `INT_ENABLE`, stored as a full 32-bit word: after `sb` of `0x01` it
-holds `0x01010101` and reads back garbage in the upper bits. Correct today only
-because bits 0..1 are the only ones used; any use of the upper bits, or any
-read-modify-write, breaks.
+`sram/hdl/dp_sram_regfile.v:59` fixes `WIN_W = 10`; line 99 compares
+`window_cnt == WINDOW_CYCLES-1`. They agree only at the default 1024. At 2048 the
+counter is too narrow to ever equal `WINDOW_CYCLES-1`, so the window never closes.
+Measured over 9000 cycles with two instances differing only in the parameter:
 
-Apply `wstrb` per byte, as `sram/hdl/mem_array.v:44-47` already does.
+```
+WINDOW_CYCLES=1024 : window_done pulses = 8
+WINDOW_CYCLES=2048 : window_done pulses = 0
+```
+
+Derive it: `localparam WIN_W = $clog2(WINDOW_CYCLES);`
+
+This is not the off-by-one already noted in the block (`BANDWIDTH_A/B` peaking at
+`WINDOW_CYCLES-1`), which is documented and accepted. It is a separate problem
+and it only bites upwards: shortening the window for a test works, because a
+smaller limit still fits in 10 bits. Raising it past 1024 stops the window
+closing at all.
+
+Verilator flags the width mismatch; it is listed in `KNOWN_LINT` in
+`soc/debug/sim/run_verilator.sh` so the SoC lint gate still runs, and the entry
+has to be removed once this is fixed.
 
 **7. Register word 7 is a silent hole.**
 
 `REG_WORD_MAX = 7` routes words 0..7 to the bank, but
-`sram/hdl/sram_regfile.v:49-55` defines only 0..6. Word 7 reads 0, swallows
-writes, answers OKAY.
+`sram/hdl/dp_sram_regfile.v:50-56` defines only 0..6. Measured on port A:
 
-**8. The register region can never return an error.**
+```
+word 6 (COOLDOWN_CYCLES, defined): rresp=00 rdata=0x00000004
+word 7 (not defined)             : rresp=00 rdata=0x00000000
+word 7 write of 0xDEADBEEF       : bresp=00, then reads back 0x00000000
+```
 
-`sram/hdl/dp_sram_top.v:120`: `a_mem_error_final = a_is_reg ? 1'b0 : ...`.
+Software cannot tell a register that does not exist from one that does.
+
+**8. An undefined register address cannot return an error.**
+
+The bank now has error outputs, but `sram/hdl/dp_sram_regfile.v:246-247` ties
+`a_reg_error_o` to 0 and drives `b_reg_error_o` from `write_conflict` alone, so
+they report a port-B write losing an arbitration and nothing else. An access to a
+register that does not exist still answers OKAY.
 
 **9. The last eight words of the array cannot be addressed.**
 
-`sram/hdl/mem_array.v:33` declares `mem[0:255]`, but `dp_sram_top` subtracts
-`MEM_BASE_OFFSET` from a 10-bit address before indexing, so words 8..255 of the
-address space map onto `mem[0..247]`. `mem[248..255]` has no address. The block
-offers 248 data words where the specification asks for 256, and widening the SoC
-window does not help — the port is 10 bits wide.
+`sram/hdl/mem_array.v:33` declares `mem[0:255]`, but `sram/hdl/dp_sram_top.v:117`
+subtracts `MEM_BASE_OFFSET` from a 10-bit address before indexing, so words 8..255
+of the address space map onto `mem[0..247]`. Measured: a write to the top address
+the port can carry, 0x3FC, lands on `mem[247]`, so `mem[248..255]` have no address
+at all. The block offers 248 data words where the specification asks for 256, and
+widening the SoC window does not help — the port is 10 bits wide.
 
 Widen `ADDR_W` to 11, or declare the array `[0:247]` so its size states what is
 reachable.
 
-**10. `tb_regfile.v` no longer compiles.**
+**10. `regfile.v` is dead code that breaks a shared library.**
 
-It uses the pre-rename port names (`clk`, `a_reg_valid`, `irq`). The register
-bank is now covered only indirectly through `tb_dp_sram_top`.
+`dp_sram_top` instantiates `dp_sram_regfile`, and the block's own `compile.do`
+does not build `regfile.v`, but the file is still on the branch and still defines
+a module called `regfile` — the same name as the CPU's register file. Compiled
+into one library the second definition overwrites the first:
+
+```
+** Warning: sram_regfile_orig.v(11): (vlog-2275) Existing module 'regfile'
+   will be overwritten.
+```
+
+It is not carried into the SoC for that reason; deleting it on the branch would
+say so once instead of leaving each integrator to work it out.
 
 ---
 
@@ -114,7 +147,8 @@ addresses independently. They agree today and nothing enforces it.
 | `INT_ENABLE` ignored when forming `irq` | the DMA bench unmasks before checking, but never checks that a masked channel stays quiet |
 
 The third closes with the negative case in item 3: set `INT_ENABLE = 0` and
-require `irq` to stay low.
+require `irq` to stay low. The `WIN_W` row is no longer a mutation — item 6 is
+the delivered state of the block.
 
 **13. The CPU brief and the PIC brief specify different interrupt interfaces.**
 

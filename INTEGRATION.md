@@ -15,15 +15,19 @@ independent review see [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).
 
 ## 1. What was changed in the blocks
 
-Four source changes, none of which touches a block's algorithm — no state
+One source change is left, and it does not touch a block's algorithm — no state
 machine, no arbitration, no collision detection was modified.
 
 | Block | Change | Why |
 |---|---|---|
 | DMA | its bench writes `INT_ENABLE` before checking `irq` | the bench never unmasked the line it asserts on |
-| DP-SRAM | module `regfile` renamed `sram_regfile` | name collision with the CPU |
-| DP-SRAM | its `compile.do` follows the rename | the block bench stopped compiling |
-| DP-SRAM | `WIN_W` derived from `WINDOW_CYCLES` | the two could silently disagree |
+
+Integration once carried three more, all of them now settled upstream: the DMA's
+two RTL fixes are on its own branch, and the DP-SRAM's `regfile` collision was
+resolved by its owner renaming the module `dp_sram_regfile`. One file is left out
+rather than changed — `regfile.v`, which the block no longer instantiates or
+compiles but still ships, still defining a module named `regfile` that collides
+with the CPU's. See item 10 of [TO_MODIFY.md](TO_MODIFY.md).
 
 ### DMA: the RTL is now identical to its own branch
 
@@ -44,24 +48,6 @@ axil_write({24'h0, ADDR_INT_ENABLE}, 32'h0000_000F);
 `tb_mc_dma_top` checks `irq[0]` but never writes `INT_ENABLE`, which resets to
 zero. Now that `irq` is `INT_STATUS & INT_ENABLE`, the bench cannot pass without
 it. See item 3 of [TO_MODIFY.md](TO_MODIFY.md).
-
-### DP-SRAM: `regfile` renamed to `sram_regfile`
-
-Both blocks defined a module called `regfile` — the CPU's 32 GPRs and the
-SRAM's control/status bank. Compiled into one library the second definition
-overwrites the first (`vlog-2275`) and the elaborated design gets whichever was
-compiled last. The SRAM's bank was renamed; the CPU's was left alone, since its
-testbenches, assertions and documentation all refer to it.
-
-`sram/debug/sim/compile.do` was updated to match. The block's own bench then
-runs unchanged: 67 checks, 67 pass.
-
-### DP-SRAM: bandwidth window width
-
-`WIN_W` was a literal 10 while `WINDOW_CYCLES` is a parameter. At the default
-1024 they agree. At 2048 the counter is too narrow to reach the end of its own
-window, so `window_done` never asserts and `BANDWIDTH_A/B` stop updating —
-measured as 0 pulses. Now `WIN_W = $clog2(WINDOW_CYCLES)`.
 
 ### What was deliberately not changed
 
@@ -95,6 +81,13 @@ The DMA was merged again later, the same way, when its branch gained the
 transfer-length fix, the interrupt pulse and the `data_fifo` reset. That merge
 took the block's RTL wholesale; the only conflict was `sim.do`, which the branch
 had emptied and `master` still held an unrelated project in.
+
+The DP-SRAM was merged again too, when its branch gained byte strobes on the
+register bank, a rewritten `dp_sram_regfile`, a register map and test plan, and a
+bench for the register file. Its two source trees — one at the repository root,
+one under `Siemens/` — had stopped drifting and were identical, so the `Siemens/`
+copy was taken as before, plus the three files that existed only at the root.
+Every RTL file under `sram/hdl/` is byte-identical to that branch.
 
 Every block ends up with the same shape — `hdl/` for the design, `debug/` for
 its verification:
@@ -211,7 +204,7 @@ after the block was relocated.
 | CPU lint + SVA + coverage on Verilator (`make test`) | passes, 88/92 bins |
 | SoC lint + SVA on Verilator (`make soc-sva`) | lint clean, all benches pass |
 | DMA block bench | passes |
-| DP-SRAM block bench | 67/67 |
+| DP-SRAM block bench | 1217/1217 |
 
 The fourteen SoC runs are five benches: the address map, the burst bridge, the
 system with the CPU asleep while the DMA works, the system with the CPU working
