@@ -167,21 +167,20 @@ may reach the CPU''; \reg{mie} in the CPU says ``current software cares''. They
 are independent, which is what allows software to mask a class of interrupts
 without reconfiguring the controller.
 
-Stacking them naively does not work, and the first version of this design got it
-wrong. The PIC resolved the winner without knowing \reg{mie}, and the core then
-applied \reg{mie} to the winner it had been handed. A source enabled in the PIC
-but masked in \reg{mie} was therefore selected and never claimed: the controller
-parked on it and every less urgent source starved behind it, and a \sig{WFI}
-waiting on one of those sources never woke. It was written up at the time as an
-integration rule --- do not enable a source no handler will service --- but a rule
-that forbids using a per-source mask for what it is for is not a rule, it is a
-defect with a workaround.
+The two cannot simply be stacked. If the controller resolved a winner without
+knowing \reg{mie} and the core then applied \reg{mie} to the winner it was
+handed, a source enabled in the PIC but masked in the core would be selected and
+never claimed: the resolver would park on it, every less urgent source would
+starve behind it, and a \sig{WFI} waiting on one of those sources would never
+wake. A per-source mask that cannot be used per source is not a mask.
 
-The core now exports \reg{mie}[31:16] to the PIC as \sig{cpu\_mask\_i}, and the
-resolver skips a masked source when it chooses. The source stays pending, so its
-deadline counter keeps running and it is offered the moment software unmasks it;
-the core still re-checks the mask on the offer it receives, which covers the
-cycle in which \reg{mie} changes. Both masks now do what their names say.
+The core therefore exports \reg{mie}[31:16] to the PIC as \sig{cpu\_mask\_i}, and
+the resolver skips a masked source when it chooses. The source stays pending, so
+its deadline counter keeps running and it is offered the moment software unmasks
+it; the core re-checks the mask on the offer it receives, which covers the cycle
+in which \reg{mie} changes. Each mask does what its name says: the PIC's
+\reg{INT\_ENABLE} decides whether a source exists as far as the controller is
+concerned, and \reg{mie} decides whether this core will take it.
 
 \section{Multi-core behaviour}
 

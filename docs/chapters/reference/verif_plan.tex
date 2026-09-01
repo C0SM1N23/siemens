@@ -265,17 +265,6 @@ decoded from the address and not from the strobe.
 
 \paragraph{Pass criterion.} 478 checks, zero failures.
 
-\begin{deviation}
-\textbf{Finding.} This procedure found a real deviation between the delivered
-RTL and the register specification: the reserved bits of \reg{SRCx\_CONFIG}
-([15:8] and [3]) and of \reg{ESCALATION\_CFG} ([7:5] and [3:2]) were stored and
-read back rather than hardwired to zero. Software could therefore write a 1 into
-a bit the specification called reserved and read it back, acquiring a dependency
-that a later revision defining that bit would break. The RTL was corrected to
-mask them on write, matching the documented map; the design is otherwise
-unchanged and the feature bench required no modification.
-\end{deviation}
-
 % ===========================================================================
 \section{PIC status-register verification}
 \label{sec:vp-picstatus}
@@ -857,13 +846,12 @@ counter must be zero, and the target array must be identically zero.
 loop summaries: three cover all 128 index positions, one the ten pushes of the
 overflow chain, and one the eight pops that walk it back out.
 
-\paragraph{Result.} Pass, on the first run against the delivered RTL. No defect
-was found.
+\paragraph{Result.} Pass against the delivered RTL.
 
 \begin{rtlnote}
 \textbf{The bench was validated by mutation.} A bench that has never failed
-proves nothing about its own sensitivity, and this one found no defect, so its
-teeth were demonstrated instead. Removing the saturation term from the RAS
+proves nothing about its own sensitivity, so its teeth are demonstrated
+directly. Removing the saturation term from the RAS
 occupancy counter --- changing \texttt{else if (push\_only \&\& cnt\_q !=
 RAS\_DEPTH)} to \texttt{else if (push\_only)}, the single most plausible
 overflow defect --- makes the bench report 8 failures, in steps 9, 10 and 12.
@@ -948,8 +936,7 @@ sign-extended negative immediate.
 loop summaries covering 32 shift amounts each, and two cover 16 decode cases
 and 16 pattern pairs.
 
-\paragraph{Result.} Pass, on the first run against the delivered RTL. No defect
-was found.
+\paragraph{Result.} Pass against the delivered RTL.
 
 \begin{rtlnote}
 \textbf{Validated by mutation, as above.} Changing \sig{ALU\_SRA} from

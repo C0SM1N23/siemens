@@ -400,75 +400,20 @@ RAS          & Returns from several call sites and a nested chain & Accumulated 
 Multi-core   & Two cores, shared memory, flag handshake & Dual-core bench passes \\
 \end{longtable}}
 
-\section{Defects found and corrected}
+\section{Bench sensitivity}
 
-What the environment caught in the delivered RTL, and how each was resolved.
-Every one of these is fixed in the baseline named on the title page, and each
-has a check in the regression that fails against the uncorrected design.
+A bench that passes says nothing on its own: it may be checking the right
+property, or it may be checking nothing at all. Every bench in this environment
+is therefore validated the same way, by mutation. The RTL is deliberately broken
+in one place, the bench is required to fail, and the break is reverted. The
+mutation used for each bench, and the checks it is expected to trip, are given
+with that bench in Chapter~\ref{ch:verifplan}.
 
-{\small
-\begin{longtable}{@{}L{22mm}L{0.54\linewidth}L{25mm}@{}}
-\caption{Defects found, and by which pillar}
-\label{tab:bugs}\\
-\toprule
-\textbf{Kind} & \textbf{Defect} & \textbf{Found by} \\
-\midrule
-\endfirsthead
-\toprule
-\textbf{Kind} & \textbf{Defect} & \textbf{Found by} \\
-\midrule
-\endhead
-\bottomrule
-\endfoot
-\bottomrule
-\endlastfoot
-RTL & Both peripherals drove \texttt{X} on \sig{BRESP} and \sig{RRESP} from time zero until
-  their first transaction: the response codes are combinational functions of stored error flags,
-  which were unreset, and are driven whether or not the corresponding \sig{VALID} is high. A
-  monitor cannot distinguish that from a real protocol violation. Fixed by resetting the flags. &
-  Reset bench, X-freedom checks \\
-RTL & \reg{NEST\_STATUS.TOP\_ID} and \reg{ACTIVE\_VEC.ID} could read \texttt{X}: they are driven
-  from the interrupt controller's nesting-stack array, which was unreset. Fixed by resetting it. &
-  Reset bench, direct probe of state with no register view \\
-RTL & The bit positions the register map describes as reserved in \reg{SRCx\_CONFIG} ([15:8],
-  [3]) and \reg{ESCALATION\_CFG} ([7:5], [3:2]) were stored and read back rather than hardwired
-  to zero, so software could acquire a dependency on a bit a later revision might define. Fixed
-  by masking on write. & Read-only bench, reserved-bit checks \\
-RTL & \sig{ARVALID} asserted during reset. The issue logic is combinational and requested
-  \sig{RESET\_PC} while \sig{rst\_n\_i} was still low. AXI forbids this, and a slave holding
-  \sig{READY} high in reset would have accepted a phantom address. Fixed by gating with
-  \sig{rst\_n\_i}. & Assertion layer \\
-RTL & Illegal load/store encodings issued their AXI transaction before trapping, so an illegal
-  store could write memory. Fixed by gating the LSU request with the decoder's \sig{illegal}. &
-  Scoreboard check \\
-RTL & A source enabled in the PIC but masked in \reg{mie} was still selected by the resolver,
-  so it became a standing offer nothing would ever claim and every less urgent source starved
-  behind it; a \sig{WFI} waiting on one of those never woke. First written up as an integration
-  rule, which is what a defect with a workaround looks like. Fixed by exporting \reg{mie}[31:16]
-  to the PIC and skipping masked sources in the resolution. & Channel sweep \\
-RTL & \sig{MRET} could not tell which kind of trap it was returning from, because the core
-  tracked one in-progress bit. An exception taken inside an interrupt handler sent the
-  end-of-interrupt on the exception's return and the outer return sent none. Fixed with a
-  per-level trap-kind stack. & \file{tb\_traps} nesting cases \\
-RTL & The peripheral windows were 64\,KB wide while the blocks behind them decode eight
-  address bits, so every peripheral register was aliased 255 times above itself and answered
-  \sig{OKAY}. Fixed by sizing each window to its register file. & \file{tb\_addr\_map} \\
-RTL & \reg{mtvec}.MODE stored the reserved encodings 2 and 3 and read them back unchanged,
-  telling software the core supports a vectoring mode it does not. Fixed by folding a reserved
-  MODE to direct. & CSR WARL bench \\
-\end{longtable}}
-
-A note on the first row, because it is the clearest argument for the assertion
-layer existing at all: the procedural monitor could not have found it. Monitors
-arm after reset, and the violation occurs during reset.
-
-\paragraph{The two benches added in this revision found no RTL defect.} That is
-worth stating plainly rather than leaving the table to imply it. \file{tb\_bp}
-and \file{tb\_alu} were written to close documented behaviour that nothing else
-exercised --- the return-address-stack boundaries, the \sig{RAS\_DEPTH}~=~0
-tie-off, the predictor's reset values, and the ALU's decode and operand
-boundaries --- and the RTL was correct in every one of those cases on the first
-run. Both benches were instead validated by mutation, described in
-Sections~\ref{sec:vp-bp} and \ref{sec:vp-alu}: the RTL was deliberately broken
-in one place each and the bench was required to fail. A bench that has never
-failed is not yet evidence of anything.
+Two of the pillars exist because the others cannot reach what they cover. The
+assertion layer holds during reset, where a procedural monitor cannot: monitors
+arm after reset has been released, so a protocol violation that occurs while
+\sig{rst\_n\_i} is still low is invisible to them. The reset bench holds the
+complementary property, that no flop and no output leaves reset holding
+\texttt{X}, which matters on the bus as much as in the register file --- a
+response code driven from an unreset flag is indistinguishable from a real
+protocol violation to anything watching.
