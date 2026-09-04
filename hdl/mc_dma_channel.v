@@ -1,28 +1,28 @@
 module mc_dma_channel (
-    input               clk,
-    input               rst_n,
+    input               clk_i,
+    input               rst_ni,
 
     // Register File configuration inputs
-    input       [31:0]  desc_addr_in,
-    input       [31:0]  control_in,
-    input       [31:0]  bw_cap_in,
+    input       [31:0]  desc_addr_i,
+    input       [31:0]  control_i,
+    input       [31:0]  bw_cap_i,
     
     // Status and Interrupt outputs
-    output reg  [31:0]  status_out,
-    output reg          irq_out,
+    output reg  [31:0]  status_o,
+    output reg          irq_o,
 
     // Priority Arbiter interface
-    output reg          req_valid,
-    output reg  [31:0]  req_addr,
-    output reg  [7:0]   req_len,
-    output reg          req_is_write,
-    input               arb_gnt,
+    output reg          req_valid_o,
+    output reg  [31:0]  req_addr_o,
+    output reg  [7:0]   req_len_o,
+    output reg          req_is_write_o,
+    input               arb_gnt_i,
 
     // Master execution feedback
-    input               burst_done,
-    input               axi_error,
-    input       [31:0]  fetch_data_in,
-    input               fetch_data_valid
+    input               burst_done_i,
+    input               axi_error_i,
+    input       [31:0]  fetch_data_i,
+    input               fetch_data_valid_i
 );
 
     // FSM State encoding
@@ -34,13 +34,13 @@ module mc_dma_channel (
     localparam STATE_ERROR      = 3'd5;
 
     // Control bits decoding
-    wire enable = control_in[0];
-    wire abort  = control_in[1];
-    wire resume = control_in[2];
+    wire enable = control_i[0];
+    wire abort  = control_i[1];
+    wire resume = control_i[2];
 
     // Bandwidth configuration decoding
-    wire [15:0] refill_rate = bw_cap_in[15:0];
-    wire [15:0] max_tokens  = bw_cap_in[31:16];
+    wire [15:0] refill_rate = bw_cap_i[15:0];
+    wire [15:0] max_tokens  = bw_cap_i[31:16];
 
     // Internal registers
     reg  [2:0]  state;
@@ -57,8 +57,8 @@ module mc_dma_channel (
     reg         active_is_write;
 
     // 1. Bandwidth Throttling Logic
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)                     
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)                     
             window_timer <= 8'h00;                  
         else if (window_timer == 8'd99)      
             window_timer <= 8'h00;                  
@@ -67,8 +67,8 @@ module mc_dma_channel (
     end
 
     // Token bucket counter
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) 
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni) 
             token_bucket <= 16'h0000;
         else if (window_timer == 8'd99) begin
             if (token_bucket + refill_rate > max_tokens)
@@ -76,44 +76,44 @@ module mc_dma_channel (
             else
                 token_bucket <= token_bucket + refill_rate;
         end 
-        else if (req_valid && arb_gnt)
+        else if (req_valid_o && arb_gnt_i)
             token_bucket <= token_bucket - 16'd8; // Spent tokens
     end
 
     // 2. Descriptor Fetching and Execution Logic
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             fetch_word_cnt <= 3'd0;
         else if (state == STATE_IDLE)
             fetch_word_cnt <= 3'd0;
-        else if (state == STATE_FETCHING && fetch_data_valid ) 
+        else if (state == STATE_FETCHING && fetch_data_valid_i ) 
             fetch_word_cnt <= fetch_word_cnt + 1'b1;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             desc_src <= 32'h0;
-        else if (state == STATE_FETCHING && fetch_data_valid  && fetch_word_cnt == 3'd0)
-            desc_src <= fetch_data_in;
-        else if (state == STATE_ACTIVE && burst_done && active_is_write)
+        else if (state == STATE_FETCHING && fetch_data_valid_i  && fetch_word_cnt == 3'd0)
+            desc_src <= fetch_data_i;
+        else if (state == STATE_ACTIVE && burst_done_i && active_is_write)
             desc_src <= desc_src + 32'd32; // Advance 8 words
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             desc_dst <= 32'h0;
-        else if (state == STATE_FETCHING && fetch_data_valid  && fetch_word_cnt == 3'd1)
-            desc_dst <= fetch_data_in;
-        else if (state == STATE_ACTIVE && burst_done && active_is_write)
+        else if (state == STATE_FETCHING && fetch_data_valid_i  && fetch_word_cnt == 3'd1)
+            desc_dst <= fetch_data_i;
+        else if (state == STATE_ACTIVE && burst_done_i && active_is_write)
             desc_dst <= desc_dst + 32'd32; 
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             desc_len <= 32'h0;
-        else if (state == STATE_FETCHING && fetch_data_valid  && fetch_word_cnt == 3'd2)
-            desc_len <= fetch_data_in;
-        else if (state == STATE_ACTIVE && burst_done && active_is_write) begin
+        else if (state == STATE_FETCHING && fetch_data_valid_i  && fetch_word_cnt == 3'd2)
+            desc_len <= fetch_data_i;
+        else if (state == STATE_ACTIVE && burst_done_i && active_is_write) begin
             if (desc_len >= 32'd32)
                 desc_len <= desc_len - 32'd32;
             else
@@ -121,19 +121,19 @@ module mc_dma_channel (
         end
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             desc_ctrl <= 32'h0;
-        else if (state == STATE_FETCHING && fetch_data_valid  && fetch_word_cnt == 3'd3)
-            desc_ctrl <= fetch_data_in;
+        else if (state == STATE_FETCHING && fetch_data_valid_i  && fetch_word_cnt == 3'd3)
+            desc_ctrl <= fetch_data_i;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             active_is_write <= 1'b0;
         else if (state == STATE_FETCHING)
             active_is_write <= 1'b0;
-        else if (state == STATE_ACTIVE && burst_done) begin
+        else if (state == STATE_ACTIVE && burst_done_i) begin
             if (active_is_write)
                 active_is_write <= 1'b0;
             else
@@ -142,8 +142,8 @@ module mc_dma_channel (
     end
 
     // 3. FSM (Finite State Machine)
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             state <= STATE_IDLE;
         else begin
             case (state)
@@ -153,9 +153,9 @@ module mc_dma_channel (
                 end
                 
                 STATE_FETCHING: begin
-                    if (axi_error)
+                    if (axi_error_i)
                         state <= STATE_ERROR;
-                    else if (burst_done) begin
+                    else if (burst_done_i) begin
                         if (abort)
                             state <= STATE_SUSPENDED;
                         else
@@ -164,9 +164,9 @@ module mc_dma_channel (
                 end
                 
                 STATE_ACTIVE: begin
-                    if (axi_error)
+                    if (axi_error_i)
                         state <= STATE_ERROR;
-                    else if (burst_done) begin
+                    else if (burst_done_i) begin
                         if (abort)
                             state <= STATE_SUSPENDED;
                         // Modificat. Inainte trecea fara scriere, doar citire
@@ -197,9 +197,9 @@ module mc_dma_channel (
     end
 
     // ==== FIX: urmarim daca exista o tranzactie DEJA trimisa la master si
-    // inca neterminata (req_pending). Fara acest semnal, req_valid se
-    // reaserta la UN SINGUR ciclu dupa arb_gnt (deoarece conditia
-    // "state==ACTIVE && has_tokens && ~arb_gnt" devine din nou adevarata
+    // inca neterminata (req_pending). Fara acest semnal, req_valid_o se
+    // reaserta la UN SINGUR ciclu dupa arb_gnt_i (deoarece conditia
+    // "state==ACTIVE && has_tokens && ~arb_gnt_i" devine din nou adevarata
     // imediat ce pulsul de grant de 1 ciclu dispare), MULT INAINTE ca
     // burst-ul curent (care dureaza multe cicluri: adresa + 8 beat-uri de
     // date) sa se fi terminat efectiv. Aceasta cerere prematura, "fantoma",
@@ -207,75 +207,75 @@ module mc_dma_channel (
     // termina (deoarece master-ul redevine liber exact atunci), dar cu
     // parametri (adresa/directie) proaspat recalculati combinational dupa
     // ce active_is_write a comutat -- ducand la o tranzactie IN PLUS,
-    // nedorita, care "fura" un burst_done ce ajunge sa fie interpretat gresit
+    // nedorita, care "fura" un burst_done_i ce ajunge sa fie interpretat gresit
     // de FSM ca finalizarea scrierii, desi scrierea reala nici macar nu a
-    // inceput faza de date. req_pending blocheaza reasertarea lui req_valid
-    // pana cand burst_done confirma ca tranzactia anterioara chiar s-a
+    // inceput faza de date. req_pending blocheaza reasertarea lui req_valid_o
+    // pana cand burst_done_i confirma ca tranzactia anterioara chiar s-a
     // incheiat.
     reg req_pending;
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             req_pending <= 1'b0;
-        else if (arb_gnt)
+        else if (arb_gnt_i)
             req_pending <= 1'b1;   // Tranzactie trimisa la master, in desfasurare
-        else if (burst_done)
+        else if (burst_done_i)
             req_pending <= 1'b0;   // Tranzactia s-a incheiat cu adevarat
     end
 
     // 4. Arbiter Request Logic
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            req_valid <= 1'b0;
-        else if (state == STATE_FETCHING && has_tokens && ~arb_gnt && ~req_pending)
-            req_valid <= 1'b1;
-        else if (state == STATE_ACTIVE && has_tokens && ~arb_gnt && ~req_pending)
-            req_valid <= 1'b1;
-        else if (arb_gnt)
-            req_valid <= 1'b0;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            req_valid_o <= 1'b0;
+        else if (state == STATE_FETCHING && has_tokens && ~arb_gnt_i && ~req_pending)
+            req_valid_o <= 1'b1;
+        else if (state == STATE_ACTIVE && has_tokens && ~arb_gnt_i && ~req_pending)
+            req_valid_o <= 1'b1;
+        else if (arb_gnt_i)
+            req_valid_o <= 1'b0;
     end
 
     // ==== FIX 1: Semnalele de date devin pur combinaționale ====
     always @(*) begin
-        req_is_write = 1'b0;
-        req_len      = 8'h00;
-        req_addr     = 32'h00000000;
+        req_is_write_o = 1'b0;
+        req_len_o      = 8'h00;
+        req_addr_o     = 32'h00000000;
         
         if (state == STATE_FETCHING) begin
-            req_is_write = 1'b0;
-            req_len      = 8'h07;
-            req_addr     = desc_addr_in;
+            req_is_write_o = 1'b0;
+            req_len_o      = 8'h07;
+            req_addr_o     = desc_addr_i;
         end else if (state == STATE_ACTIVE) begin
-            req_is_write = active_is_write;
-            req_len      = (desc_len >= 32) ? 8'd7 : (desc_len[7:2] - 1);
+            req_is_write_o = active_is_write;
+            req_len_o      = (desc_len >= 32) ? 8'd7 : (desc_len[7:2] - 1);
             if (active_is_write)
-                req_addr = desc_dst;
+                req_addr_o = desc_dst;
             else
-                req_addr = desc_src;
+                req_addr_o = desc_src;
         end
     end
 
     // 5. Status and Interrupts
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            status_out <= 32'h00000000;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            status_o <= 32'h00000000;
         else
-            status_out <= {29'd0, state};
+            status_o <= {29'd0, state};
     end
 
     reg [2:0] state_d; // delay state pentru a detecta tranzitia
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) state_d <= STATE_IDLE;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni) state_d <= STATE_IDLE;
         else state_d <= state;
     end
 
     // Puls generat doar la intrarea in DONE sau ERROR
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            irq_out <= 1'b0;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            irq_o <= 1'b0;
         else if ((state == STATE_DONE || state == STATE_ERROR) && (state_d != STATE_DONE && state_d != STATE_ERROR))
-            irq_out <= 1'b1;
+            irq_o <= 1'b1;
         else
-            irq_out <= 1'b0;
+            irq_o <= 1'b0;
     end
 
 endmodule

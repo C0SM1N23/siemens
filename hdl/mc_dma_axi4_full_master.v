@@ -1,54 +1,54 @@
 module mc_dma_axi4_full_master (
-    input               clk,
-    input               rst_n,
+    input               clk_i,
+    input               rst_ni,
 
     // Transfer Port: AXI4-Full Master Interface
     // Write Address Channel
-    output reg  [31:0]  m_axi_awaddr,
-    output reg  [7:0]   m_axi_awlen,
-    output      [2:0]   m_axi_awsize,
-    output      [1:0]   m_axi_awburst,
-    output reg          m_axi_awvalid,
-    input               m_axi_awready,
+    output reg  [31:0]  m_axi_awaddr_o,
+    output reg  [7:0]   m_axi_awlen_o,
+    output      [2:0]   m_axi_awsize_o,
+    output      [1:0]   m_axi_awburst_o,
+    output reg          m_axi_awvalid_o,
+    input               m_axi_awready_i,
     
     // Write Data Channel
-    output reg  [31:0]  m_axi_wdata,
-    output reg  [3:0]   m_axi_wstrb,
-    output reg          m_axi_wlast,
-    output reg          m_axi_wvalid,
-    input               m_axi_wready,
+    output reg  [31:0]  m_axi_wdata_o,
+    output reg  [3:0]   m_axi_wstrb_o,
+    output reg          m_axi_wlast_o,
+    output reg          m_axi_wvalid_o,
+    input               m_axi_wready_i,
     
     // Write Response Channel
-    input       [1:0]   m_axi_bresp,
-    input               m_axi_bvalid,
-    output reg          m_axi_bready,
+    input       [1:0]   m_axi_bresp_i,
+    input               m_axi_bvalid_i,
+    output reg          m_axi_bready_o,
     
     // Read Address Channel
-    output reg  [31:0]  m_axi_araddr,
-    output reg  [7:0]   m_axi_arlen,
-    output      [2:0]   m_axi_arsize,
-    output      [1:0]   m_axi_arburst,
-    output reg          m_axi_arvalid,
-    input               m_axi_arready,
+    output reg  [31:0]  m_axi_araddr_o,
+    output reg  [7:0]   m_axi_arlen_o,
+    output      [2:0]   m_axi_arsize_o,
+    output      [1:0]   m_axi_arburst_o,
+    output reg          m_axi_arvalid_o,
+    input               m_axi_arready_i,
     
     // Read Data Channel
-    input       [31:0]  m_axi_rdata,
-    input       [1:0]   m_axi_rresp,
-    input               m_axi_rlast,
-    input               m_axi_rvalid,
-    output reg          m_axi_rready,
+    input       [31:0]  m_axi_rdata_i,
+    input       [1:0]   m_axi_rresp_i,
+    input               m_axi_rlast_i,
+    input               m_axi_rvalid_i,
+    output reg          m_axi_rready_o,
 
     // Interface from Priority Arbiter
-    input               master_req_valid,
-    input       [31:0]  master_req_addr,
-    input       [7:0]   master_req_len,
-    input               master_req_is_write,
-    input       [1:0]   master_req_ch_id,
-    output reg          master_req_ready,
+    input               master_req_valid_i,
+    input       [31:0]  master_req_addr_i,
+    input       [7:0]   master_req_len_i,
+    input               master_req_is_write_i,
+    input       [1:0]   master_req_ch_id_i,
+    output reg          master_req_ready_o,
 
     // Scatter-Gather Loop (Master to Channels)
-    output reg  [31:0]  fetch_data_out,
-    output reg          fetch_data_valid
+    output reg  [31:0]  fetch_data_o,
+    output reg          fetch_data_valid_o
 );
 
     // FSM State encoding
@@ -59,10 +59,10 @@ module mc_dma_axi4_full_master (
     localparam STATE_WRITE_DATA = 3'd4;
     localparam STATE_WRITE_RESP = 3'd5;
 
-    assign m_axi_arsize  = 3'b010; // 4 bytes per beat
-    assign m_axi_arburst = 2'b01;  // INCR burst type
-    assign m_axi_awsize  = 3'b010; 
-    assign m_axi_awburst = 2'b01;
+    assign m_axi_arsize_o  = 3'b010; // 4 bytes per beat
+    assign m_axi_arburst_o = 2'b01;  // INCR burst type
+    assign m_axi_awsize_o  = 3'b010; 
+    assign m_axi_awburst_o = 2'b01;
 
     reg [2:0] state;
     reg [7:0] burst_cnt;
@@ -73,22 +73,22 @@ module mc_dma_axi4_full_master (
 
     // Retine carui canal ii apartine tranzactia curenta
     reg [1:0] active_ch_id;
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             active_ch_id <= 2'd0;
-        else if (state == STATE_IDLE && master_req_valid)
-            active_ch_id <= master_req_ch_id;
+        else if (state == STATE_IDLE && master_req_valid_i)
+            active_ch_id <= master_req_ch_id_i;
     end
 
     // 1. Master State Machine
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) begin
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni) begin
             state <= STATE_IDLE;
         end else begin
             case (state)
                 STATE_IDLE: begin
-                    if (master_req_valid) begin
-                        if (master_req_is_write)
+                    if (master_req_valid_i) begin
+                        if (master_req_is_write_i)
                             state <= STATE_WRITE_ADDR;
                         else
                             state <= STATE_READ_ADDR;
@@ -96,27 +96,27 @@ module mc_dma_axi4_full_master (
                 end
                 
                 STATE_READ_ADDR: begin
-                    if (m_axi_arready && m_axi_arvalid)
+                    if (m_axi_arready_i && m_axi_arvalid_o)
                         state <= STATE_READ_DATA;
                 end
                 
                 STATE_READ_DATA: begin
-                    if (m_axi_rvalid && m_axi_rready && m_axi_rlast)
+                    if (m_axi_rvalid_i && m_axi_rready_o && m_axi_rlast_i)
                         state <= STATE_IDLE;
                 end
                 
                 STATE_WRITE_ADDR: begin
-                    if (m_axi_awready && m_axi_awvalid)
+                    if (m_axi_awready_i && m_axi_awvalid_o)
                         state <= STATE_WRITE_DATA;
                 end
                 
                 STATE_WRITE_DATA: begin
-                    if (m_axi_wvalid && m_axi_wready && m_axi_wlast)
+                    if (m_axi_wvalid_o && m_axi_wready_i && m_axi_wlast_o)
                         state <= STATE_WRITE_RESP;
                 end
                 
                 STATE_WRITE_RESP: begin
-                    if (m_axi_bvalid && m_axi_bready)
+                    if (m_axi_bvalid_i && m_axi_bready_o)
                         state <= STATE_IDLE;
                 end
                 
@@ -127,14 +127,14 @@ module mc_dma_axi4_full_master (
     end
 
     // 2. Burst Counter
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
             burst_cnt <= 8'h0;
         else if (state == STATE_IDLE)
             burst_cnt <= 8'h0;
-        else if (state == STATE_READ_DATA && m_axi_rvalid && m_axi_rready)
+        else if (state == STATE_READ_DATA && m_axi_rvalid_i && m_axi_rready_o)
             burst_cnt <= burst_cnt + 1'b1;
-        else if (state == STATE_WRITE_DATA && m_axi_wvalid && m_axi_wready)
+        else if (state == STATE_WRITE_DATA && m_axi_wvalid_o && m_axi_wready_i)
             burst_cnt <= burst_cnt + 1'b1;
     end
 
@@ -143,110 +143,110 @@ module mc_dma_axi4_full_master (
     // ==== FIX 2: Semnal combinațional dependent doar de stare ====
     always @(*) begin
         if (state == STATE_IDLE)
-            master_req_ready = 1'b1;
+            master_req_ready_o = 1'b1;
         else
-            master_req_ready = 1'b0;
+            master_req_ready_o = 1'b0;
     end
 
     // 4. Read Address Channel (AR)
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_arvalid <= 1'b0;
-        else if (state == STATE_IDLE && master_req_valid && ~master_req_is_write)
-            m_axi_arvalid <= 1'b1;
-        else if (m_axi_arready && m_axi_arvalid)
-            m_axi_arvalid <= 1'b0;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_arvalid_o <= 1'b0;
+        else if (state == STATE_IDLE && master_req_valid_i && ~master_req_is_write_i)
+            m_axi_arvalid_o <= 1'b1;
+        else if (m_axi_arready_i && m_axi_arvalid_o)
+            m_axi_arvalid_o <= 1'b0;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_araddr <= 32'h0;
-        else if (state == STATE_IDLE && master_req_valid)
-            m_axi_araddr <= master_req_addr;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_araddr_o <= 32'h0;
+        else if (state == STATE_IDLE && master_req_valid_i)
+            m_axi_araddr_o <= master_req_addr_i;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_arlen <= 8'h0;
-        else if (state == STATE_IDLE && master_req_valid)
-            m_axi_arlen <= master_req_len;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_arlen_o <= 8'h0;
+        else if (state == STATE_IDLE && master_req_valid_i)
+            m_axi_arlen_o <= master_req_len_i;
     end
 
     // 5. Read Data Channel (R)
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_rready <= 1'b0;
-        else if (state == STATE_READ_DATA && ~(m_axi_rvalid && m_axi_rready && m_axi_rlast))
-            m_axi_rready <= 1'b1;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_rready_o <= 1'b0;
+        else if (state == STATE_READ_DATA && ~(m_axi_rvalid_i && m_axi_rready_o && m_axi_rlast_i))
+            m_axi_rready_o <= 1'b1;
         else
-            m_axi_rready <= 1'b0;
+            m_axi_rready_o <= 1'b0;
     end
 
     // Forward read data to the Scatter-Gather loop
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            fetch_data_valid <= 1'b0;
-        else if (state == STATE_READ_DATA && m_axi_rvalid && m_axi_rready)
-            fetch_data_valid <= 1'b1;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            fetch_data_valid_o <= 1'b0;
+        else if (state == STATE_READ_DATA && m_axi_rvalid_i && m_axi_rready_o)
+            fetch_data_valid_o <= 1'b1;
         else
-            fetch_data_valid <= 1'b0;
+            fetch_data_valid_o <= 1'b0;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            fetch_data_out <= 32'h0;
-        else if (state == STATE_READ_DATA && m_axi_rvalid)
-            fetch_data_out <= m_axi_rdata;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            fetch_data_o <= 32'h0;
+        else if (state == STATE_READ_DATA && m_axi_rvalid_i)
+            fetch_data_o <= m_axi_rdata_i;
     end
 
     integer c, w;
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n) begin
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni) begin
             for (c = 0; c < 4; c = c + 1)
                 for (w = 0; w < 8; w = w + 1)
                     data_fifo[c][w] <= 32'h0;
-        end else if (state == STATE_READ_DATA && m_axi_rvalid) begin
-            data_fifo[active_ch_id][burst_cnt[2:0]] <= m_axi_rdata;
+        end else if (state == STATE_READ_DATA && m_axi_rvalid_i) begin
+            data_fifo[active_ch_id][burst_cnt[2:0]] <= m_axi_rdata_i;
         end
     end
 
     // 6. Write Address Channel (AW)
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_awvalid <= 1'b0;
-        else if (state == STATE_IDLE && master_req_valid && master_req_is_write)
-            m_axi_awvalid <= 1'b1;
-        else if (m_axi_awready && m_axi_awvalid)
-            m_axi_awvalid <= 1'b0;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_awvalid_o <= 1'b0;
+        else if (state == STATE_IDLE && master_req_valid_i && master_req_is_write_i)
+            m_axi_awvalid_o <= 1'b1;
+        else if (m_axi_awready_i && m_axi_awvalid_o)
+            m_axi_awvalid_o <= 1'b0;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_awaddr <= 32'h0;
-        else if (state == STATE_IDLE && master_req_valid)
-            m_axi_awaddr <= master_req_addr;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_awaddr_o <= 32'h0;
+        else if (state == STATE_IDLE && master_req_valid_i)
+            m_axi_awaddr_o <= master_req_addr_i;
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_awlen <= 8'h0;
-        else if (state == STATE_IDLE && master_req_valid)
-            m_axi_awlen <= master_req_len;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_awlen_o <= 8'h0;
+        else if (state == STATE_IDLE && master_req_valid_i)
+            m_axi_awlen_o <= master_req_len_i;
     end
 
     // 7. Write Data Channel (W)
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_wvalid <= 1'b0;
-        else if (state == STATE_WRITE_DATA && ~(m_axi_wvalid && m_axi_wready && m_axi_wlast))
-            m_axi_wvalid <= 1'b1;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_wvalid_o <= 1'b0;
+        else if (state == STATE_WRITE_DATA && ~(m_axi_wvalid_o && m_axi_wready_i && m_axi_wlast_o))
+            m_axi_wvalid_o <= 1'b1;
         else
-            m_axi_wvalid <= 1'b0;
+            m_axi_wvalid_o <= 1'b0;
     end
 
-    // FIX: m_axi_wdata trebuie sa fie COMBINATIONAL, la fel ca m_axi_wlast
+    // FIX: m_axi_wdata_o trebuie sa fie COMBINATIONAL, la fel ca m_axi_wlast_o
     // (vezi "CORECTIE" mai jos), nu inregistrat. In varianta originala,
-    // m_axi_wdata era un registru care selecta data_fifo[burst_cnt] folosind
+    // m_axi_wdata_o era un registru care selecta data_fifo[burst_cnt] folosind
     // valoarea PRE-CLOCK-EDGE a lui burst_cnt, in acelasi ciclu in care
     // burst_cnt se incrementa tot pe baza valorii pre-edge. Efectul: primul
     // cuvant era duplicat, iar ultimul cuvant din fiecare burst de scriere
@@ -254,33 +254,33 @@ module mc_dma_axi4_full_master (
     // 0x2004 aveau aceeasi valoare, iar 0x201C avea valoarea care ar fi
     // trebuit sa fie la 0x2018.
     always @(*) begin
-        m_axi_wdata = data_fifo[active_ch_id][burst_cnt[2:0]];
+        m_axi_wdata_o = data_fifo[active_ch_id][burst_cnt[2:0]];
     end
 
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_wstrb <= 4'h0;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_wstrb_o <= 4'h0;
         else if (state == STATE_WRITE_DATA)
-            m_axi_wstrb <= 4'hF;
+            m_axi_wstrb_o <= 4'hF;
     end
 
-    // CORECȚIE: m_axi_wlast devine 1 imediat ce burst_cnt a ajuns la awlen,
+    // CORECȚIE: m_axi_wlast_o devine 1 imediat ce burst_cnt a ajuns la awlen,
     // în ACELAȘI ciclu de ceas cu ultima dată validă.
     always @(*) begin
-        if (state == STATE_WRITE_DATA && burst_cnt == m_axi_awlen)
-            m_axi_wlast = 1'b1;
+        if (state == STATE_WRITE_DATA && burst_cnt == m_axi_awlen_o)
+            m_axi_wlast_o = 1'b1;
         else
-            m_axi_wlast = 1'b0;
+            m_axi_wlast_o = 1'b0;
     end
 
     // 8. Write Response Channel (B)
-    always @(posedge clk or negedge rst_n) begin
-        if (~rst_n)
-            m_axi_bready <= 1'b0;
-        else if (state == STATE_WRITE_RESP && ~(m_axi_bvalid && m_axi_bready))
-            m_axi_bready <= 1'b1;
+    always @(posedge clk_i or negedge rst_ni) begin
+        if (~rst_ni)
+            m_axi_bready_o <= 1'b0;
+        else if (state == STATE_WRITE_RESP && ~(m_axi_bvalid_i && m_axi_bready_o))
+            m_axi_bready_o <= 1'b1;
         else
-            m_axi_bready <= 1'b0;
+            m_axi_bready_o <= 1'b0;
     end
 
 endmodule

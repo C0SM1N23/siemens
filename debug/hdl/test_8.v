@@ -102,53 +102,60 @@ module test_8;
         forever #5 clk = ~clk;
     end
 
-    mc_dma_top dut_dma (
-        .clk(clk),
-        .rst_n(rst_n),
-        .irq(irq), // <--- Interrupt port connected
+    mc_dma dut_dma ( 
+        .clk_i(clk),
+        .rst_ni(rst_n),
+        .irq_o(irq), 
 
         //AXI4-Lite Read
-        .s_axi_araddr(s_axi_araddr),
-        .s_axi_arvalid(s_axi_arvalid),
-        .s_axi_rready(s_axi_rready),
-        .s_axi_rdata(s_axi_rdata),
-        .s_axi_rvalid(s_axi_rvalid),
-        .s_axi_arready(s_axi_arready),
-        .s_axi_rresp(s_axi_rresp),
+        .s_axi_araddr_i(s_axi_araddr),
+        .s_axi_arvalid_i(s_axi_arvalid),
+        .s_axi_rready_i(s_axi_rready),
+        .s_axi_rdata_o(s_axi_rdata),
+        .s_axi_rvalid_o(s_axi_rvalid),
+        .s_axi_arready_o(s_axi_arready),
+        .s_axi_rresp_o(s_axi_rresp),
+        
         //AXI4-Lite Write
-        .s_axi_awaddr(s_axi_awaddr),
-        .s_axi_awvalid(s_axi_awvalid),
-        .s_axi_wdata(s_axi_wdata),
-        .s_axi_wstrb(s_axi_wstrb),
-        .s_axi_wvalid(s_axi_wvalid),
-        .s_axi_bready(s_axi_bready),
-        .s_axi_awready(s_axi_awready),
-        .s_axi_wready(s_axi_wready),
-        .s_axi_bvalid(s_axi_bvalid),
-        .s_axi_bresp(s_axi_bresp),
+        .s_axi_awaddr_i(s_axi_awaddr),
+        .s_axi_awvalid_i(s_axi_awvalid),
+        .s_axi_wdata_i(s_axi_wdata),
+        .s_axi_wstrb_i(s_axi_wstrb),
+        .s_axi_wvalid_i(s_axi_wvalid),
+        .s_axi_bready_i(s_axi_bready),
+        .s_axi_awready_o(s_axi_awready),
+        .s_axi_wready_o(s_axi_wready),
+        .s_axi_bvalid_o(s_axi_bvalid),
+        .s_axi_bresp_o(s_axi_bresp),
+        
         //AXI4-Full Read
-        .m_axi_araddr(m_axi_araddr),
-        .m_axi_arlen(m_axi_arlen),
-        .m_axi_arvalid(m_axi_arvalid),
-        .m_axi_arready(m_axi_arready),
-        .m_axi_rdata(m_axi_rdata),
-        .m_axi_rresp(m_axi_rresp),
-        .m_axi_rlast(m_axi_rlast),
-        .m_axi_rvalid(m_axi_rvalid),
-        .m_axi_rready(m_axi_rready),
+        .m_axi_araddr_o(m_axi_araddr),
+        .m_axi_arlen_o(m_axi_arlen),
+        .m_axi_arvalid_o(m_axi_arvalid),
+        .m_axi_arready_i(m_axi_arready),
+        .m_axi_rdata_i(m_axi_rdata),
+        .m_axi_rresp_i(m_axi_rresp),
+        .m_axi_rlast_i(m_axi_rlast),
+        .m_axi_rvalid_i(m_axi_rvalid),
+        .m_axi_rready_o(m_axi_rready),
+        .m_axi_arsize_o(),
+        .m_axi_arburst_o(),
+        
         //AXI4-Full Write
-        .m_axi_awaddr(m_axi_awaddr),
-        .m_axi_awlen(m_axi_awlen),
-        .m_axi_awvalid(m_axi_awvalid),
-        .m_axi_awready(m_axi_awready),
-        .m_axi_wdata(m_axi_wdata),
-        .m_axi_wstrb(m_axi_wstrb),
-        .m_axi_wlast(m_axi_wlast),
-        .m_axi_wvalid(m_axi_wvalid),
-        .m_axi_wready(m_axi_wready),
-        .m_axi_bresp(m_axi_bresp),
-        .m_axi_bvalid(m_axi_bvalid),
-        .m_axi_bready(m_axi_bready)
+        .m_axi_awaddr_o(m_axi_awaddr),
+        .m_axi_awlen_o(m_axi_awlen),
+        .m_axi_awvalid_o(m_axi_awvalid),
+        .m_axi_awready_i(m_axi_awready),
+        .m_axi_wdata_o(m_axi_wdata),
+        .m_axi_wstrb_o(m_axi_wstrb),
+        .m_axi_wlast_o(m_axi_wlast),
+        .m_axi_wvalid_o(m_axi_wvalid),
+        .m_axi_wready_i(m_axi_wready),
+        .m_axi_bresp_i(m_axi_bresp),
+        .m_axi_bvalid_i(m_axi_bvalid),
+        .m_axi_bready_o(m_axi_bready),
+        .m_axi_awsize_o(),
+        .m_axi_awburst_o()
     );
 
     //======AXI4-Lite TASKs========
