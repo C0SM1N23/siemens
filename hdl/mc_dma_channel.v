@@ -1,4 +1,4 @@
-module dma_channel (
+module mc_dma_channel (
     input               clk,
     input               rst_n,
 

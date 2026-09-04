@@ -1,4 +1,4 @@
-module mc_dma_top (
+module mc_dma (
     input         clk,
     input         rst_n,
     output  [3:0] irq,
@@ -59,22 +59,28 @@ module mc_dma_top (
     input         m_axi_rvalid,
     output        m_axi_rready
 );
+
+    localparam N_CHANNELS = 4;
+
+    wire [N_CHANNELS-1:0][31:0] ch_desc_addr;
+    wire [N_CHANNELS-1:0][31:0] ch_control;
+    wire [N_CHANNELS-1:0][31:0] ch_bw_cap;
+    wire [N_CHANNELS-1:0][31:0] ch_status;
+    wire [N_CHANNELS-1:0]       hw_irq;
+    wire [N_CHANNELS-1:0]       ch_req;
+    wire [N_CHANNELS-1:0][31:0] ch_req_addr;
+    wire [N_CHANNELS-1:0][7:0]  ch_req_len;
+    wire [N_CHANNELS-1:0]       ch_req_is_wr;
+    wire [N_CHANNELS-1:0]       ch_gnt;
+    reg  [N_CHANNELS-1:0]       active_master_ch;
     // 1. Between Register File and Channels (CH0 - CH3)
-    wire [31:0] ch0_desc_addr, ch1_desc_addr, ch2_desc_addr, ch3_desc_addr;
-    wire [31:0] ch0_control,   ch1_control,   ch2_control,   ch3_control;
-    wire [31:0] ch0_bw_cap,    ch1_bw_cap,    ch2_bw_cap,    ch3_bw_cap;
+   
     wire [31:0] sched_policy;
 
-    wire [31:0] ch0_status,    ch1_status,    ch2_status,    ch3_status;
-    wire [3:0]  hw_irq;
+   
     wire [31:0] int_status_w, int_enable_w;
 
-    // 2. Between Channels (CH0 - CH3) and Priority Arbiter
-    wire [ 3:0] ch_req;
-    wire [31:0] ch0_req_addr,  ch1_req_addr,  ch2_req_addr,  ch3_req_addr;
-    wire [7:0]  ch0_req_len,   ch1_req_len,   ch2_req_len,   ch3_req_len;
-    wire        ch0_req_is_wr, ch1_req_is_wr, ch2_req_is_wr, ch3_req_is_wr;
-    wire [ 3:0] ch_gnt;
+  
 
     // 3. Between Priority Arbiter and AXI4-Full Master
     wire        master_req_valid;
@@ -89,18 +95,24 @@ module mc_dma_top (
     wire [31:0] fetch_data_out;
     wire        fetch_data_valid;
 
+    wire [N_CHANNELS-1:0] fetch_data_valid_ch;
+
+    genvar i;
+
+
     // active_master_ch remembers which channel owns the transaction the master
     // is currently running. It is declared here, ahead of the continuous
     // assignments that read it below: Verilog requires a variable to be
     // declared before it is referenced, and vlog rejects the other order with
     // "Undefined variable" followed by "already declared in this scope".
-    reg [3:0] active_master_ch;
+    
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n)
             active_master_ch <= 4'b0000;
-        else if (|ch_gnt) // one-cycle grant pulse: latch the channel id
+        else if (ch_gnt) // one-cycle grant pulse: latch the channel id
             active_master_ch <= ch_gnt;
     end
+
 
     // ==== FIX BUG 2: date de fetch calificate per-canal ====
     // fetch_data_out/fetch_data_valid erau transmise nefiltrat (broadcast)
@@ -114,10 +126,9 @@ module mc_dma_top (
     // Solutia mentine acelasi tipar folosit deja pentru burst_done/axi_error:
     // se calific fetch_data_valid cu active_master_ch[i], astfel incat doar
     // canalul caruia ii apartine efectiv tranzactia curenta sa capteze datele.
-    wire fetch_data_valid_ch0 = fetch_data_valid && active_master_ch[0];
-    wire fetch_data_valid_ch1 = fetch_data_valid && active_master_ch[1];
-    wire fetch_data_valid_ch2 = fetch_data_valid && active_master_ch[2];
-    wire fetch_data_valid_ch3 = fetch_data_valid && active_master_ch[3];
+    for (i = 0; i < N_CHANNELS; i = i + 1) begin : gen_fetch_data_valid_ch
+        assign fetch_data_valid_ch[i] = fetch_data_valid && active_master_ch[i];
+    end
     
     
     // Global feedback derived from AXI responses
@@ -148,7 +159,7 @@ module mc_dma_top (
     
 
     // 1. AXI4-Lite Slave (Register File)
-    axi4_lite_slave slave_inst (
+    mc_dma_axi4_lite_slave #(.NO_CHANNELS(N_CHANNELS)) slave_inst (
         .clk            (clk),
         .rst_n          (rst_n),
         
@@ -170,136 +181,50 @@ module mc_dma_top (
         .s_axi_rvalid   (s_axi_rvalid),
         .s_axi_rready   (s_axi_rready),
 
-        .ch0_desc_addr  (ch0_desc_addr),
-        .ch0_control    (ch0_control),
-        .ch0_bw_cap     (ch0_bw_cap),
-        .ch0_status_in  (ch0_status),
-        
-        .ch1_desc_addr(ch1_desc_addr), 
-        .ch1_control(ch1_control), 
-        .ch1_bw_cap(ch1_bw_cap), 
-        .ch1_status_in(ch1_status),
-
-        .ch2_desc_addr(ch2_desc_addr), 
-        .ch2_control(ch2_control), 
-        .ch2_bw_cap(ch2_bw_cap), 
-        .ch2_status_in(ch2_status),
-        
-        .ch3_desc_addr(ch3_desc_addr), 
-        .ch3_control(ch3_control), 
-        .ch3_bw_cap(ch3_bw_cap), 
-        .ch3_status_in(ch3_status),
+        .ch_desc_addr  (ch_desc_addr),
+        .ch_control    (ch_control),
+        .ch_bw_cap     (ch_bw_cap),
+        .ch_status_in  (ch_status),
 
         .sched_policy   (sched_policy),
         .int_status     (int_status_w),
         .int_enable     (int_enable_w),
         .hw_irq_in      (hw_irq)
     );
+    
+    for (i = 0; i < N_CHANNELS; i = i + 1) begin : gen_dma_channels
+        mc_dma_channel ch_inst (
+            .clk            (clk),
+            .rst_n          (rst_n),
+            .desc_addr_in   (ch_desc_addr[i]),
+            .control_in     (ch_control[i]),
+            .bw_cap_in      (ch_bw_cap[i]),
+            .status_out     (ch_status[i]),
+            .irq_out        (hw_irq[i]),
+            
+            .req_valid      (ch_req[i]),
+            .req_addr       (ch_req_addr[i]),
+            .req_len        (ch_req_len[i]),
+            .req_is_write   (ch_req_is_wr[i]),
+            .arb_gnt        (ch_gnt[i]),
 
-    // 2. DMA Channels
-    dma_channel ch0_inst (
-        .clk            (clk),
-        .rst_n          (rst_n),
-        .desc_addr_in   (ch0_desc_addr),
-        .control_in     (ch0_control),
-        .bw_cap_in      (ch0_bw_cap),
-        .status_out     (ch0_status),
-        .irq_out        (hw_irq[0]),
-        
-        .req_valid      (ch_req[0]),
-        .req_addr       (ch0_req_addr),
-        .req_len        (ch0_req_len),
-        .req_is_write   (ch0_req_is_wr),
-        .arb_gnt        (ch_gnt[0]), // Partea de acordare a grantului rămâne neschimbată
-        
-        .burst_done     (global_burst_done && active_master_ch[0]), // Am modificat
-        .axi_error      (global_axi_error  && active_master_ch[0]), // Am modificat
-        .fetch_data_in  (fetch_data_out),
-        .fetch_data_valid(fetch_data_valid_ch0)
-    );
-
-    dma_channel ch1_inst (
-        .clk            (clk),
-        .rst_n          (rst_n),
-        .desc_addr_in   (ch1_desc_addr),
-        .control_in     (ch1_control),
-        .bw_cap_in      (ch1_bw_cap),
-        .status_out     (ch1_status),
-        .irq_out        (hw_irq[1]),
-        
-        .req_valid      (ch_req[1]),
-        .req_addr       (ch1_req_addr),
-        .req_len        (ch1_req_len),
-        .req_is_write   (ch1_req_is_wr),
-        .arb_gnt        (ch_gnt[1]),
-        
-        .burst_done     (global_burst_done && active_master_ch[1]), // Am modificat
-        .axi_error      (global_axi_error  && active_master_ch[1]), // Am modificat
-        .fetch_data_in  (fetch_data_out),
-        .fetch_data_valid(fetch_data_valid_ch1)
-    );
-
-    dma_channel ch2_inst (
-        .clk            (clk),
-        .rst_n          (rst_n),
-        .desc_addr_in   (ch2_desc_addr),
-        .control_in     (ch2_control),
-        .bw_cap_in      (ch2_bw_cap),
-        .status_out     (ch2_status),
-        .irq_out        (hw_irq[2]),
-        
-        .req_valid      (ch_req[2]),
-        .req_addr       (ch2_req_addr),
-        .req_len        (ch2_req_len),
-        .req_is_write   (ch2_req_is_wr),
-        .arb_gnt        (ch_gnt[2]),
-        
-        .burst_done     (global_burst_done && active_master_ch[2]), // Am modificat
-        .axi_error      (global_axi_error  && active_master_ch[2]), // Am modificat
-        .fetch_data_in  (fetch_data_out),
-        .fetch_data_valid(fetch_data_valid_ch2)
-    );
-
-    dma_channel ch3_inst (
-        .clk            (clk),
-        .rst_n          (rst_n),
-        .desc_addr_in   (ch3_desc_addr),
-        .control_in     (ch3_control),
-        .bw_cap_in      (ch3_bw_cap),
-        .status_out     (ch3_status),
-        .irq_out        (hw_irq[3]),
-        
-        .req_valid      (ch_req[3]),
-        .req_addr       (ch3_req_addr),
-        .req_len        (ch3_req_len),
-        .req_is_write   (ch3_req_is_wr),
-        .arb_gnt        (ch_gnt[3]),
-        
-        .burst_done     (global_burst_done && active_master_ch[3]), // Am modificat
-        .axi_error      (global_axi_error  && active_master_ch[3]), // Am modificat
-        .fetch_data_in  (fetch_data_out),
-        .fetch_data_valid(fetch_data_valid_ch3)
-    );
-
+            .burst_done     (global_burst_done && active_master_ch[i]), 
+            .axi_error      (global_axi_error  && active_master_ch[i]), 
+            .fetch_data_in  (fetch_data_out),
+            .fetch_data_valid(fetch_data_valid_ch[i])
+        );
+    end
+   
     // 3. Priority Arbiter
-    priority_arbiter arbiter_inst (
+    mc_dma_priority_arbiter arbiter_inst (
         .clk                (clk),
         .rst_n              (rst_n),
         .sched_policy       (sched_policy),
         
         .ch_req             (ch_req),
-        .ch0_req_addr       (ch0_req_addr),
-        .ch0_req_len        (ch0_req_len),
-        .ch0_req_is_write   (ch0_req_is_wr),
-        .ch1_req_addr       (ch1_req_addr),
-        .ch1_req_len        (ch1_req_len),
-        .ch1_req_is_write   (ch1_req_is_wr),
-        .ch2_req_addr       (ch2_req_addr),
-        .ch2_req_len        (ch2_req_len),
-        .ch2_req_is_write   (ch2_req_is_wr),
-        .ch3_req_addr       (ch3_req_addr),
-        .ch3_req_len        (ch3_req_len),
-        .ch3_req_is_write   (ch3_req_is_wr),
+        .ch_req_addr        (ch_req_addr),
+        .ch_req_len         (ch_req_len),
+        .ch_req_is_write    (ch_req_is_wr),
         
         .ch_gnt             (ch_gnt),
         
@@ -312,7 +237,7 @@ module mc_dma_top (
     );
 
     // 4. AXI4-Full Master
-    axi4_full_master master_inst (
+    mc_dma_axi4_full_master master_inst (
         .clk                (clk),
         .rst_n              (rst_n),
         

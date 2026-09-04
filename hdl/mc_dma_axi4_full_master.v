@@ -1,4 +1,4 @@
-module axi4_full_master (
+module mc_dma_axi4_full_master (
     input               clk,
     input               rst_n,
 

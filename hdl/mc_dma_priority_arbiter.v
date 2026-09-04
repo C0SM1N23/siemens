@@ -1,4 +1,4 @@
-module priority_arbiter (
+module mc_dma_priority_arbiter (
     input               clk,
     input               rst_n,
 
@@ -8,21 +8,9 @@ module priority_arbiter (
     // Requests from the 4 Channels
     input       [3:0]   ch_req,
     
-    input       [31:0]  ch0_req_addr,
-    input       [7:0]   ch0_req_len,
-    input               ch0_req_is_write,
-
-    input       [31:0]  ch1_req_addr,
-    input       [7:0]   ch1_req_len,
-    input               ch1_req_is_write, 
-
-    input       [31:0]  ch2_req_addr,
-    input       [7:0]   ch2_req_len,
-    input               ch2_req_is_write,
-
-    input       [31:0]  ch3_req_addr,
-    input       [7:0]   ch3_req_len,
-    input               ch3_req_is_write,
+    input [3:0] [31:0] ch_req_addr,
+    input [3:0] [7:0]  ch_req_len,
+    input [3:0]        ch_req_is_write,
 
     // Grants sent back to the Channels
     output reg  [3:0]   ch_gnt,
@@ -143,52 +131,34 @@ module priority_arbiter (
     end
 
     always @(*) begin
-        master_req_addr = 32'h00000000;
-        if (selected_gnt[0])
-            master_req_addr = ch0_req_addr;
-        else if (selected_gnt[1])
-            master_req_addr = ch1_req_addr;
-        else if (selected_gnt[2])
-            master_req_addr = ch2_req_addr;
-        else if (selected_gnt[3])
-            master_req_addr = ch3_req_addr;
-    end
-
-    always @(*) begin
-        master_req_len = 8'h00;
-        if (selected_gnt[0])
-            master_req_len = ch0_req_len;
-        else if (selected_gnt[1])
-            master_req_len = ch1_req_len;
-        else if (selected_gnt[2])
-            master_req_len = ch2_req_len;
-        else if (selected_gnt[3])
-            master_req_len = ch3_req_len;
-    end
-
-    always @(*) begin
+        master_req_addr     = 32'h00000000;
+        master_req_len      = 8'h00;
         master_req_is_write = 1'b0;
-        if (selected_gnt[0])
-            master_req_is_write = ch0_req_is_write;
-        else if (selected_gnt[1])
-            master_req_is_write = ch1_req_is_write;
-        else if (selected_gnt[2])
-            master_req_is_write = ch2_req_is_write;
-        else if (selected_gnt[3])
-            master_req_is_write = ch3_req_is_write;
-    end
+        master_req_ch_id    = 2'd0;
 
-    // FIX BUG 2: codifica identitatea canalului castigator (0-3)
-    always @(*) begin
-        master_req_ch_id = 2'd0;
-        if (selected_gnt[0])
-            master_req_ch_id = 2'd0;
-        else if (selected_gnt[1])
-            master_req_ch_id = 2'd1;
-        else if (selected_gnt[2])
-            master_req_ch_id = 2'd2;
-        else if (selected_gnt[3])
-            master_req_ch_id = 2'd3;
+        if (selected_gnt[0]) begin
+            master_req_addr     = ch_req_addr[0];
+            master_req_len      = ch_req_len[0];
+            master_req_is_write = ch_req_is_write[0];
+            master_req_ch_id    = 2'd0;
+        end
+        else if (selected_gnt[1]) begin
+            master_req_addr     = ch_req_addr[1];
+            master_req_len      = ch_req_len[1];
+            master_req_is_write = ch_req_is_write[1];
+            master_req_ch_id    = 2'd1;
+        end
+        else if (selected_gnt[2]) begin
+            master_req_addr     = ch_req_addr[2];
+            master_req_len      = ch_req_len[2];
+            master_req_is_write = ch_req_is_write[2];
+            master_req_ch_id    = 2'd2;
+        end
+        else if (selected_gnt[3]) begin
+            master_req_addr     = ch_req_addr[3];
+            master_req_len      = ch_req_len[3];
+            master_req_is_write = ch_req_is_write[3];
+            master_req_ch_id    = 2'd3;
+        end
     end
-
 endmodule
