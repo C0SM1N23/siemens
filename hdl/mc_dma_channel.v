@@ -196,30 +196,14 @@ module mc_dma_channel (
         end
     end
 
-    // ==== FIX: urmarim daca exista o tranzactie DEJA trimisa la master si
-    // inca neterminata (req_pending). Fara acest semnal, req_valid_o se
-    // reaserta la UN SINGUR ciclu dupa arb_gnt_i (deoarece conditia
-    // "state==ACTIVE && has_tokens && ~arb_gnt_i" devine din nou adevarata
-    // imediat ce pulsul de grant de 1 ciclu dispare), MULT INAINTE ca
-    // burst-ul curent (care dureaza multe cicluri: adresa + 8 beat-uri de
-    // date) sa se fi terminat efectiv. Aceasta cerere prematura, "fantoma",
-    // ajunge sa fie acordata chiar in ciclul in care burst-ul CURENT se
-    // termina (deoarece master-ul redevine liber exact atunci), dar cu
-    // parametri (adresa/directie) proaspat recalculati combinational dupa
-    // ce active_is_write a comutat -- ducand la o tranzactie IN PLUS,
-    // nedorita, care "fura" un burst_done_i ce ajunge sa fie interpretat gresit
-    // de FSM ca finalizarea scrierii, desi scrierea reala nici macar nu a
-    // inceput faza de date. req_pending blocheaza reasertarea lui req_valid_o
-    // pana cand burst_done_i confirma ca tranzactia anterioara chiar s-a
-    // incheiat.
     reg req_pending;
     always @(posedge clk_i or negedge rst_ni) begin
         if (~rst_ni)
             req_pending <= 1'b0;
         else if (arb_gnt_i)
-            req_pending <= 1'b1;   // Tranzactie trimisa la master, in desfasurare
+            req_pending <= 1'b1;   
         else if (burst_done_i)
-            req_pending <= 1'b0;   // Tranzactia s-a incheiat cu adevarat
+            req_pending <= 1'b0;   
     end
 
     // 4. Arbiter Request Logic

@@ -244,15 +244,6 @@ module mc_dma_axi4_full_master (
             m_axi_wvalid_o <= 1'b0;
     end
 
-    // FIX: m_axi_wdata_o trebuie sa fie COMBINATIONAL, la fel ca m_axi_wlast_o
-    // (vezi "CORECTIE" mai jos), nu inregistrat. In varianta originala,
-    // m_axi_wdata_o era un registru care selecta data_fifo[burst_cnt] folosind
-    // valoarea PRE-CLOCK-EDGE a lui burst_cnt, in acelasi ciclu in care
-    // burst_cnt se incrementa tot pe baza valorii pre-edge. Efectul: primul
-    // cuvant era duplicat, iar ultimul cuvant din fiecare burst de scriere
-    // se pierdea (shift de o pozitie) - exact tiparul observat: 0x2000 si
-    // 0x2004 aveau aceeasi valoare, iar 0x201C avea valoarea care ar fi
-    // trebuit sa fie la 0x2018.
     always @(*) begin
         m_axi_wdata_o = data_fifo[active_ch_id][burst_cnt[2:0]];
     end
@@ -264,8 +255,6 @@ module mc_dma_axi4_full_master (
             m_axi_wstrb_o <= 4'hF;
     end
 
-    // CORECȚIE: m_axi_wlast_o devine 1 imediat ce burst_cnt a ajuns la awlen,
-    // în ACELAȘI ciclu de ceas cu ultima dată validă.
     always @(*) begin
         if (state == STATE_WRITE_DATA && burst_cnt == m_axi_awlen_o)
             m_axi_wlast_o = 1'b1;

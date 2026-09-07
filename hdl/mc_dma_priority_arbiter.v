@@ -20,10 +20,6 @@ module mc_dma_priority_arbiter (
     output reg  [31:0]  master_req_addr_o,
     output reg  [7:0]   master_req_len_o,
     output reg          master_req_is_write_o,
-    // FIX BUG 2: identitatea canalului caruia ii apartine cererea curenta.
-    // Master-ul foloseste acest ID pentru a izola datele fiecarui canal in
-    // propriul "sertar" din data_fifo, in loc sa foloseasca un singur buffer
-    // global partajat (vezi axi4_full_master.v).
     output reg  [1:0]   master_req_ch_id_o,
     input               master_req_ready_i
 );

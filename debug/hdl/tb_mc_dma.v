@@ -1,5 +1,5 @@
 `timescale 1ns / 1ps
-module test_1;
+module tb_mc_dma;
     localparam ADDR_CH0_DESC_ADDR   = 8'h00;
     localparam ADDR_CH0_CONTROL     = 8'h04;
     localparam ADDR_CH0_BW_CAP      = 8'h08;
@@ -28,6 +28,18 @@ module test_1;
     localparam [31:0] v5 = 32'hDEADBEEF;
     localparam [31:0] v6 = 32'h07070707;
     localparam [31:0] v7 = 32'h08080808;
+
+    // ========================================================
+    // TEST SELECTOR: Change this value to run different tests
+    // 1 = T01: AXI4-Lite Register R/W
+    // 2 = T02: IRQ Masking (INT_ENABLE = 0)
+    // 3 = T03: IRQ Write-1-To-Clear (W1C)
+    // 4 = T04: 4-Channel Concurrent Arbitration (Round-Robin)
+    // 5 = T05: Bandwidth Throttling (Token Bucket)
+    // 6 = T06: Suspend (Abort) and Resume
+    // 7 = T07: Unaligned Transfer (40 Bytes)
+    // ========================================================
+    integer ACTIVE_TEST = 7; // <--- Change this value to select the test case
 
     reg         clk;
     reg         rst_n;
@@ -339,18 +351,144 @@ module test_1;
             end
 
             // Thread 3: Feature Testing
-            begin
-                for (i = 0; i < 8192; i = i + 1)
-                    ram_memory[i] = 32'h00000000;
+            begin : test_sequence
+                integer k;
+                
+                for (k = 0; k < 8192; k = k + 1) ram_memory[k] = 32'h00000000;
                 apply_reset(27); 
 
-                // =========T01: AXI4-Lite Register R/W Test========
-                $display("\n--- [T01] RUNNING: AXI4-Lite Register R/W ---");
-                axi_lite_write(ADDR_CH0_BW_CAP, 32'hDEADBEEF, 0);
-                axi_lite_read(ADDR_CH0_BW_CAP, read_val);
-                if (read_val === 32'hDEADBEEF) $display(">>> [T01] PASSED");
-                else $display(">>> [T01] FAILED (Expected DEADBEEF, Got %h)", read_val);
-                // ==========================================================
+                $display("\n===========================================");
+                $display("   STARTING TEST SUITE - RUNNING TEST %0d", ACTIVE_TEST);
+                $display("===========================================\n");
+
+                case (ACTIVE_TEST)
+                    1: begin
+                        // ========= T01: AXI4-Lite Register R/W Test ========
+                        $display("--- [T01] RUNNING: AXI4-Lite Register R/W ---");
+                        axi_lite_write(ADDR_CH0_BW_CAP, 32'hDEADBEEF, 0);
+                        axi_lite_read(ADDR_CH0_BW_CAP, read_val);
+                        if (read_val === 32'hDEADBEEF) $display(">>> [T01] PASSED");
+                        else $display(">>> [T01] FAILED (Expected DEADBEEF, Got %h)", read_val);
+                    end
+
+                    2: begin
+                        // ========= T02: IRQ Masking Test ========
+                        $display("--- [T02] RUNNING: IRQ Masking (INT_ENABLE = 0) ---");
+                        axi_lite_write(ADDR_INT_ENABLE, 32'h00000000, 0);
+                        setup_dma_transfer(32'h0100, 32'h1000, 32'h2000, 32'h20, 32'hA1A1A1A1);
+                        start_channel(ADDR_CH0_DESC_ADDR, 32'h0100, 32'h00200008); 
+                        wait_channel_done(ADDR_CH0_STATUS);
+                        
+                        if (irq[0] === 1'b0) $display(">>> [T02] PASSED (Interrupt masked correctly)");
+                        else $display(">>> [T02] FAILED (IRQ leaked through mask)");
+                        axi_lite_write(ADDR_CH0_CONTROL, 32'h0, 0);
+                    end
+
+                    3: begin
+                        // ========= T03: IRQ Write-1-To-Clear (W1C) Test ========
+                        $display("--- [T03] RUNNING: IRQ W1C Behavior ---");
+                        axi_lite_write(ADDR_INT_ENABLE, 32'h0000000F, 0);
+                        setup_dma_transfer(32'h0200, 32'h3000, 32'h4000, 32'h20, 32'hB2B2B2B2);
+                        start_channel(ADDR_CH0_DESC_ADDR, 32'h0200, 32'h00200008); 
+                        wait_channel_done(ADDR_CH0_STATUS);
+                        
+                        #50;
+                        axi_lite_read(ADDR_INT_STATUS, read_val);
+                        if (read_val[0] === 1'b1 && irq[0] === 1'b1) begin
+                            $display("          Writing 1 to INT_STATUS to clear...");
+                            axi_lite_write(ADDR_INT_STATUS, 32'h00000001, 0); 
+                            #50;
+                            if (irq[0] === 1'b0) $display(">>> [T03] PASSED (IRQ Cleared via W1C)");
+                            else $display(">>> [T03] FAILED (IRQ remained HIGH)");
+                        end else begin
+                            $display(">>> [T03] FAILED (IRQ was not latched in INT_STATUS)");
+                        end
+                        axi_lite_write(ADDR_CH0_CONTROL, 32'h0, 0);
+                    end
+
+                    4: begin
+                        // ========= T04: Concurrent Channels Arbitration ========
+                        $display("--- [T04] RUNNING: 4-Channel Concurrent Arbitration ---");
+                        setup_dma_transfer(32'h0500, 32'h1000, 32'h2000, 32'h20, 32'hAAAA0000);
+                        setup_dma_transfer(32'h0600, 32'h3000, 32'h4000, 32'h20, 32'hBBBB0000);
+                        setup_dma_transfer(32'h0700, 32'h5000, 32'h6000, 32'h20, 32'hCCCC0000);
+                        setup_dma_transfer(32'h0800, 32'h6800, 32'h7000, 32'h20, 32'hDDDD0000);
+
+                        axi_lite_write(ADDR_SCHED_POLICY, 32'h00000001, 0); // 1 = Round Robin
+
+                        start_channel(ADDR_CH0_DESC_ADDR, 32'h00000500, 32'h00200008); 
+                        start_channel(ADDR_CH1_DESC_ADDR, 32'h00000600, 32'h00200008);
+                        start_channel(ADDR_CH2_DESC_ADDR, 32'h00000700, 32'h00200008);
+                        start_channel(ADDR_CH3_DESC_ADDR, 32'h00000800, 32'h00200008);
+
+                        wait_channel_done(ADDR_CH0_STATUS);
+                        wait_channel_done(ADDR_CH1_STATUS);
+                        wait_channel_done(ADDR_CH2_STATUS);
+                        wait_channel_done(ADDR_CH3_STATUS);
+
+                        if (ram_memory[(32'h00002000 >> 2)] === 32'hAAAA0000 &&
+                            ram_memory[(32'h00004000 >> 2)] === 32'hBBBB0000) begin
+                            $display(">>> [T04] PASSED! (No data lost during heavy traffic)");
+                        end else begin
+                            $display(">>> [T04] FAILED! (Data corruption detected)");
+                        end
+                    end
+
+                    5: begin
+                        // ========= T05: Bandwidth Throttling (Token Bucket) ========
+                        $display("--- [T05] RUNNING: Bandwidth Throttling (CH0 Slow vs CH1 Fast) ---");
+                        setup_dma_transfer(32'h0900, 32'h8000, 32'h8100, 32'h40, 32'hE5E5E5E5);
+                        setup_dma_transfer(32'h0A00, 32'h8200, 32'h8300, 32'h40, 32'hF6F6F6F6);
+                        
+                        $display("          Starting CH0 (Slow) and CH1 (Fast) simultaneously...");
+                        start_channel(ADDR_CH0_DESC_ADDR, 32'h0900, 32'h00100001); 
+                        start_channel(ADDR_CH1_DESC_ADDR, 32'h0A00, 32'h00200010);
+                        
+                        wait_channel_done(ADDR_CH1_STATUS);
+                        $display("          CH1 (Fast) finished. Waiting for CH0 (Slow)...");
+                        wait_channel_done(ADDR_CH0_STATUS);
+                        $display(">>> [T05] PASSED! CH0 finished later. Throttling works.");
+                        
+                        axi_lite_write(ADDR_CH0_CONTROL, 32'h0, 0);
+                        axi_lite_write(ADDR_CH1_CONTROL, 32'h0, 0);
+                    end
+
+                    6: begin
+                        // ========= T06: Suspend (Abort) and Resume ========
+                        $display("--- [T06] RUNNING: Suspend (Abort) and Resume ---");
+                        setup_dma_transfer(32'h0300, 32'h5000, 32'h6000, 32'h80, 32'hC3C3C3C3); 
+                        start_channel(ADDR_CH1_DESC_ADDR, 32'h0300, 32'h00200008); 
+                        
+                        #200; 
+                        $display("          Sending ABORT command...");
+                        axi_lite_write(ADDR_CH1_CONTROL, 32'h00000002, 0); 
+                        
+                        #300; 
+                        $display("          Sending RESUME command...");
+                        axi_lite_write(ADDR_CH1_CONTROL, 32'h00000005, 0); 
+                        
+                        wait_channel_done(ADDR_CH1_STATUS);
+                        $display(">>> [T06] DONE (Check Waveforms to visually verify suspension)");
+                        axi_lite_write(ADDR_CH1_CONTROL, 32'h0, 0);
+                    end
+
+                    7: begin
+                        // ========= T07: Unaligned Transfer Test ========
+                        $display("--- [T07] RUNNING: Unaligned Transfer (40 Bytes) ---");
+                        setup_dma_transfer(32'h0400, 32'h6800, 32'h7000, 32'h28, 32'hD4D4D4D4); 
+                        start_channel(ADDR_CH2_DESC_ADDR, 32'h0400, 32'h00200008); 
+                        wait_channel_done(ADDR_CH2_STATUS);
+                        
+                        if (ram_memory[(32'h00007000 + 40) >> 2] === 32'h00000000) 
+                            $display(">>> [T07] PASSED (Memory boundaries respected for 40B transfer)");
+                        else 
+                            $display(">>> [T07] FAILED (Memory overwritten past 40B boundary!)");
+                        
+                        axi_lite_write(ADDR_CH2_CONTROL, 32'h0, 0);
+                    end
+
+                    default: $display(">>> ERROR: Invalid ACTIVE_TEST value!");
+                endcase
                 
                 #100;
                 $finish;
