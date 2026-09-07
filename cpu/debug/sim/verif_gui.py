@@ -58,15 +58,15 @@ PARAM_DEFAULTS = {
     "ENTRIES": 128, "RAS_DEPTH": 8,
 }
 PARAM_GPATH = {
-    "imem_RL":   "/tb_cpu_axi/imem_inst/READ_LAT",
-    "imem_SP":   "/tb_cpu_axi/imem_inst/STALL_PROB",
-    "imem_SEED": "/tb_cpu_axi/imem_inst/SEED",
-    "dmem_RL":   "/tb_cpu_axi/dmem_inst/READ_LAT",
-    "dmem_WL":   "/tb_cpu_axi/dmem_inst/WRITE_LAT",
-    "dmem_SP":   "/tb_cpu_axi/dmem_inst/STALL_PROB",
-    "dmem_SEED": "/tb_cpu_axi/dmem_inst/SEED",
-    "ENTRIES":   "/tb_cpu_axi/uut/branch_predictor_inst/ENTRIES",
-    "RAS_DEPTH": "/tb_cpu_axi/uut/branch_predictor_inst/RAS_DEPTH",
+    "imem_RL":   "/rv32i_tb_cpu_axi/imem_inst/READ_LAT",
+    "imem_SP":   "/rv32i_tb_cpu_axi/imem_inst/STALL_PROB",
+    "imem_SEED": "/rv32i_tb_cpu_axi/imem_inst/SEED",
+    "dmem_RL":   "/rv32i_tb_cpu_axi/dmem_inst/READ_LAT",
+    "dmem_WL":   "/rv32i_tb_cpu_axi/dmem_inst/WRITE_LAT",
+    "dmem_SP":   "/rv32i_tb_cpu_axi/dmem_inst/STALL_PROB",
+    "dmem_SEED": "/rv32i_tb_cpu_axi/dmem_inst/SEED",
+    "ENTRIES":   "/rv32i_tb_cpu_axi/uut/branch_predictor_inst/ENTRIES",
+    "RAS_DEPTH": "/rv32i_tb_cpu_axi/uut/branch_predictor_inst/RAS_DEPTH",
 }
 
 INFRA_TOKENS = (
@@ -83,7 +83,7 @@ STATUS_COLOR = {"PASS": "#2e9e4f", "FAIL": "#d23131",
 INFO_PAGES = [
     ("ModelSim TB + waveforms", """\
 What it does: opens ModelSim (GUI), compiles the RTL and the testbenches, loads
-tb_cpu_axi with the AXI signals already in the Wave window (wave.do) and runs
+rv32i_tb_cpu_axi with the AXI signals already in the Wave window (wave.do) and runs
 the test program to completion. The verdict appears here, because the
 transcript is tailed live, while you stay in ModelSim to look at the waveforms.
 
@@ -693,7 +693,7 @@ class App(tk.Tk):
             g = self._gflags()
             # mirrors sim.do, with optional -G overrides on the inner vsim
             do = ("do compile.do; "
-                  f"vsim -voptargs=+acc {g} work.tb_cpu_axi; "
+                  f"vsim -voptargs=+acc {g} work.rv32i_tb_cpu_axi; "
                   "do wave.do; run -all; wave zoom full")
             return dict(key=key, label="ModelSim TB (GUI)", mode="gui_tail",
                         argv=[self.vsim, "-do", do], verdict=verdict_sim)
@@ -707,7 +707,7 @@ class App(tk.Tk):
             return dict(key=key, label="Dual-core", mode="stream",
                         argv=[self.vsim, "-c", "-do",
                               "do compile.do; "
-                              "vsim -onfinish stop work.tb_dual_core; "
+                              "vsim -onfinish stop work.rv32i_tb_dual_core; "
                               "run -all; quit -f"],
                         verdict=verdict_dual)
         if key == "vlt":

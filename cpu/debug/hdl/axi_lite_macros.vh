@@ -74,28 +74,64 @@
 
 // --- bare ports (no prefix): the behavioural memory, a slave -----------------
 `define AXIL_BARE_SLV(w) \
-  .awaddr_i(w``_awaddr), .awvalid_i(w``_awvalid), .awready_o(w``_awready), \
-  .wdata_i(w``_wdata), .wstrb_i(w``_wstrb), .wvalid_i(w``_wvalid), .wready_o(w``_wready), \
-  .bresp_o(w``_bresp), .bvalid_o(w``_bvalid), .bready_i(w``_bready), \
-  .araddr_i(w``_araddr), .arvalid_i(w``_arvalid), .arready_o(w``_arready), \
-  .rdata_o(w``_rdata), .rresp_o(w``_rresp), .rvalid_o(w``_rvalid), .rready_i(w``_rready)
+  .awaddr_i(w``_awaddr), \
+  .awvalid_i(w``_awvalid), \
+  .awready_o(w``_awready), \
+  .wdata_i(w``_wdata), \
+  .wstrb_i(w``_wstrb), \
+  .wvalid_i(w``_wvalid), \
+  .wready_o(w``_wready), \
+  .bresp_o(w``_bresp), \
+  .bvalid_o(w``_bvalid), \
+  .bready_i(w``_bready), \
+  .araddr_i(w``_araddr), \
+  .arvalid_i(w``_arvalid), \
+  .arready_o(w``_arready), \
+  .rdata_o(w``_rdata), \
+  .rresp_o(w``_rresp), \
+  .rvalid_o(w``_rvalid), \
+  .rready_i(w``_rready)
 
 // --- bare ports: the passive monitor, which only ever observes ---------------
 `define AXIL_BARE_MON(w) \
-  .awaddr_i(w``_awaddr), .awvalid_i(w``_awvalid), .awready_i(w``_awready), \
-  .wdata_i(w``_wdata), .wstrb_i(w``_wstrb), .wvalid_i(w``_wvalid), .wready_i(w``_wready), \
-  .bresp_i(w``_bresp), .bvalid_i(w``_bvalid), .bready_i(w``_bready), \
-  .araddr_i(w``_araddr), .arvalid_i(w``_arvalid), .arready_i(w``_arready), \
-  .rdata_i(w``_rdata), .rresp_i(w``_rresp), .rvalid_i(w``_rvalid), .rready_i(w``_rready)
+  .awaddr_i(w``_awaddr), \
+  .awvalid_i(w``_awvalid), \
+  .awready_i(w``_awready), \
+  .wdata_i(w``_wdata), \
+  .wstrb_i(w``_wstrb), \
+  .wvalid_i(w``_wvalid), \
+  .wready_i(w``_wready), \
+  .bresp_i(w``_bresp), \
+  .bvalid_i(w``_bvalid), \
+  .bready_i(w``_bready), \
+  .araddr_i(w``_araddr), \
+  .arvalid_i(w``_arvalid), \
+  .arready_i(w``_arready), \
+  .rdata_i(w``_rdata), \
+  .rresp_i(w``_rresp), \
+  .rvalid_i(w``_rvalid), \
+  .rready_i(w``_rready)
 
 // --- a memory model used read-only: AR/R wired, write side tied off ----------
 `define AXIL_BARE_RD_SLV(w) \
-  .araddr_i(w``_araddr), .arvalid_i(w``_arvalid), .arready_o(w``_arready), \
-  .rdata_o(w``_rdata), .rresp_o(w``_rresp), .rvalid_o(w``_rvalid), .rready_i(w``_rready)
+  .araddr_i(w``_araddr), \
+  .arvalid_i(w``_arvalid), \
+  .arready_o(w``_arready), \
+  .rdata_o(w``_rdata), \
+  .rresp_o(w``_rresp), \
+  .rvalid_o(w``_rvalid), \
+  .rready_i(w``_rready)
 
 `define AXIL_BARE_WR_TIEOFF \
-  .awaddr_i(32'b0), .awvalid_i(1'b0), .awready_o(), \
-  .wdata_i(32'b0), .wstrb_i(4'b0), .wvalid_i(1'b0), .wready_o(), \
-  .bresp_o(), .bvalid_o(), .bready_i(1'b0)
+  .awaddr_i(32'b0), \
+  .awvalid_i(1'b0), \
+  .awready_o(), \
+  .wdata_i(32'b0), \
+  .wstrb_i(4'b0), \
+  .wvalid_i(1'b0), \
+  .wready_o(), \
+  .bresp_o(), \
+  .bvalid_o(), \
+  .bready_i(1'b0)
 
 `endif

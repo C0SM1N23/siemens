@@ -202,7 +202,7 @@ def main():
         + "".join(f"`define ADDR_{name} 32'h{addr:08x}\n"
                   for name, addr in sorted(syms.items(), key=lambda kv: kv[1]))
 
-    # The sym file is `include`d by tb_cpu_axi, so a fresh mtime makes
+    # The sym file is `include`d by rv32i_tb_cpu_axi, so a fresh mtime makes
     # Verilator re-verilate and recompile the whole model (minutes in WSL);
     # leave it untouched when nothing changed. The hex is only $readmemh'd at
     # run time, so bumping its mtime is free — do it even when identical, to

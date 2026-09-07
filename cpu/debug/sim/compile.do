@@ -30,7 +30,7 @@ vlog +incdir+. -f tb_cpu.f
 # 3. dual-core bench: ModelSim-only (the Verilator flow runs the single-core
 #    bench). The arbiter is a leaf and must precede the bench that uses it.
 vlog ../hdl/axi_lite_arb2.v
-vlog +incdir+../hdl ../hdl/tb_dual_core.v
+vlog +incdir+../hdl ../hdl/rv32i_tb_dual_core.v
 
 # 4. block-level benches: reset, read-only, register fields, trap causes
 vlog -f tb_block.f

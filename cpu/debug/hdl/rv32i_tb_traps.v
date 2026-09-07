@@ -1,5 +1,5 @@
 // ===========================================================================
-// tb_traps - one directed test per trap cause (hdl/cpu_top.v)
+// tb_traps - one directed test per trap cause (hdl/rv32i_cpu_top.v)
 // ===========================================================================
 //
 // OBJECTIVE
@@ -21,7 +21,7 @@
 //   cause that must NOT commit its instruction or NOT issue a bus transaction,
 //   that is asserted in the same case rather than inferred.
 //
-// CAUSES COVERED - the complete supported set from hdl/defines.vh
+// CAUSES COVERED - the complete supported set from hdl/rv32i_defines.vh
 //    0  instruction address misaligned    (taken jump to a target with bit 1 set)
 //    1  instruction access fault          (fetch outside the instruction memory)
 //    2  illegal instruction               (undefined opcode)
@@ -50,7 +50,7 @@
 
 `timescale 1ns/1ps
 
-module tb_traps;
+module rv32i_tb_traps;
 
 // ---- memory map for this bench ----
 localparam [31:0] IMEM_BASE  = 32'h0000_0000;   // 256 words: 0x0000 .. 0x03FF
@@ -107,44 +107,102 @@ integer i;
 reg [31:0] prog [0:IWORDS-1];
 `include "tb_check.vh"
 
-cpu_top #(.RESET_PC(IMEM_BASE)) dut (
-    .clk_i(clk), .rst_n_i(rst_n),
-    .ibus_axi_araddr_o(ib_araddr), .ibus_axi_arprot_o(ib_arprot),
-    .ibus_axi_arvalid_o(ib_arvalid), .ibus_axi_arready_i(ib_arready),
-    .ibus_axi_rdata_i(ib_rdata), .ibus_axi_rresp_i(ib_rresp),
-    .ibus_axi_rvalid_i(ib_rvalid), .ibus_axi_rready_o(ib_rready),
-    .dbus_axi_awaddr_o(db_awaddr), .dbus_axi_awprot_o(db_awprot),
-    .dbus_axi_awvalid_o(db_awvalid), .dbus_axi_awready_i(db_awready),
-    .dbus_axi_wdata_o(db_wdata), .dbus_axi_wstrb_o(db_wstrb),
-    .dbus_axi_wvalid_o(db_wvalid), .dbus_axi_wready_i(db_wready),
-    .dbus_axi_bresp_i(db_bresp), .dbus_axi_bvalid_i(db_bvalid), .dbus_axi_bready_o(db_bready),
-    .dbus_axi_araddr_o(db_araddr), .dbus_axi_arprot_o(db_arprot),
-    .dbus_axi_arvalid_o(db_arvalid), .dbus_axi_arready_i(db_arready),
-    .dbus_axi_rdata_i(db_rdata), .dbus_axi_rresp_i(db_rresp),
-    .dbus_axi_rvalid_i(db_rvalid), .dbus_axi_rready_o(db_rready),
-    .cpu_irq_i(cpu_irq), .cpu_irq_vec_i(cpu_irq_vec),
-    .irq_pending_i(16'b0), .irq_mask_o(),
-    .cpu_irq_ack_o(cpu_irq_ack), .cpu_irq_eoi_o(cpu_irq_eoi), .cpu_in_trap_o(cpu_in_trap)
+rv32i_cpu_top #(
+    .RESET_PC(IMEM_BASE)
+) dut (
+    .clk_i(clk),
+    .rst_n_i(rst_n),
+    .ibus_axi_araddr_o(ib_araddr),
+    .ibus_axi_arprot_o(ib_arprot),
+    .ibus_axi_arvalid_o(ib_arvalid),
+    .ibus_axi_arready_i(ib_arready),
+    .ibus_axi_rdata_i(ib_rdata),
+    .ibus_axi_rresp_i(ib_rresp),
+    .ibus_axi_rvalid_i(ib_rvalid),
+    .ibus_axi_rready_o(ib_rready),
+    .dbus_axi_awaddr_o(db_awaddr),
+    .dbus_axi_awprot_o(db_awprot),
+    .dbus_axi_awvalid_o(db_awvalid),
+    .dbus_axi_awready_i(db_awready),
+    .dbus_axi_wdata_o(db_wdata),
+    .dbus_axi_wstrb_o(db_wstrb),
+    .dbus_axi_wvalid_o(db_wvalid),
+    .dbus_axi_wready_i(db_wready),
+    .dbus_axi_bresp_i(db_bresp),
+    .dbus_axi_bvalid_i(db_bvalid),
+    .dbus_axi_bready_o(db_bready),
+    .dbus_axi_araddr_o(db_araddr),
+    .dbus_axi_arprot_o(db_arprot),
+    .dbus_axi_arvalid_o(db_arvalid),
+    .dbus_axi_arready_i(db_arready),
+    .dbus_axi_rdata_i(db_rdata),
+    .dbus_axi_rresp_i(db_rresp),
+    .dbus_axi_rvalid_i(db_rvalid),
+    .dbus_axi_rready_o(db_rready),
+    .cpu_irq_i(cpu_irq),
+    .cpu_irq_vec_i(cpu_irq_vec),
+    .irq_pending_i(16'b0),
+    .irq_mask_o(),
+    .cpu_irq_ack_o(cpu_irq_ack),
+    .cpu_irq_eoi_o(cpu_irq_eoi),
+    .cpu_in_trap_o(cpu_in_trap)
 );
 
 // instruction memory: read-only from the CPU, written directly by the bench
-axi_lite_mem_model #(.WORDS(IWORDS), .BASE(IMEM_BASE), .READ_LAT(0), .SEED(3)) imem (
-    .clk_i(clk), .rst_n_i(rst_n),
-    .awaddr_i(32'b0), .awvalid_i(1'b0), .awready_o(),
-    .wdata_i(32'b0), .wstrb_i(4'b0), .wvalid_i(1'b0), .wready_o(),
-    .bresp_o(), .bvalid_o(), .bready_i(1'b0),
-    .araddr_i(ib_araddr), .arvalid_i(ib_arvalid), .arready_o(ib_arready),
-    .rdata_o(ib_rdata), .rresp_o(ib_rresp), .rvalid_o(ib_rvalid), .rready_i(ib_rready)
+axi_lite_mem_model #(
+    .WORDS(IWORDS),
+    .BASE(IMEM_BASE),
+    .READ_LAT(0),
+    .SEED(3)
+) imem (
+    .clk_i(clk),
+    .rst_n_i(rst_n),
+    .awaddr_i(32'b0),
+    .awvalid_i(1'b0),
+    .awready_o(),
+    .wdata_i(32'b0),
+    .wstrb_i(4'b0),
+    .wvalid_i(1'b0),
+    .wready_o(),
+    .bresp_o(),
+    .bvalid_o(),
+    .bready_i(1'b0),
+    .araddr_i(ib_araddr),
+    .arvalid_i(ib_arvalid),
+    .arready_o(ib_arready),
+    .rdata_o(ib_rdata),
+    .rresp_o(ib_rresp),
+    .rvalid_o(ib_rvalid),
+    .rready_i(ib_rready)
 );
 
 // data memory
-axi_lite_mem_model #(.WORDS(256), .BASE(DMEM_BASE), .READ_LAT(1), .WRITE_LAT(1), .SEED(5)) dmem (
-    .clk_i(clk), .rst_n_i(rst_n),
-    .awaddr_i(db_awaddr), .awvalid_i(db_awvalid), .awready_o(db_awready),
-    .wdata_i(db_wdata), .wstrb_i(db_wstrb), .wvalid_i(db_wvalid), .wready_o(db_wready),
-    .bresp_o(db_bresp), .bvalid_o(db_bvalid), .bready_i(db_bready),
-    .araddr_i(db_araddr), .arvalid_i(db_arvalid), .arready_o(db_arready),
-    .rdata_o(db_rdata), .rresp_o(db_rresp), .rvalid_o(db_rvalid), .rready_i(db_rready)
+axi_lite_mem_model #(
+    .WORDS(256),
+    .BASE(DMEM_BASE),
+    .READ_LAT(1),
+    .WRITE_LAT(1),
+    .SEED(5)
+) dmem (
+    .clk_i(clk),
+    .rst_n_i(rst_n),
+    .awaddr_i(db_awaddr),
+    .awvalid_i(db_awvalid),
+    .awready_o(db_awready),
+    .wdata_i(db_wdata),
+    .wstrb_i(db_wstrb),
+    .wvalid_i(db_wvalid),
+    .wready_o(db_wready),
+    .bresp_o(db_bresp),
+    .bvalid_o(db_bvalid),
+    .bready_i(db_bready),
+    .araddr_i(db_araddr),
+    .arvalid_i(db_arvalid),
+    .arready_o(db_arready),
+    .rdata_o(db_rdata),
+    .rresp_o(db_rresp),
+    .rvalid_o(db_rvalid),
+    .rready_i(db_rready)
 );
 
 // ---------------------------------------------------------------------------

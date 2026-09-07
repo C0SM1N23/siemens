@@ -1,14 +1,14 @@
 // ---------------------------------------------------------------------------
-// Testbench collateral for the tb_cpu_axi bench — shared by both flows, and
+// Testbench collateral for the rv32i_tb_cpu_axi bench — shared by both flows, and
 // ordered by the same bottom-up rule as rtl.f (see the long note there).
 //
-// The dual-core bench (axi_lite_arb2 + tb_dual_core) and the block-level
+// The dual-core bench (axi_lite_arb2 + rv32i_tb_dual_core) and the block-level
 // benches are ModelSim-only and stay in compile.do; the SVA layer is
 // Verilator-only and stays in run_verilator.sh. rtl.f must be compiled before
-// this file: tb_cpu_axi instantiates cpu_top, pic and mtimer.
+// this file: rv32i_tb_cpu_axi instantiates rv32i_cpu_top, pic and mtimer.
 //
 //   L0  ck_rst_tb, axi_lite_mem_model, axi_lite_monitor, axi_lite_dec2
-//   L1  tb_cpu_axi (instantiates the four above plus the RTL from rtl.f)
+//   L1  rv32i_tb_cpu_axi (instantiates the four above plus the RTL from rtl.f)
 // ---------------------------------------------------------------------------
 
 // Resolves `include "axi_lite_macros.vh" in both flows.
@@ -21,4 +21,4 @@
 ../hdl/axi_lite_dec2.v       // 1-to-2 AXI4-Lite address decoder  (leaf)
 
 // --- Level 1: the bench itself -------------------------------------------------
-../hdl/tb_cpu_axi.v
+../hdl/rv32i_tb_cpu_axi.v

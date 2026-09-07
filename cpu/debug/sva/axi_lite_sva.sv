@@ -11,7 +11,7 @@
 //
 // axi_lite_monitor.v stays the ModelSim-compatible checker; this is the same
 // contract in SVA for tools that support it (Verilator --assert, Questa). Bound
-// from bind_sva.sv — no RTL is touched.
+// from rv32i_bind_sva.sv — no RTL is touched.
 //
 // Parameters: NAME tags the messages; HAS_WRITE 0 = read-only port (no write
 // checks); CHECK_ALIGN 1 = ARADDR must be word-aligned (instruction fetch, not

@@ -13,11 +13,11 @@
 // - bus beats  = response handshakes on ibus/dbus, binned by RRESP/BRESP
 //
 // Plain counters (portable to Verilator, Questa, even ModelSim ASE minus the
-// SVA files). Bound from bind_sva.sv — no RTL is touched.
+// SVA files). Bound from rv32i_bind_sva.sv — no RTL is touched.
 
 `timescale 1ns/1ps
 
-module cpu_func_cov (
+module rv32i_cpu_func_cov (
     input        clk_i,
     input        rst_n_i,
 

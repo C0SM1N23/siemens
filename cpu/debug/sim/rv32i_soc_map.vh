@@ -1,8 +1,8 @@
 // SoC memory map for the testbench — one place to change the addresses the
 // global map is still open on (README "Open points"). The decoders and models
 // in tb_cpu_axi reference these instead of scattering literals.
-`ifndef SOC_MAP_VH
-`define SOC_MAP_VH
+`ifndef RV32I_SOC_MAP_VH
+`define RV32I_SOC_MAP_VH
 
 `define IMEM_BASE 32'h0000_0000   // instruction memory (ibus)
 `define DMEM_BASE 32'h0000_2000   // data memory (dbus default leg)

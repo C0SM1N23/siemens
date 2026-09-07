@@ -1,6 +1,6 @@
 // ===========================================================================
 // tb_alu - block-level verification of the arithmetic path
-//          (hdl/alu_top.v + hdl/alu.v)
+//          (hdl/rv32i_alu_top.v + hdl/rv32i_alu.v)
 // ===========================================================================
 //
 // OBJECTIVE
@@ -45,9 +45,9 @@
 
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module tb_alu;
+module rv32i_tb_alu;
 
 // ---- boundary patterns used throughout ----
 localparam [31:0] ZERO   = 32'h0000_0000;
@@ -75,7 +75,7 @@ reg [31:0] expect_v;
 reg [31:0] pa, pb;
 `include "tb_check.vh"
 
-alu_top dut (
+rv32i_alu_top dut (
     .operand_a_i     (opa),
     .operand_b_reg_i (opb_reg),
     .operand_b_imm_i (opb_imm),
@@ -208,7 +208,7 @@ initial begin
     eval(`ALUOP_FUNCT, 3'b000, F7_1, pa, pb, 32'h0000_000E,
          "  and the R-type SUB is still a SUB (the asymmetry is real)");
 
-    // the three non-FUNCT ALUOp values, plus one that control.v never emits
+    // the three non-FUNCT ALUOp values, plus one that rv32i_control.v never emits
     eval(`ALUOP_ADD,   3'b111, F7_1, pa, pb, 32'h0000_0014,
          "  ALUOP_ADD ignores funct3/funct7 (address arithmetic)");
     eval(`ALUOP_LUI,   3'b111, F7_1, pa, pb, 32'h0000_0003,

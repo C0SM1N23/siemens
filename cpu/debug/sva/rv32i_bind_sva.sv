@@ -1,6 +1,6 @@
 // Functional-coverage bind for the CPU block flow.
 //
-// The assertion binds live in bind_core_sva.sv, which the SoC flow compiles as
+// The assertion binds live in rv32i_bind_core_sva.sv, which the SoC flow compiles as
 // well. This file is only the coverage instance: its bins are calibrated for
 // cpu/debug/sim/program_axi.s, so it belongs to the run that executes that
 // program and nowhere else.
@@ -8,7 +8,7 @@
 `timescale 1ns/1ps
 
 // functional coverage
-bind cpu_top cpu_func_cov func_cov_i (
+bind rv32i_cpu_top rv32i_cpu_func_cov func_cov_i (
     .clk_i         (clk_i),
     .rst_n_i       (rst_n_i),
     .valid_i       (ifdx_valid_q),

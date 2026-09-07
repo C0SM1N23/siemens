@@ -146,14 +146,14 @@ optional, as now.
 
 ### 2.5 Block benches for the remaining modules
 
-**Gap.** `control.v`, `imm_gen.v`, `decode.v` and `exception_unit.v` have no
+**Gap.** `rv32i_control.v`, `rv32i_imm_gen.v`, `rv32i_decode.v` and `rv32i_exception_unit.v` have no
 block-level bench; they are covered only through the system program.
 
 **Why.** `imm_gen` is the strongest candidate: five encoding formats with
 different bit-scrambling and sign extension, and a bench can be exhaustive over
 the sign bit and the field boundaries the way `tb_alu` is over shift amounts.
-`control.v` is next — the illegal-encoding path matters, and "every other
-control line is forced inactive" is asserted in the documentation but only
+`rv32i_control.v` is next — the illegal-encoding path matters, and "every other
+rv32i_control line is forced inactive" is asserted in the documentation but only
 observed indirectly.
 
 **Cost.** Low each, and they follow the `tb_alu` pattern exactly.

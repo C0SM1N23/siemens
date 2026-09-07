@@ -1,5 +1,5 @@
 // AXI4-Lite master driver tasks, shared by the block-level testbenches
-// (tb_pic, tb_pic_reset, tb_pic_ro, tb_pic_status, tb_mtimer_regs).
+// (pic_tb_feature, pic_tb_reset, pic_tb_ro, pic_tb_status, mtimer_tb_regs).
 //
 // Included inside a module body that has already declared the master-side
 // signals with these exact names, plus `integer errors;`, `reg [31:0] rd;` and

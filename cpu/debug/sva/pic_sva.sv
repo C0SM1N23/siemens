@@ -9,7 +9,7 @@
 //  - D-NEST: depth_i stays within [0, NEST_MAX], moves only by claim/eoi, and the
 //            depth_i limit masks further offers (enforcing the bound)
 //
-// Bound from bind_sva.sv — no RTL is touched.
+// Bound from rv32i_bind_sva.sv — no RTL is touched.
 
 `timescale 1ns/1ps
 

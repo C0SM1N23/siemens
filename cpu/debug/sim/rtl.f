@@ -11,11 +11,11 @@
 // time. So a randomly ordered list usually still works. "Usually" is the
 // problem. Two things are resolved at COMPILE time, in file order:
 //
-//   1. `include / `define. defines.vh is textually included by the modules
+//   1. `include / `define. rv32i_defines.vh is textually included by the modules
 //      that use its encodings. A macro is only visible from the point it is
 //      defined onwards in the compilation unit, so a file that relies on a
 //      macro defined elsewhere must be compiled after it. Here every consumer
-//      includes defines.vh itself under an include guard, and +incdir+ below
+//      includes rv32i_defines.vh itself under an include guard, and +incdir+ below
 //      makes it findable, which is what keeps that class of failure away.
 //   2. Module redefinition and cross-file parameter/name clashes are reported
 //      against whichever copy is seen first.
@@ -40,33 +40,33 @@
 // ---------------------------------------------------------------------------
 
 // --- include path -----------------------------------------------------------
-// Resolves `include "defines.vh" (shared encodings) in both flows.
+// Resolves `include "rv32i_defines.vh" (shared encodings) in both flows.
 +incdir+../../hdl
 
 // --- Level 0: leaf modules (no submodule instances) --------------------------
 // Order within the level is irrelevant; alphabetical by convention.
-../../hdl/alu.v              // ALU datapath                    (leaf)
+../../hdl/rv32i_alu.v              // ALU datapath                    (leaf)
 ../../hdl/axi_lite_slave.v   // reusable AXI4-Lite slave port    (leaf)
-../../hdl/branch_predictor.v // BHT + BTB + RAS                  (leaf)
-../../hdl/branch_unit.v      // branch condition + target        (leaf)
-../../hdl/control.v          // main instruction decoder         (leaf)
-../../hdl/csr_file.v         // M-mode CSR file                  (leaf)
-../../hdl/decode.v           // instruction field extraction     (leaf)
-../../hdl/exception_unit.v   // synchronous exception detect     (leaf)
-../../hdl/fetch_unit.v       // PC + ibus AXI4-Lite read master  (leaf)
-../../hdl/hazard_unit.v      // stall / flush / forwarding       (leaf)
-../../hdl/imm_gen.v          // immediate generator              (leaf)
-../../hdl/lsu.v              // dbus AXI4-Lite master            (leaf)
-../../hdl/regfile.v          // 32 x 32-bit GPRs                 (leaf)
-../../hdl/writeback_mux.v    // writeback source select          (leaf)
+../../hdl/rv32i_branch_predictor.v // BHT + BTB + RAS                  (leaf)
+../../hdl/rv32i_branch_unit.v      // branch condition + target        (leaf)
+../../hdl/rv32i_control.v          // main instruction decoder         (leaf)
+../../hdl/rv32i_csr_file.v         // M-mode CSR file                  (leaf)
+../../hdl/rv32i_decode.v           // instruction field extraction     (leaf)
+../../hdl/rv32i_exception_unit.v   // synchronous exception detect     (leaf)
+../../hdl/rv32i_fetch_unit.v       // PC + ibus AXI4-Lite read master  (leaf)
+../../hdl/rv32i_hazard_unit.v      // stall / flush / forwarding       (leaf)
+../../hdl/rv32i_imm_gen.v          // immediate generator              (leaf)
+../../hdl/rv32i_lsu.v              // dbus AXI4-Lite master            (leaf)
+../../hdl/rv32i_regfile.v          // 32 x 32-bit GPRs                 (leaf)
+../../hdl/rv32i_writeback_mux.v    // writeback source select          (leaf)
 
 // --- Level 1: depend on Level 0 only -----------------------------------------
-../../hdl/alu_top.v          // alu_top      -> alu
+../../hdl/rv32i_alu_top.v          // alu_top      -> alu
 ../../hdl/mtimer.v           // mtimer       -> axi_lite_slave
 ../../hdl/pic.v              // pic          -> axi_lite_slave
 
 // --- Level 2: system top ------------------------------------------------------
-// cpu_top -> alu_top (L1) + branch_predictor, branch_unit, control, csr_file,
+// rv32i_cpu_top -> alu_top (L1) + branch_predictor, branch_unit, control, csr_file,
 //            decode, exception_unit, fetch_unit, hazard_unit, imm_gen, lsu,
 //            regfile, writeback_mux (all L0)
-../../hdl/cpu_top.v
+../../hdl/rv32i_cpu_top.v

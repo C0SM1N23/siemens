@@ -102,7 +102,7 @@ of `tb_pic`, `tb_pic_reset`, `tb_pic_ro`, `tb_pic_status`, `tb_mtimer_regs`,
 `tb_csr_ro`, `tb_traps`, `tb_bp`, `tb_alu`, `tb_dual_core`:
 
 ```
-vsim -c -do "do compile.do; vsim -onfinish stop work.tb_pic; run -all; quit -f"
+vsim -c -do "do compile.do; vsim -onfinish stop work.pic_tb_feature; run -all; quit -f"
 ```
 
 **Compile hygiene.** Both flows are warning-free, and that is part of the pass
@@ -120,7 +120,7 @@ width-explicit rather than relying on implicit extension or truncation.
 
    ```
    do compile.do                          ;# compile RTL + TB into work/
-   vsim -voptargs=+acc work.tb_cpu_axi    ;# elaborate (+acc keeps signals visible)
+   vsim -voptargs=+acc work.rv32i_tb_cpu_axi    ;# elaborate (+acc keeps signals visible)
    do wave.do                             ;# add the AXI-grouped waves
    run -all                               ;# run to $finish
    ```
@@ -201,7 +201,7 @@ tags as the README index and the code.
 | D21 (D-NEST) | In-service suppression: a claimed source with its line still high stays out of `cpu_irq` until its handler's eoi | a handler that re-enables MIE must not be re-entered by its own interrupt | src3 held high through its whole handler; `suppress_fail` checks `cpu_irq`/vec=3 never reappears in that window; claim3 count stays 1 |
 | D19,D22 (D-AXI) | PIC software interface: INT_ENABLE write+readback, SRC5_STATUS / INT_STATUS / ACTIVE_VEC reads; PIC enable and `mie` are independent masks | the programmable half of the PIC, over real AXI | scoreboard: INT_ENABLE=0x2C, SRC5_STATUS pending=0x1, INT_STATUS=0, ACTIVE_VEC=0x107 (valid\|src7) read *inside* the handler; src5 visible in mip yet never taken |
 | D22 (D-AXI) | Unmapped PIC word read and read-only register write answer SLVERR -> precise access faults | error responses from a real peripheral, not just the TB model | both accesses trap (causes 5 and 7, counted in the exact 17); PIC-port monitor stays clean |
-| D-BAND/NEST/SPUR/DDL/SW | Advanced-scheduling features driven directly in `tb_pic.v` | the system bench uses the default config; the feature set needs a dedicated bench | priority bands (inter/intra/tie), preemptive nesting + `NEST_MAX` overflow, a source re-banded while active keeping its claimed priority (grouping Q4), spurious detection + `SPURIOUS_LOG` W1C, deadline escalation that flips the offer *and* preempts an active lower source, bump+multi escalation, keyed software triggers, edge latching, SLVERR/OKAY responses — 139 checks, all pass |
+| D-BAND/NEST/SPUR/DDL/SW | Advanced-scheduling features driven directly in `pic_tb_feature.v` | the system bench uses the default config; the feature set needs a dedicated bench | priority bands (inter/intra/tie), preemptive nesting + `NEST_MAX` overflow, a source re-banded while active keeping its claimed priority (grouping Q4), spurious detection + `SPURIOUS_LOG` W1C, deadline escalation that flips the offer *and* preempts an active lower source, bump+multi escalation, keyed software triggers, edge latching, SLVERR/OKAY responses — 139 checks, all pass |
 | REQ10 | x0 hardwired, regfile reset | | `addi x0,x0,5` then read; regs[0] === 0 |
 | D23 | WFI: sleep until wake, ibus silent, mepc = wfi+4 on an interrupt wake, fall-through (no trap) when MIE=0 | the CPU must idle without burning interconnect bandwidth the DMA needs | timer irq wakes the first WFI (mepc readback = wfi+4); second WFI with MIE=0 falls through to a marker store with the handler-entry count unchanged; TB measures ≤1 ibus read per sleep window + SVA `wfi_ibus_quiet` |
 | D24 | RAS: returns from 3 different call sites + a nested call chain (h→g→g) predict correctly and stay correct | the BTB's last-target scheme is systematically wrong for returns; the RAS may only change *time*, never results | accumulated signature 0x243 checked; FCOV separates returns predicted correctly vs mispredicted (first encounters only) |
@@ -224,7 +224,7 @@ tags as the README index and the code.
 ModelSim ASE has no SVA and no coverage, so this layer lives in `debug/sva/`
 and runs the same `tb_cpu_axi` through Verilator
 (`--timing --assert --coverage`, plus `sim_main.cpp` to dump the coverage
-database). Nothing is edited to attach it — `bind_sva.sv` binds the checkers
+database). Nothing is edited to attach it — `rv32i_bind_sva.sv` binds the checkers
 into `cpu_top`, `pic` and `mtimer`, so every instance (dual-core included) gets
 them:
 
@@ -234,7 +234,7 @@ them:
   ≤1-outstanding claim (D6, D12), legal response codes (no EXOKAY), VALID
   low during reset, word-aligned fetch addresses. Cover properties record
   backpressure and error-response events for `verilator_coverage`.
-- `cpu_core_sva.sv` — pipeline promises as properties: ack one-hot and
+- `rv32i_cpu_core_sva.sv` — pipeline promises as properties: ack one-hot and
   one-cycle (REQ4), interrupts only at instruction boundaries (D2), trap
   entry raises `cpu_in_trap` / MRET drops it, a trapping instruction never
   commits (D3), a stalled S2 feeds S3 bubbles, x0 reads zero (REQ10), WSTRB
@@ -246,14 +246,14 @@ them:
   offered source is a pending, non-in-service request, preemption is strict over
   the top of the nesting stack, depth stays within `[0, NEST_MAX]` and moves only
   by claim/eoi, and the depth limit masks further offers.
-- `cpu_func_cov.sv` — functional coverage: instruction classes, load/store
+- `rv32i_cpu_func_cov.sv` — functional coverage: instruction classes, load/store
   sizes, each branch × taken/not-taken, predictor outcome matrix, every
   trap cause, CSR op forms, forwarding paths, irq scenarios, per-channel
   acks, bus response/backpressure bins. Prints the `[FCOV]` table with a
   hit/MISS verdict per bin and a summary percentage at end of run.
 
 Current evidence: **all system-bench TB checks pass (ModelSim and Verilator),
-plus the standalone `tb_pic.v` (139 checks) for the PIC's advanced features,
+plus the standalone `pic_tb_feature.v` (139 checks) for the PIC's advanced features,
 zero assertion violations, 88/92 functional bins hit (95%)**. The first measurement of this
 table (59/85) exposed real test-plan holes — AUIPC never committed,
 BLT/BGE/BLTU/BGEU and CSRRCI never executed, both-operand forwarding never
@@ -316,14 +316,14 @@ it end to end.
   quantify the return-mispredict win on a bigger program.
 - The PIC is the real advanced-scheduling `pic.v`, exercised in-system (the TB
   plays the peripherals on `irq_src`, default config = lowest-index priority)
-  and, feature by feature, by the standalone `tb_pic.v` (bands, nesting,
+  and, feature by feature, by the standalone `pic_tb_feature.v` (bands, nesting,
   spurious, deadline escalation, software triggers, AXI responses).
 - The PIC supports preemptive nesting natively (hardware stack, `NEST_MAX`),
-  verified in `tb_pic.v`. In the integrated CPU, handlers run with MIE=0, so the
+  verified in `pic_tb_feature.v`. In the integrated CPU, handlers run with MIE=0, so the
   CPU exercises one nesting level via `cpu_irq_ack`/`cpu_irq_eoi`; multi-level
   nesting through the CPU needs handler software to re-enable MIE and save
   mepc/mcause/mstatus (standard RISC-V) — a small addition on top of the eoi
-  path, not an RTL gap. Randomized many-source toggling in `tb_pic.v` would
+  path, not an RTL gap. Randomized many-source toggling in `pic_tb_feature.v` would
   still add value.
 - The dbus decoder covers 2 slaves; richer fabrics (more slaves, DECERR from
   the fabric's own decoder) come with the real interconnect.
@@ -342,7 +342,7 @@ it end to end.
   `db_araddr`, `db_wdata`, `db_wstrb` and their decoded copies) read X from
   time 0 until the CPU's first load/store, and `RRESP[1]`/`BRESP[1]` on the
   peripheral ports read X until the first transaction there. Both come from
-  registers deliberately left unreset — the LSU command latch (`lsu.v`, "no
+  registers deliberately left unreset — the LSU command latch (`rv32i_lsu.v`, "no
   reset, see header") and `rresp_err_q`/`bresp_err_q` in `axi_lite_slave.v`.
   This is legal: AXI only requires the payload to be stable and meaningful
   while the matching VALID is high, and VALID is low the whole time, which is

@@ -1,6 +1,6 @@
 // ===========================================================================
 // tb_csr_ro - read-only, WARL and reset verification for the CSR file
-//             (hdl/csr_file.v)
+//             (hdl/rv32i_csr_file.v)
 // ===========================================================================
 //
 // OBJECTIVE
@@ -50,9 +50,9 @@
 
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module tb_csr_ro;
+module rv32i_tb_csr_ro;
 
 // ---- CSR addresses ----
 localparam MSTATUS  = 12'h300, MISA     = 12'h301, MIE      = 12'h304,
@@ -96,18 +96,34 @@ reg [31:0] rd;
 reg [31:0] before_val;
 `include "tb_check.vh"
 
-csr_file #(.HART_ID(THIS_HART)) dut (
-    .clk_i(clk), .rst_n_i(rst_n),
-    .csr_addr_i(csr_addr), .csr_wdata_i(csr_wdata), .csr_op_i(csr_op),
-    .csr_ren_i(csr_ren), .csr_wen_i(csr_wen),
-    .csr_rdata_o(csr_rdata), .csr_illegal_o(csr_illegal),
-    .trap_set_i(trap_set), .trap_is_irq_i(trap_is_irq), .trap_code_i(trap_code),
-    .trap_pc_i(trap_pc), .trap_val_i(trap_val), .mret_i(mret),
-    .irq_lines_i(irq_lines), .irq_enable_o(irq_enable), .mie_global_o(mie_global),
-    .trap_vector_o(trap_vector), .mepc_out_o(mepc_out),
+rv32i_csr_file #(
+    .HART_ID(THIS_HART)
+) dut (
+    .clk_i(clk),
+    .rst_n_i(rst_n),
+    .csr_addr_i(csr_addr),
+    .csr_wdata_i(csr_wdata),
+    .csr_op_i(csr_op),
+    .csr_ren_i(csr_ren),
+    .csr_wen_i(csr_wen),
+    .csr_rdata_o(csr_rdata),
+    .csr_illegal_o(csr_illegal),
+    .trap_set_i(trap_set),
+    .trap_is_irq_i(trap_is_irq),
+    .trap_code_i(trap_code),
+    .trap_pc_i(trap_pc),
+    .trap_val_i(trap_val),
+    .mret_i(mret),
+    .irq_lines_i(irq_lines),
+    .irq_enable_o(irq_enable),
+    .mie_global_o(mie_global),
+    .trap_vector_o(trap_vector),
+    .mepc_out_o(mepc_out),
     .retire_i(retire),
-    .ev_mispredict_i(ev_mispredict), .ev_ibus_wait_i(ev_ibus_wait),
-    .ev_dbus_stall_i(ev_dbus_stall), .ev_wfi_sleep_i(ev_wfi_sleep)
+    .ev_mispredict_i(ev_mispredict),
+    .ev_ibus_wait_i(ev_ibus_wait),
+    .ev_dbus_stall_i(ev_dbus_stall),
+    .ev_wfi_sleep_i(ev_wfi_sleep)
 );
 
 // ---------------------------------------------------------------------------

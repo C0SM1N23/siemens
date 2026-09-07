@@ -37,7 +37,7 @@
 
 `timescale 1ns/1ps
 
-module tb_pic_ro;
+module pic_tb_ro;
 
 // ---- register map (byte offsets) ----
 localparam CFG0 = 32'h00, SWT0 = 32'h40, STA0 = 32'h80;
@@ -77,16 +77,34 @@ reg [31:0] before_val;
 
 wire [15:0] pic_pending;
 pic dut (
-    .clk_i(clk), .rst_n_i(rst_n),
+    .clk_i(clk),
+    .rst_n_i(rst_n),
     .irq_src_i(irq_src),
     .cpu_mask_i(16'hFFFF),          // no CPU-side mask in the standalone bench
-    .cpu_irq_o(cpu_irq), .cpu_irq_vec_o(cpu_irq_vec), .pending_o(pic_pending),
-    .cpu_irq_ack_i(cpu_irq_ack), .cpu_irq_eoi_i(cpu_irq_eoi),
-    .s_axi_awaddr_i(awaddr), .s_axi_awprot_i(3'b0), .s_axi_awvalid_i(awvalid), .s_axi_awready_o(awready),
-    .s_axi_wdata_i(wdata), .s_axi_wstrb_i(wstrb), .s_axi_wvalid_i(wvalid), .s_axi_wready_o(wready),
-    .s_axi_bresp_o(bresp), .s_axi_bvalid_o(bvalid), .s_axi_bready_i(bready),
-    .s_axi_araddr_i(araddr), .s_axi_arprot_i(3'b0), .s_axi_arvalid_i(arvalid), .s_axi_arready_o(arready),
-    .s_axi_rdata_o(rdata), .s_axi_rresp_o(rresp), .s_axi_rvalid_o(rvalid), .s_axi_rready_i(rready)
+    .cpu_irq_o(cpu_irq),
+    .cpu_irq_vec_o(cpu_irq_vec),
+    .pending_o(pic_pending),
+    .cpu_irq_ack_i(cpu_irq_ack),
+    .cpu_irq_eoi_i(cpu_irq_eoi),
+    .s_axi_awaddr_i(awaddr),
+    .s_axi_awprot_i(3'b0),
+    .s_axi_awvalid_i(awvalid),
+    .s_axi_awready_o(awready),
+    .s_axi_wdata_i(wdata),
+    .s_axi_wstrb_i(wstrb),
+    .s_axi_wvalid_i(wvalid),
+    .s_axi_wready_o(wready),
+    .s_axi_bresp_o(bresp),
+    .s_axi_bvalid_o(bvalid),
+    .s_axi_bready_i(bready),
+    .s_axi_araddr_i(araddr),
+    .s_axi_arprot_i(3'b0),
+    .s_axi_arvalid_i(arvalid),
+    .s_axi_arready_o(arready),
+    .s_axi_rdata_o(rdata),
+    .s_axi_rresp_o(rresp),
+    .s_axi_rvalid_o(rvalid),
+    .s_axi_rready_i(rready)
 );
 
 // per-source register address helpers

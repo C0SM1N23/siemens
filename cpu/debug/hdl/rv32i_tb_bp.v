@@ -1,6 +1,6 @@
 // ===========================================================================
 // tb_bp - block-level verification of the branch predictor
-//         (hdl/branch_predictor.v): BTB/BHT, return-address stack, reset
+//         (hdl/rv32i_branch_predictor.v): BTB/BHT, return-address stack, reset
 // ===========================================================================
 //
 // OBJECTIVE
@@ -62,7 +62,7 @@
 
 `timescale 1ns/1ps
 
-module tb_bp;
+module rv32i_tb_bp;
 
 localparam ENTRIES   = 128;
 localparam RAS_DEPTH = 8;
@@ -91,7 +91,10 @@ integer i, j;
 reg [31:0] pc_a, pc_b;
 `include "tb_check.vh"
 
-branch_predictor #(.ENTRIES(ENTRIES), .RAS_DEPTH(RAS_DEPTH)) dut (
+rv32i_branch_predictor #(
+    .ENTRIES(ENTRIES),
+    .RAS_DEPTH(RAS_DEPTH)
+) dut (
     .clk_i           (clk),
     .rst_n_i         (rst_n),
     .lookup_pc_i     (lookup_pc),
@@ -112,7 +115,10 @@ branch_predictor #(.ENTRIES(ENTRIES), .RAS_DEPTH(RAS_DEPTH)) dut (
 wire        pred_taken0;
 wire [31:0] pred_target0;
 
-branch_predictor #(.ENTRIES(ENTRIES), .RAS_DEPTH(0)) dut0 (
+rv32i_branch_predictor #(
+    .ENTRIES(ENTRIES),
+    .RAS_DEPTH(0)
+) dut0 (
     .clk_i           (clk),
     .rst_n_i         (rst_n),
     .lookup_pc_i     (lookup_pc),

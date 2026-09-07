@@ -19,11 +19,13 @@
 
 `include "axi_lite_macros.vh"
 
-module tb_dual_core;
+module rv32i_tb_dual_core;
 
 wire clk, rst_n;
 
-ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst_inst (
+ck_rst_tb #(
+    .CK_SEMIPERIOD(5)
+) ck_rst_inst (
     .clk_o   (clk),
     .rst_n_o (rst_n)
 );
@@ -40,7 +42,9 @@ wire        eoi    [0:1];
 wire        intrap [0:1];
 
 // no PIC in the dual-core bench: the interrupt inputs are tied off
-cpu_top #(.HART_ID(0)) cpu0 (
+rv32i_cpu_top #(
+    .HART_ID(0)
+) cpu0 (
     .clk_i         (clk),
     .rst_n_i       (rst_n),
     `AXIL_MST_RD(ibus_axi, ib0),
@@ -54,7 +58,9 @@ cpu_top #(.HART_ID(0)) cpu0 (
     .cpu_in_trap_o (intrap[0])
 );
 
-cpu_top #(.HART_ID(1)) cpu1 (
+rv32i_cpu_top #(
+    .HART_ID(1)
+) cpu1 (
     .clk_i         (clk),
     .rst_n_i       (rst_n),
     `AXIL_MST_RD(ibus_axi, ib1),
@@ -70,43 +76,59 @@ cpu_top #(.HART_ID(1)) cpu1 (
 
 // private instruction memories, same binary in both
 axi_lite_mem_model #(
-    .WORDS(256), .BASE(32'h0000_0000), .INIT_FILE("program_dual.hex"),
+    .WORDS(256),
+    .BASE(32'h0000_0000),
+    .INIT_FILE("program_dual.hex"),
     .READ_LAT(0)
 ) imem0 (
-    .clk_i(clk), .rst_n_i(rst_n),
+    .clk_i(clk),
+    .rst_n_i(rst_n),
     `AXIL_BARE_WR_TIEOFF,
     `AXIL_BARE_RD_SLV(ib0)
 );
 
 axi_lite_mem_model #(
-    .WORDS(256), .BASE(32'h0000_0000), .INIT_FILE("program_dual.hex"),
+    .WORDS(256),
+    .BASE(32'h0000_0000),
+    .INIT_FILE("program_dual.hex"),
     .READ_LAT(0)
 ) imem1 (
-    .clk_i(clk), .rst_n_i(rst_n),
+    .clk_i(clk),
+    .rst_n_i(rst_n),
     `AXIL_BARE_WR_TIEOFF,
     `AXIL_BARE_RD_SLV(ib1)
 );
 
 // both data buses share one memory through the arbiter
 axi_lite_arb2 arb (
-    .clk_i(clk), .rst_n_i(rst_n),
+    .clk_i(clk),
+    .rst_n_i(rst_n),
     `AXIL_NP_SLV(m0, db0),
     `AXIL_NP_SLV(m1, db1),
     `AXIL_NP_MST(s, s)
 );
 
 axi_lite_mem_model #(
-    .WORDS(1024), .BASE(32'h0000_2000),
-    .READ_LAT(1), .WRITE_LAT(1)
+    .WORDS(1024),
+    .BASE(32'h0000_2000),
+    .READ_LAT(1),
+    .WRITE_LAT(1)
 ) dmem_inst (
-    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_SLV(s)
+    .clk_i(clk),
+    .rst_n_i(rst_n), `AXIL_BARE_SLV(s)
 );
 
 // keep the arbitrated link protocol-clean too
 wire [15:0] mon_err;
-axi_lite_monitor #(.NAME("shared"), .HAS_WRITE(1)) mon (
-    .clk_i(clk), .rst_n_i(rst_n), `AXIL_BARE_MON(s),
-    .err_cnt_o(mon_err), .rd_cnt_o(), .wr_cnt_o()
+axi_lite_monitor #(
+    .NAME("shared"),
+    .HAS_WRITE(1)
+) mon (
+    .clk_i(clk),
+    .rst_n_i(rst_n), `AXIL_BARE_MON(s),
+    .err_cnt_o(mon_err),
+    .rd_cnt_o(),
+    .wr_cnt_o()
 );
 
 integer errors;
