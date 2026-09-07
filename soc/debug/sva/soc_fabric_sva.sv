@@ -16,7 +16,7 @@
 // ===========================================================================
 // axi_lite_dec: address decode and response routing
 // ===========================================================================
-module axi_lite_dec_sva #(
+module soc_axi_lite_dec_sva #(
     parameter NAME = "dec",
     parameter integer N = 2
 )(
@@ -123,7 +123,7 @@ endmodule
 // ===========================================================================
 // axi_lite_arb: round-robin grant for a shared slave
 // ===========================================================================
-module axi_lite_arb_sva #(
+module soc_axi_lite_arb_sva #(
     parameter NAME = "arb",
     parameter integer M = 2
 )(
@@ -191,7 +191,7 @@ endmodule
 // ===========================================================================
 // axi_full2lite: burst splitting
 // ===========================================================================
-module axi_full2lite_sva #(
+module soc_axi_full2lite_sva #(
     parameter NAME = "bridge"
 )(
     input             clk_i,

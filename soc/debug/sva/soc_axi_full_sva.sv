@@ -26,7 +26,7 @@
 // checker watches the bridge's slave side in tb_full2lite, because that bench
 // deliberately drives a WRAP burst to prove the bridge refuses it - the very
 // thing these assertions forbid.
-module axi_full_sva #(
+module soc_axi_full_sva #(
     parameter NAME = "axi_full",
     parameter CHECK_SUBSET = 1
 )(

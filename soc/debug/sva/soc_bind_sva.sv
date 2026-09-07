@@ -7,7 +7,7 @@
 // is forwarded from the target (`#(.N(N))`), so one bind covers instances of
 // different widths.
 //
-// The CPU block's assertion binds (cpu/debug/sva/bind_core_sva.sv) cover
+// The CPU block's assertion binds (cpu/debug/sva/rv32i_bind_core_sva.sv) cover
 // cpu_top's two ports, the pipeline invariants, and the PIC and timer slave
 // ports; the SoC flow compiles that file alongside this one. What this file
 // adds is everything the CPU block never saw: the fabric's internal decisions,
@@ -22,8 +22,10 @@
 
 // the burst bridge's AXI4-Lite master side: what the DMA looks like to the
 // fabric once its bursts have been split
-bind axi_full2lite axi_lite_sva #(
-    .NAME("dma_lite"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+bind soc_axi_full2lite axi_lite_sva #(
+    .NAME("dma_lite"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) lite_port_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -47,8 +49,10 @@ bind axi_full2lite axi_lite_sva #(
 );
 
 // the arbiter's slave side: the single stream the shared memory actually sees
-bind axi_lite_arb axi_lite_sva #(
-    .NAME("arb_out"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+bind soc_axi_lite_arb axi_lite_sva #(
+    .NAME("arb_out"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) arb_out_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -72,8 +76,10 @@ bind axi_lite_arb axi_lite_sva #(
 );
 
 // both memories: one bind, two instances (IMEM and DMEM)
-bind axi_lite_ram axi_lite_sva #(
-    .NAME("ram_s"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+bind soc_axi_lite_ram axi_lite_sva #(
+    .NAME("ram_s"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) ram_port_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -98,7 +104,9 @@ bind axi_lite_ram axi_lite_sva #(
 
 // the DMA's AXI4-Lite register slave
 bind mc_dma_top axi_lite_sva #(
-    .NAME("dma_regs"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+    .NAME("dma_regs"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) dma_regs_sva_i (
     .clk_i     (clk),
     .rst_n_i   (rst_n),
@@ -124,7 +132,9 @@ bind mc_dma_top axi_lite_sva #(
 // the dual-port SRAM, one checker per port. Its addresses are 10 bits wide -
 // the window size - so they are zero-extended to the checker's 32.
 bind dp_sram_top axi_lite_sva #(
-    .NAME("sram_a"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+    .NAME("sram_a"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) sram_a_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -148,7 +158,9 @@ bind dp_sram_top axi_lite_sva #(
 );
 
 bind dp_sram_top axi_lite_sva #(
-    .NAME("sram_b"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+    .NAME("sram_b"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) sram_b_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -177,8 +189,9 @@ bind dp_sram_top axi_lite_sva #(
 // Protocol only. The subset assertions are off here because tb_full2lite
 // drives an unsupported burst on purpose; they are asserted on the DMA's own
 // port below, which is where they are a statement about the design.
-bind axi_full2lite axi_full_sva #(
-    .NAME("dma_full"), .CHECK_SUBSET(0)
+bind soc_axi_full2lite soc_axi_full_sva #(
+    .NAME("dma_full"),
+    .CHECK_SUBSET(0)
 ) full_port_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -212,8 +225,9 @@ bind axi_full2lite axi_full_sva #(
 // ===========================================================================
 // the fabric's own decisions
 // ===========================================================================
-bind axi_lite_dec axi_lite_dec_sva #(
-    .NAME("dec"), .N(N)
+bind soc_axi_lite_dec soc_axi_lite_dec_sva #(
+    .NAME("dec"),
+    .N(N)
 ) dec_sva_i (
     .clk_i       (clk_i),
     .rst_n_i     (rst_n_i),
@@ -237,8 +251,9 @@ bind axi_lite_dec axi_lite_dec_sva #(
     .s_arvalid_i (s_arvalid_o)
 );
 
-bind axi_lite_arb axi_lite_arb_sva #(
-    .NAME("arb"), .M(M)
+bind soc_axi_lite_arb soc_axi_lite_arb_sva #(
+    .NAME("arb"),
+    .M(M)
 ) arb_sva_i (
     .clk_i         (clk_i),
     .rst_n_i       (rst_n_i),
@@ -256,7 +271,7 @@ bind axi_lite_arb axi_lite_arb_sva #(
     .s_arvalid_i   (s_arvalid_o[0])
 );
 
-bind axi_full2lite axi_full2lite_sva #(
+bind soc_axi_full2lite soc_axi_full2lite_sva #(
     .NAME("bridge")
 ) bridge_sva_i (
     .clk_i      (clk_i),
@@ -288,8 +303,9 @@ bind axi_full2lite axi_full2lite_sva #(
 // bind only exists where mc_dma_top does, so it never sees the bridge's own
 // bench. The protocol assertions duplicate the ones above on the same wires -
 // harmless, and it keeps one checker instead of two.
-bind mc_dma_top axi_full_sva #(
-    .NAME("dma_master"), .CHECK_SUBSET(1)
+bind mc_dma_top soc_axi_full_sva #(
+    .NAME("dma_master"),
+    .CHECK_SUBSET(1)
 ) dma_master_sva_i (
     .clk_i     (clk),
     .rst_n_i   (rst_n),

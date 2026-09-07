@@ -25,7 +25,7 @@
 
 `timescale 1ns/1ps
 
-module tb_soc_stress #(
+module soc_tb_stress #(
     // The coverage floors below describe what this bench produces at the
     // nominal bus timing. Under injected latency or random backpressure the
     // schedule changes and the same program reaches different corners, so the
@@ -38,7 +38,12 @@ integer errors;
 `include "tb_check.vh"
 
 wire clk, rst_n;
-ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst (.clk_o(clk), .rst_n_o(rst_n));
+ck_rst_tb #(
+    .CK_SEMIPERIOD(5)
+) ck_rst (
+    .clk_o(clk),
+    .rst_n_o(rst_n)
+);
 
 wire       cpu_in_trap, cpu_irq, sram_irq, tmr_irq;
 wire [3:0] dma_irq;

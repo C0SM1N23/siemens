@@ -101,14 +101,14 @@ run_bench () {
         --unroll-count 64 \
         --top-module "$top" -o "V$top" \
         -f soc_rtl.f \
-        +incdir+../../../cpu/debug/hdl \
+        +incdir+../../../cpu/debug/hdl $extra \
         ../../../cpu/debug/hdl/ck_rst_tb.v \
         "../hdl/$top.v" \
         "$CPUSVA"/axi_lite_sva.sv \
-        "$CPUSVA"/cpu_core_sva.sv \
+        "$CPUSVA"/rv32i_cpu_core_sva.sv \
         "$CPUSVA"/pic_sva.sv \
-        "$CPUSVA"/bind_core_sva.sv \
-        "$SVA"/axi_full_sva.sv \
+        "$CPUSVA"/rv32i_bind_core_sva.sv \
+        "$SVA"/soc_axi_full_sva.sv \
         "$SVA"/soc_fabric_sva.sv \
         "$SVA"/soc_bind_sva.sv \
         > "build_$top.log" 2>&1 || { cat "build_$top.log"; return 1; }
@@ -122,12 +122,40 @@ run_bench () {
     return 0
 }
 
+# The map-consistency check includes both address maps, and the backpressure
+# bench builds the peripheral leg from the same window definitions the design
+# uses, so both need the RTL include path.
+MAPINC="+incdir+../../hdl +incdir+../../../cpu/debug/sim"
+HDLINC="+incdir+../../hdl"
+
 status=0
-run_bench tb_addr_map   || status=1
-run_bench tb_full2lite  || status=1
-run_bench tb_soc_top    || status=1
-run_bench tb_soc_stress  || status=1
-run_bench tb_soc_dma_len || status=1
+
+# structural checks
+run_bench soc_tb_map_consistency "$MAPINC" || status=1
+run_bench soc_tb_addr_map                  || status=1
+
+# the burst bridge, clean and with an error inside a burst
+run_bench soc_tb_full2lite                 || status=1
+run_bench soc_tb_full2lite_err             || status=1
+
+# the slaves that have no timing knob of their own
+run_bench soc_tb_perip_backpressure "$HDLINC" || status=1
+
+# the system, and the system under load
+run_bench soc_tb_top                       || status=1
+run_bench soc_tb_stress                    || status=1
+run_bench soc_tb_dma_len                   || status=1
+
+# the DMA paths no system run reached
+run_bench soc_tb_dma_irq                   || status=1
+run_bench soc_tb_dma_channels              || status=1
+run_bench soc_tb_dma_err                   || status=1
+
+# the interrupt paths no system run reached
+run_bench soc_tb_timer                     || status=1
+run_bench soc_tb_pic_sources               || status=1
+run_bench soc_tb_pic_nest                  || status=1
+run_bench soc_tb_pic_escalate              || status=1
 
 echo
 if [ $status -eq 0 ]; then

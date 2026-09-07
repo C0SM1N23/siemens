@@ -1,5 +1,5 @@
 // The SoC address map, checked against the decoder that implements it
-// (soc/hdl/axi_lite_dec.v driven from soc/hdl/soc_addr_map.vh).
+// (soc/hdl/soc_axi_lite_dec.v driven from soc/hdl/soc_addr_map.vh).
 //
 // The property under test is the one the map's own header claims: every
 // window is exactly the size of the block behind it, so an address that lands
@@ -25,7 +25,7 @@
 `timescale 1ns/1ps
 `include "soc_addr_map.vh"
 
-module tb_addr_map;
+module soc_tb_addr_map;
 
 localparam integer N = 5;                       // DMEM, SRAM, PIC, TMR, DMA
 localparam integer SD_DMEM = 0, SD_SRAM = 1, SD_PIC = 2, SD_TMR = 3, SD_DMA = 4;
@@ -58,22 +58,51 @@ wire [N-1:0]    s_awvalid, s_wvalid, s_bready, s_arvalid, s_rready;
 reg [N-1:0]    s_bvalid_q, s_rvalid_q;
 reg [N*32-1:0] s_rdata_q;
 
-axi_lite_dec #(
+soc_axi_lite_dec #(
     .N    (N),
     .BASE ({`SOC_DMA_BASE, `SOC_TMR_BASE, `SOC_PIC_BASE, `SOC_SRAM_BASE, `SOC_DMEM_BASE}),
     .MASK ({`SOC_DMA_MASK, `SOC_TMR_MASK, `SOC_PIC_MASK, `SOC_SRAM_MASK, `SOC_DMEM_MASK})
 ) dut (
-    .clk_i(clk), .rst_n_i(rst_n),
-    .m_awaddr_i(m_awaddr), .m_awprot_i(3'b0), .m_awvalid_i(m_awvalid), .m_awready_o(m_awready),
-    .m_wdata_i(m_wdata), .m_wstrb_i(m_wstrb), .m_wvalid_i(m_wvalid), .m_wready_o(m_wready),
-    .m_bresp_o(m_bresp), .m_bvalid_o(m_bvalid), .m_bready_i(m_bready),
-    .m_araddr_i(m_araddr), .m_arprot_i(3'b0), .m_arvalid_i(m_arvalid), .m_arready_o(m_arready),
-    .m_rdata_o(m_rdata), .m_rresp_o(m_rresp), .m_rvalid_o(m_rvalid), .m_rready_i(m_rready),
-    .s_awaddr_o(s_awaddr), .s_awprot_o(s_awprot), .s_awvalid_o(s_awvalid), .s_awready_i({N{1'b1}}),
-    .s_wdata_o(s_wdata), .s_wstrb_o(s_wstrb), .s_wvalid_o(s_wvalid), .s_wready_i({N{1'b1}}),
-    .s_bresp_i({N{RESP_OKAY}}), .s_bvalid_i(s_bvalid_q), .s_bready_o(s_bready),
-    .s_araddr_o(s_araddr), .s_arprot_o(s_arprot), .s_arvalid_o(s_arvalid), .s_arready_i({N{1'b1}}),
-    .s_rdata_i(s_rdata_q), .s_rresp_i({N{RESP_OKAY}}), .s_rvalid_i(s_rvalid_q), .s_rready_o(s_rready)
+    .clk_i(clk),
+    .rst_n_i(rst_n),
+    .m_awaddr_i(m_awaddr),
+    .m_awprot_i(3'b0),
+    .m_awvalid_i(m_awvalid),
+    .m_awready_o(m_awready),
+    .m_wdata_i(m_wdata),
+    .m_wstrb_i(m_wstrb),
+    .m_wvalid_i(m_wvalid),
+    .m_wready_o(m_wready),
+    .m_bresp_o(m_bresp),
+    .m_bvalid_o(m_bvalid),
+    .m_bready_i(m_bready),
+    .m_araddr_i(m_araddr),
+    .m_arprot_i(3'b0),
+    .m_arvalid_i(m_arvalid),
+    .m_arready_o(m_arready),
+    .m_rdata_o(m_rdata),
+    .m_rresp_o(m_rresp),
+    .m_rvalid_o(m_rvalid),
+    .m_rready_i(m_rready),
+    .s_awaddr_o(s_awaddr),
+    .s_awprot_o(s_awprot),
+    .s_awvalid_o(s_awvalid),
+    .s_awready_i({N{1'b1}}),
+    .s_wdata_o(s_wdata),
+    .s_wstrb_o(s_wstrb),
+    .s_wvalid_o(s_wvalid),
+    .s_wready_i({N{1'b1}}),
+    .s_bresp_i({N{RESP_OKAY}}),
+    .s_bvalid_i(s_bvalid_q),
+    .s_bready_o(s_bready),
+    .s_araddr_o(s_araddr),
+    .s_arprot_o(s_arprot),
+    .s_arvalid_o(s_arvalid),
+    .s_arready_i({N{1'b1}}),
+    .s_rdata_i(s_rdata_q),
+    .s_rresp_i({N{RESP_OKAY}}),
+    .s_rvalid_i(s_rvalid_q),
+    .s_rready_o(s_rready)
 );
 
 // ---------------------------------------------------------------------------

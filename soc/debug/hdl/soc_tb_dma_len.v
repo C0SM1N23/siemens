@@ -24,13 +24,18 @@
 
 `timescale 1ns/1ps
 
-module tb_soc_dma_len;
+module soc_tb_dma_len;
 
 integer errors;
 `include "tb_check.vh"
 
 wire clk, rst_n;
-ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst (.clk_o(clk), .rst_n_o(rst_n));
+ck_rst_tb #(
+    .CK_SEMIPERIOD(5)
+) ck_rst (
+    .clk_o(clk),
+    .rst_n_o(rst_n)
+);
 
 wire       cpu_in_trap, cpu_irq, sram_irq, tmr_irq;
 wire [3:0] dma_irq;

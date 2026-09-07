@@ -24,7 +24,7 @@
 
 `timescale 1ns/1ps
 
-module tb_full2lite;
+module soc_tb_full2lite;
 
 integer errors;
 `include "tb_check.vh"
@@ -38,7 +38,12 @@ localparam [1:0] RESP_OKAY   = 2'b00;
 localparam [1:0] RESP_SLVERR = 2'b10;
 
 wire clk, rst_n;
-ck_rst_tb #(.CK_SEMIPERIOD(5)) ck_rst (.clk_o(clk), .rst_n_o(rst_n));
+ck_rst_tb #(
+    .CK_SEMIPERIOD(5)
+) ck_rst (
+    .clk_o(clk),
+    .rst_n_o(rst_n)
+);
 
 // ---------------------------------------------------------------------------
 // full side, driven by this bench
@@ -75,39 +80,79 @@ wire [1:0]  l_bresp, l_rresp;
 wire        l_awvalid, l_awready, l_wvalid, l_wready;
 wire        l_bvalid, l_bready, l_arvalid, l_arready, l_rvalid, l_rready;
 
-axi_full2lite dut (
-    .clk_i(clk), .rst_n_i(rst_n),
-    .s_awaddr_i(f_awaddr), .s_awlen_i(f_awlen), .s_awsize_i(f_awsize),
-    .s_awburst_i(f_awburst), .s_awvalid_i(f_awvalid), .s_awready_o(f_awready),
-    .s_wdata_i(f_wdata), .s_wstrb_i(f_wstrb), .s_wlast_i(f_wlast),
-    .s_wvalid_i(f_wvalid), .s_wready_o(f_wready),
-    .s_bresp_o(f_bresp), .s_bvalid_o(f_bvalid), .s_bready_i(f_bready),
-    .s_araddr_i(f_araddr), .s_arlen_i(f_arlen), .s_arsize_i(f_arsize),
-    .s_arburst_i(f_arburst), .s_arvalid_i(f_arvalid), .s_arready_o(f_arready),
-    .s_rdata_o(f_rdata), .s_rresp_o(f_rresp), .s_rlast_o(f_rlast),
-    .s_rvalid_o(f_rvalid), .s_rready_i(f_rready),
+soc_axi_full2lite dut (
+    .clk_i(clk),
+    .rst_n_i(rst_n),
+    .s_awaddr_i(f_awaddr),
+    .s_awlen_i(f_awlen),
+    .s_awsize_i(f_awsize),
+    .s_awburst_i(f_awburst),
+    .s_awvalid_i(f_awvalid),
+    .s_awready_o(f_awready),
+    .s_wdata_i(f_wdata),
+    .s_wstrb_i(f_wstrb),
+    .s_wlast_i(f_wlast),
+    .s_wvalid_i(f_wvalid),
+    .s_wready_o(f_wready),
+    .s_bresp_o(f_bresp),
+    .s_bvalid_o(f_bvalid),
+    .s_bready_i(f_bready),
+    .s_araddr_i(f_araddr),
+    .s_arlen_i(f_arlen),
+    .s_arsize_i(f_arsize),
+    .s_arburst_i(f_arburst),
+    .s_arvalid_i(f_arvalid),
+    .s_arready_o(f_arready),
+    .s_rdata_o(f_rdata),
+    .s_rresp_o(f_rresp),
+    .s_rlast_o(f_rlast),
+    .s_rvalid_o(f_rvalid),
+    .s_rready_i(f_rready),
 
-    .m_awaddr_o(l_awaddr), .m_awprot_o(l_awprot), .m_awvalid_o(l_awvalid),
+    .m_awaddr_o(l_awaddr),
+    .m_awprot_o(l_awprot),
+    .m_awvalid_o(l_awvalid),
     .m_awready_i(l_awready),
-    .m_wdata_o(l_wdata), .m_wstrb_o(l_wstrb), .m_wvalid_o(l_wvalid),
+    .m_wdata_o(l_wdata),
+    .m_wstrb_o(l_wstrb),
+    .m_wvalid_o(l_wvalid),
     .m_wready_i(l_wready),
-    .m_bresp_i(l_bresp), .m_bvalid_i(l_bvalid), .m_bready_o(l_bready),
-    .m_araddr_o(l_araddr), .m_arprot_o(l_arprot), .m_arvalid_o(l_arvalid),
+    .m_bresp_i(l_bresp),
+    .m_bvalid_i(l_bvalid),
+    .m_bready_o(l_bready),
+    .m_araddr_o(l_araddr),
+    .m_arprot_o(l_arprot),
+    .m_arvalid_o(l_arvalid),
     .m_arready_i(l_arready),
-    .m_rdata_i(l_rdata), .m_rresp_i(l_rresp), .m_rvalid_i(l_rvalid),
+    .m_rdata_i(l_rdata),
+    .m_rresp_i(l_rresp),
+    .m_rvalid_i(l_rvalid),
     .m_rready_o(l_rready)
 );
 
-axi_lite_ram #(.WORDS(256)) ram (
-    .clk_i(clk), .rst_n_i(rst_n),
-    .s_awaddr_i(l_awaddr), .s_awprot_i(l_awprot), .s_awvalid_i(l_awvalid),
+soc_axi_lite_ram #(
+    .WORDS(256)
+) ram (
+    .clk_i(clk),
+    .rst_n_i(rst_n),
+    .s_awaddr_i(l_awaddr),
+    .s_awprot_i(l_awprot),
+    .s_awvalid_i(l_awvalid),
     .s_awready_o(l_awready),
-    .s_wdata_i(l_wdata), .s_wstrb_i(l_wstrb), .s_wvalid_i(l_wvalid),
+    .s_wdata_i(l_wdata),
+    .s_wstrb_i(l_wstrb),
+    .s_wvalid_i(l_wvalid),
     .s_wready_o(l_wready),
-    .s_bresp_o(l_bresp), .s_bvalid_o(l_bvalid), .s_bready_i(l_bready),
-    .s_araddr_i(l_araddr), .s_arprot_i(l_arprot), .s_arvalid_i(l_arvalid),
+    .s_bresp_o(l_bresp),
+    .s_bvalid_o(l_bvalid),
+    .s_bready_i(l_bready),
+    .s_araddr_i(l_araddr),
+    .s_arprot_i(l_arprot),
+    .s_arvalid_i(l_arvalid),
     .s_arready_o(l_arready),
-    .s_rdata_o(l_rdata), .s_rresp_o(l_rresp), .s_rvalid_o(l_rvalid),
+    .s_rdata_o(l_rdata),
+    .s_rresp_o(l_rresp),
+    .s_rvalid_o(l_rvalid),
     .s_rready_i(l_rready)
 );
 
