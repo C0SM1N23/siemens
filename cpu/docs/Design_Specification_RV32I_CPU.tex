@@ -1,0 +1,1645 @@
+% ===========================================================================
+% Design Specification - RV32I processor core
+% Compile: lualatex (three passes, for the table of contents)
+% ===========================================================================
+\documentclass[11pt]{article}
+
+\newcommand{\doctitle}{Design Specification --- RV32I Processor Core}
+\newcommand{\docrev}{1.0}
+\newcommand{\docdate}{3 September 2026}
+
+\newcommand{\docsubject}{RV32I processor core (three-stage pipeline)}
+\input{preamble_spec}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{28mm}
+{\color{accent}\rule{\linewidth}{1.2pt}}\\[6mm]
+{\Huge\bfseries Design Specification}\\[6mm]
+{\LARGE Processor Core for the RV32I\\[2mm]
+(RISC-V 32-Bit Integer Base) Instruction Set}\\[4mm]
+{\large Three-stage pipeline, dual master interface\\
+on AXI4-Lite (Advanced eXtensible Interface, revision 4, Lite subset)}\\[5mm]
+{\color{accent}\rule{\linewidth}{1.2pt}}
+\vfill
+\identblock{Design specification}
+\vspace{16mm}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ===========================================================================
+\section{Introduction}
+
+\subsection{Purpose of the document}
+
+This document specifies the design of the RV32I processor core: its
+architecture, the responsibilities of its functional blocks, the interfaces it
+presents to the rest of the system, its software-visible register set, and the
+behaviour a system integrator must rely on.
+
+Where the core is narrower than the instruction set architecture (ISA) it is
+based on, the difference is stated at the point where it applies.
+
+\subsection{Validity of the document}
+
+The document is valid for the processor core as currently implemented,
+comprising the fetch stage, the combined decode and execute stage, the
+writeback stage, and the two bus master interfaces.
+
+Blocks the core connects to are described only as far as the contract at the
+boundary between them and the core requires.
+
+\subsection{Definitions and terms of abbreviations}
+
+\begin{longtable}{@{}L{0.13\linewidth}L{0.79\linewidth}@{}}
+\toprule
+\textbf{Term} & \textbf{Definition} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Term} & \textbf{Definition} \\
+\midrule
+\endhead
+ALU & Arithmetic Logic Unit. The block that performs the arithmetic, logical,
+       shift and comparison operations of the instruction set.  \\
+AMBA & Advanced Microcontroller Bus Architecture. The ARM bus interface
+       family that AXI4-Lite belongs to.  \\
+AXI4-Lite & The register-access subset of the AMBA Advanced eXtensible
+       Interface, revision 4. One address and one data word per transaction,
+       no bursts, no transaction identifiers.  \\
+BHT & Branch History Table. The array holding the recorded direction of a
+       previously executed control transfer.  \\
+BTB & Branch Target Buffer. The array holding the recorded target address of a
+       previously executed control transfer.  \\
+Bubble & A pipeline slot that carries no instruction. Marked by a cleared
+       valid bit in a pipeline register.  \\
+CSR & Control and Status Register. The software-visible register space defined
+       by the RISC-V privileged architecture, accessed by dedicated
+       instructions rather than by load and store.  \\
+ISA & Instruction Set Architecture.  \\
+M-mode & Machine mode. The highest privilege level of the RISC-V privileged
+       architecture, and the only one implemented by this core.  \\
+PC & Program Counter.  \\
+RAS & Return Address Stack. A small stack of return addresses used to predict
+       the target of function returns.  \\
+RV32I & The 32-bit integer base instruction set of the RISC-V ISA.  \\
+WARL & Write Any Values, Reads Legal Values. A register field that accepts any
+       written value without raising an exception but is only required to read
+       back a legal one.  \\
+WFI & Wait For Interrupt. The instruction that suspends instruction execution
+       until an interrupt becomes pending.  \\
+WPRI & Write Preserve, Read Ignore. A reserved register field that reads as
+       zero and ignores writes.  \\
+\bottomrule
+\end{longtable}
+
+\subsection{Relationship with other documents}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}L{0.30\linewidth}L{0.60\linewidth}@{}}
+\toprule
+\textbf{Document} & \textbf{Relationship} \\
+\midrule
+Verification Specification\newline --- RV32I Processor Core &
+  Specifies the verification environment applied to the design described here,
+  and what that environment establishes. \\
+\addlinespace
+The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA, version
+20191213 &
+  Defines the RV32I base instruction set implemented by the core. \\
+\addlinespace
+The RISC-V Instruction Set Manual, Volume II: Privileged Architecture, version
+20211203 &
+  Defines the M-mode privileged subset, the CSR space and trap behaviour that
+  the core implements. \\
+\addlinespace
+AMBA AXI and ACE Protocol Specification, ARM IHI 0022E &
+  Defines the AXI4-Lite protocol used by both bus master ports. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Notes on the notation used}
+
+\begin{itemize}[itemsep=2pt,topsep=3pt]
+\item Fixed-width type denotes a signal, a register or a literal value, for
+      example \sig{ARVALID} or \reg{mstatus}.
+\item Italic type marks emphasis; bold type marks a run-in heading.
+\item Numeric constants are hexadecimal when prefixed \texttt{0x}, otherwise
+      decimal. Bit ranges are written most significant bit first, as
+      \texttt{[31:16]}.
+\item The pipeline stages are referred to as S1 (fetch), S2 (decode and
+      execute) and S3 (writeback) throughout.
+\item ``The core'' means the processor core specified by this document. ``The
+      system'' means whatever the core is integrated into.
+\item In interface tables, direction is given from the point of view of the
+      core: an output leaves the core.
+\end{itemize}
+
+% ===========================================================================
+\section{Specifications and system integration}
+
+The core is a bus master only. It contains no memory-mapped registers, no
+memory and no interconnect, and it therefore cannot operate standalone. A
+system integrating it must supply the following.
+
+\begin{table}[H]
+\centering
+\caption{What the core requires from the system}
+\label{tab:integration}
+\small
+\begin{tabular}{@{}L{0.26\linewidth}L{0.64\linewidth}@{}}
+\toprule
+\textbf{Resource} & \textbf{Requirement} \\
+\midrule
+Instruction memory &
+  An AXI4-Lite slave reachable on the instruction port, holding executable code
+  at the reset vector. The port issues reads only. \\
+\addlinespace
+Data memory and\newline peripherals &
+  AXI4-Lite slaves reachable on the data port. The core issues no transaction
+  outside what the running program requests, so the address map is entirely a
+  software concern; the core itself decodes no addresses. \\
+\addlinespace
+Interrupt controller &
+  A block that resolves external interrupt sources, presents one prioritised
+  request together with its source number, consumes the claim and
+  end-of-interrupt pulses the core emits, and reports its full pending set.
+  Section~\ref{sec:irqiface} specifies this interface. \\
+\addlinespace
+Clock and reset &
+  One clock. One asynchronous, active-low reset, released synchronously or
+  asynchronously; the core contains no clock-domain crossing and no internally
+  generated clock or reset. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The core implements the RV32I base integer instruction set and the M-mode
+subset of the privileged architecture needed for precise traps and external
+interrupts. No standard extension is implemented: there is no hardware
+multiply or divide, no floating point, no atomic instructions and no
+compressed instruction support. Both bus ports comply with AXI4-Lite and use
+32-bit addresses and 32-bit data.
+
+The core is written in Verilog--2005 within the synthesisable subset, but the
+current target is behavioural simulation; see Section~\ref{sec:bugs}.
+
+% ===========================================================================
+\section{Overview of overall structure}
+\label{sec:overview}
+
+\subsection{Execution model}
+
+The core executes RV32I in three pipeline stages.
+
+\begin{table}[H]
+\centering
+\caption{Pipeline stages}
+\label{tab:stages}
+\small
+\begin{tabular}{@{}clL{0.60\linewidth}@{}}
+\toprule
+\textbf{Stage} & \textbf{Name} & \textbf{Work performed} \\
+\midrule
+S1 & Fetch &
+  Program counter generation, the instruction bus read, and the branch
+  prediction lookup for the instruction being offered. \\
+S2 & Decode and execute &
+  Decode, register read, arithmetic, branch resolution, CSR access, the
+  complete data bus transaction, and every exception and interrupt decision. \\
+S3 & Writeback &
+  Writes the result into the register file. No other effect. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Placing decode, execution and the memory access in a single stage means an
+instruction either completes in full or produces no architectural effect at
+all. That is what makes traps precise without any recovery mechanism: no
+half-completed instruction ever exists for a trap to repair. The cost is a long
+combinational path through decode, the ALU, address formation and the alignment
+check, which would constrain the achievable clock frequency in a synthesised
+implementation.
+
+\subsection{Block structure}
+
+\begin{figure}[H]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[x=1mm,y=1mm,font=\small]
+  \begin{scope}[on background layer]
+    \fill[boxbg]     (-16,-72) rectangle (22,13);
+    \fill[boxbg!55]  (26,-72)  rectangle (128,13);
+    \fill[boxbg]     (132,-72) rectangle (183,13);
+  \end{scope}
+  \node[font=\small\bfseries,color=accent] at (3,9)   {S1 fetch};
+  \node[font=\small\bfseries,color=accent] at (77,9)  {S2 decode + execute};
+  \node[font=\small\bfseries,color=accent] at (159,9) {S3 writeback};
+
+  \node[blk,minimum width=32,minimum height=12] (fu) at (3,-6)
+        {instruction fetch\\\scriptsize PC, instruction bus master};
+  \node[blk,minimum width=32,minimum height=12] (bp) at (3,-30)
+        {branch predictor\\\scriptsize BTB / BHT + RAS};
+
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=64,inner sep=0] (ifdx) at (24,-30) {};
+  \node[rotate=90,font=\tiny] at (24,-30) {S1/S2 register};
+  \node[draw=rulegrey,fill=boxbg,minimum width=7,minimum height=64,inner sep=0] (dxwb) at (133,-30) {};
+  \node[rotate=90,font=\tiny] at (133,-30) {S2/S3 register};
+
+  \node[blk,minimum width=24,minimum height=12] (dec) at (42,-6)
+        {decode\\\scriptsize immediate generation};
+  \node[blk,minimum width=24,minimum height=9]  (ctl) at (42,-24) {control};
+  \node[blk,minimum width=24,minimum height=12] (rf)  at (76,-6)
+        {register file\\\scriptsize 32$\times$32};
+  \node[blk,minimum width=24,minimum height=9]  (fwd) at (76,-24) {forwarding mux};
+
+  \node[blk,minimum width=26,minimum height=10] (alu) at (112,-6)  {arithmetic path};
+  \node[blk,minimum width=26,minimum height=10] (bu)  at (112,-22) {branch resolution};
+  \node[blk,minimum width=26,minimum height=11] (ldst) at (112,-40)
+        {load/store unit\\\scriptsize data bus master};
+  \node[blk,minimum width=26,minimum height=11] (csr) at (112,-56)
+        {CSR file\\\scriptsize $+$ trap state};
+
+  \node[blkf,minimum width=28,minimum height=9] (hz)  at (42,-46) {pipeline control};
+  \node[blkf,minimum width=30,minimum height=9] (exc) at (76,-46) {exception detect};
+
+  \node[blk,minimum width=30,minimum height=10] (wb) at (161,-22) {writeback mux};
+
+  \draw[flow] (fu.east) -- (ifdx.west|-fu);
+  \draw[flow] (ifdx.east|-dec) -- (dec.west);
+  \draw[flow] (ifdx.east|-ctl) -- (ctl.west);
+  \draw[flow] (dec.east) -- (rf.west);
+  \draw[flow] (rf.south) -- (fwd.north);
+
+  \draw[flow,-] (fwd.east) -- (94,-24);
+  \draw[thick,draw=accent] (94,-6) -- (94,-56);
+  \foreach \y in {-6,-22,-40,-56} \draw[flow] (94,\y) -- (99,\y);
+
+  \draw[flow] (alu.east) -- (dxwb.west|-alu);
+  \draw[flow] (bu.east)  -- (dxwb.west|-bu);
+  \draw[flow] (ldst.east) -- (dxwb.west|-ldst);
+  \draw[flow] (csr.east) -- (dxwb.west|-csr);
+
+  \draw[flow,-] (dxwb.east|-alu) -- (141,-6);
+  \draw[flow,-] (dxwb.east|-bu)  -- (141,-22);
+  \draw[flow,-] (dxwb.east|-ldst) -- (141,-40);
+  \draw[flow,-] (dxwb.east|-csr) -- (141,-56);
+  \draw[thick,draw=accent] (141,-6) -- (141,-56);
+  \draw[flow] (141,-22) -- (wb.west);
+
+  \draw[flow] (bp.north) -- (fu.south) node[lbl,midway,right=1mm]{prediction};
+  \draw[flow] (127,-22) -- (127,-64) -- (3,-64) -- (bp.south);
+  \node[lbl,above=0.5mm] at (34,-64) {update at commit};
+
+  \draw[flowd] (bu.north) -- (112,-14) -- (96,-14) -- (96,5) -- (3,5) -- (fu.north);
+  \node[lbl,above=0.5mm] at (34,5) {redirect};
+
+  \draw[flow] (wb.south) -- (161,-68) -- (58,-68) -- (58,-24) -- (fwd.west);
+  \node[lbl,above=0.5mm] at (100,-68) {S3 $\to$ S2 forwarding};
+\end{tikzpicture}}
+\caption{Core block structure. The two vertical bars are the pipeline
+registers; everything between them belongs to one stage. Instructions travel
+left to right. Two paths run backwards: the writeback value returns to the
+operand mux so that an instruction in S2 can use a result that has not yet
+reached the register file, and the resolved outcome of a control transfer
+returns to the fetch stage, both as a redirect of the fetch address and as an
+update of the predictor.}
+\label{fig:blocks}
+\end{figure}
+
+The operand bus drawn as a vertical rail in S2 distributes the two register
+operands, after forwarding, to all four execution blocks; the result rail on
+the right collects their results into the pipeline register. Only one of the
+four produces the value that is finally written back, selected by the writeback
+mux according to the instruction class.
+
+The blocks divide into two groups, which matters when judging what a change to
+the instruction set would cost. The register file, the arithmetic path, the
+load/store unit, the pipeline control and the two bus masters are generic: they
+are parameterised by width and by operation code, and nothing in them encodes
+which instruction set is being executed. Decode, immediate generation, branch
+resolution, exception detection and the CSR file are specific to RV32I and to
+the M-mode privileged subset; they are where the instruction encoding, the
+cause numbering and the register addresses live.
+
+\subsection{Operating modes}
+
+The core has no mode register and no software-selectable modes. It is always in
+M-mode. Its cycle-by-cycle behaviour is one of four conditions.
+
+\begin{table}[H]
+\centering
+\caption{Operating conditions}
+\label{tab:modes}
+\small
+\begin{tabular}{@{}L{0.20\linewidth}L{0.70\linewidth}@{}}
+\toprule
+\textbf{Condition} & \textbf{Behaviour} \\
+\midrule
+Running &
+  One instruction completes S2 per cycle. Both bus ports may be active
+  simultaneously, each with at most one outstanding transaction. \\
+\addlinespace
+Stalled &
+  S2 holds its instruction. Two conditions cause this: a data transaction in
+  flight, and a sleeping wait-for-interrupt instruction. S3 receives bubbles
+  for the duration, so nothing commits twice. \\
+\addlinespace
+Fetch starved &
+  S1 has no instruction to offer. S2 is not stalled; it advances with a bubble.
+  Throughput is lost, but no state is held. \\
+\addlinespace
+Sleeping &
+  A committed wait-for-interrupt instruction is waiting for a locally enabled
+  interrupt to become pending. Instruction fetch is suspended, so the
+  instruction bus goes quiet. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data flow}
+
+An instruction is fetched by S1 over the instruction bus, together with the
+prediction made for it. Both travel to S2 in the pipeline register. In S2 the
+instruction is decoded, its operands are read from the register file (bypassed
+from S3 where necessary), and exactly one of the execution blocks produces its
+result. A load or store instruction additionally runs a complete data bus
+transaction inside S2, stalling the stage until the response handshake
+completes. At the end of S2 the instruction either commits --- passing its
+result to S3, updating the predictor, and updating the CSR file if it is a CSR
+instruction --- or is squashed by a trap. S3 writes the committed result into
+the register file and has no other effect.
+
+Three events resolved in S2 change the fetch path: a trap, a return from trap,
+and a mispredicted control transfer. All three are delivered to S1 as a single
+redirect with a target address.
+
+% ===========================================================================
+\section{Interfaces}
+
+\subsection{Hardware interface}
+\label{sec:hwiface}
+
+All ports are synchronous to the single clock input except the reset, which is
+asynchronously asserted. Every port is digital and unidirectional; the core
+drives no bidirectional, tri-state or analogue signal.
+
+\begin{table}[H]
+\centering
+\caption{Port summary. Direction is given from the point of view of the core; a
+width is in bits.}
+\label{tab:ports}
+\small
+\begin{tabular}{@{}L{0.16\linewidth}L{0.16\linewidth}C{0.075\linewidth}C{0.07\linewidth}L{0.33\linewidth}@{}}
+\toprule
+\textbf{Interface} & \textbf{Signals} & \textbf{Width} & \textbf{Dir.} & \textbf{Purpose} \\
+\midrule
+Clock & Clock & 1 & in & Single clock for all sequential logic \\
+\addlinespace
+Reset & Reset & 1 & in & Asynchronous, active low \\
+\addlinespace
+Instruction bus,\newline read address & Address\newline Protection type\newline Valid\newline Ready & 32\newline 3\newline 1\newline 1 & out\newline out\newline out\newline in & Requests the next instruction; the slave replies on Ready \\
+\addlinespace
+Instruction bus,\newline read data & Data\newline Response code\newline Valid\newline Ready & 32\newline 2\newline 1\newline 1 & in\newline in\newline in\newline out & Returns the instruction word and its response code \\
+\addlinespace
+Data bus,\newline write address & Address\newline Protection type\newline Valid\newline Ready & 32\newline 3\newline 1\newline 1 & out\newline out\newline out\newline in & Requests a store \\
+\addlinespace
+Data bus,\newline write data & Data\newline Byte strobes\newline Valid\newline Ready & 32\newline 4\newline 1\newline 1 & out\newline out\newline out\newline in & Carries the value and the live byte lanes \\
+\addlinespace
+Data bus,\newline write response & Response code\newline Valid\newline Ready & 2\newline 1\newline 1 & in\newline in\newline out & Completes the store \\
+\addlinespace
+Data bus,\newline read address & Address\newline Protection type\newline Valid\newline Ready & 32\newline 3\newline 1\newline 1 & out\newline out\newline out\newline in & Requests a load \\
+\addlinespace
+Data bus,\newline read data & Data\newline Response code\newline Valid\newline Ready & 32\newline 2\newline 1\newline 1 & in\newline in\newline in\newline out & Returns the loaded word and its response code \\
+\addlinespace
+Interrupt & Request\newline Source number\newline Pending set & 1\newline 4\newline 16 & in\newline in\newline in & One resolved request, its source, and the controller's full pending state \\
+\addlinespace
+ & Enable mask\newline Claim\newline End of interrupt\newline Trap active & 16\newline 1\newline 1\newline 1 & out\newline out\newline out\newline out & The core's enable state, its two handshake pulses, and its trap state \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The sections below give the behaviour of each interface and the timing at which
+it is exercised.
+
+\subsubsection{Clock and reset}
+
+All sequential logic is triggered on the rising clock edge. The reset is
+asynchronously asserted and active low.
+
+Every flip-flop in the core is reset, including the pipeline register payloads
+and the predictor arrays, which a valid bit would otherwise cover. The rule
+applied is that no register may leave reset holding an undefined value, so that
+a two-state and a four-state simulation agree from the first cycle and no bus
+output or architectural read can ever return an undefined value. The reset state
+of the architecturally visible elements is listed in the annex.
+
+Bus request outputs are held inactive for as long as reset is asserted, as the
+bus protocol requires.
+
+\subsubsection{Instruction bus interface}
+
+An AXI4-Lite master port restricted to the read channels. The core never
+writes instruction memory, so the write channels do not exist on this port.
+
+\begin{table}[H]
+\centering
+\caption{Instruction port characteristics}
+\label{tab:iport}
+\small
+\begin{tabular}{@{}L{0.30\linewidth}L{0.60\linewidth}@{}}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Channels & Read address, read data. \\
+Outstanding transactions & At most one. \\
+Address alignment & Always word aligned. \\
+Protection type & Constant: instruction access, privileged, non-secure. \\
+Response handling & An error response does not stall the port. The returned
+  word is delivered to S2 marked as faulted and raises an instruction access
+  fault there, so a wrong-path fetch error is discarded before it can trap. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Back-to-back fetching is supported: the next read address is presented in the
+same cycle the current read data is accepted, so a slave that answers in one
+cycle sustains one instruction per cycle.
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=3pt,xscale=1.75,
+                        timing/d/text/.style={font=\tiny}]
+  clk       & 12{C} \\
+  ARVALID   & 12H \\
+  ARREADY   & 12H \\
+  ARADDR    & 2D{\tiny PC} 2D{\tiny PC+4} 2D{\tiny PC+8} 2D{\tiny PC+12} 4U \\
+  RVALID    & 2L 10H \\
+  RREADY    & 2L 10H \\
+  RDATA     & 4U 2D{\tiny instr 0} 2D{\tiny instr 1} 2D{\tiny instr 2} 2U \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,8,10}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{Back-to-back instruction fetch against a slave with no wait states.
+A new address is presented every cycle while the response for the previous one
+arrives in parallel, one cycle behind. The sequence to observe is that
+\sig{ARVALID} never drops between transactions: the address for the next fetch
+is issued in the same cycle the current read data is accepted.}
+\label{fig:ibusb2b}
+\end{figure}
+
+\subsubsection{Data bus interface}
+
+A full AXI4-Lite master port. All five channels are used.
+
+\begin{table}[H]
+\centering
+\caption{Data port characteristics}
+\label{tab:dport}
+\small
+\begin{tabular}{@{}L{0.30\linewidth}L{0.60\linewidth}@{}}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Channels & All five: write address, write data, write response, read address,
+  read data. \\
+Outstanding transactions & At most one, and never a read and a write at the
+  same time. \\
+Address alignment & Byte addresses are legal. A misaligned access is detected
+  before issue and traps without producing any transaction, so every address
+  that reaches the port is naturally aligned for its size. \\
+Byte enables & Byte and half-word stores are performed with byte strobes, not
+  by read-modify-write. The strobe pattern is one of the seven legal
+  byte, half-word and word shapes. \\
+Protection type & Constant: data access, privileged, non-secure. \\
+Response handling & An error response raises a load or store access fault in
+  S2. The instruction does not commit. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=2pt,xscale=1.05]
+  clk        & 12{C} \\
+  ARVALID    & 2L 2H 8L \\
+  ARREADY    & 2L 2H 8L \\
+  ARADDR     & 2U 2D{address} 8U \\
+  RVALID     & 6L 2H 4L \\
+  RREADY     & 4L 4H 4L \\
+  RDATA      & 6U 2D{data} 4U \\
+  S2 stalled & 2L 6H 4L \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,8}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{A load against a slave that takes two cycles to answer. The read data
+channel is only made ready after the address handshake has completed, and the
+decode and execute stage remains stalled until the data beat is accepted --- not
+until it merely arrives. This is what keeps the transaction indivisible with
+respect to interrupts.}
+\label{fig:dbusread}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=2pt,xscale=1.05]
+  clk        & 12{C} \\
+  AWVALID    & 2L 2H 8L \\
+  AWREADY    & 2L 2H 8L \\
+  WVALID     & 2L 4H 6L \\
+  WREADY     & 4L 2H 6L \\
+  WSTRB      & 2U 4D{strobes} 6U \\
+  BVALID     & 8L 2H 2L \\
+  BREADY     & 6L 4H 2L \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,8,10}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{A store where the slave accepts the address one cycle before the data.
+The write response channel is only made ready once both the address and the
+data handshakes have completed, which is why it rises later than the address
+handshake alone would suggest. The two address and data channels are tracked
+independently and may complete in either order.}
+\label{fig:dbuswrite}
+\end{figure}
+
+\subsubsection{Interrupt interface}
+\label{sec:irqiface}
+
+The core has one external interrupt input, presented as a single prioritised
+request together with the number of the source that produced it. Resolution
+between sources is performed outside the core.
+
+\begin{table}[H]
+\centering
+\caption{Interrupt interface}
+\label{tab:irqports}
+\small
+\begin{tabular}{@{}L{0.20\linewidth}cL{0.56\linewidth}@{}}
+\toprule
+\textbf{Signal group} & \textbf{Dir.} & \textbf{Description} \\
+\midrule
+Request & in & One prioritised interrupt request from the interrupt
+  controller. Level sensitive. \\
+Source number & in & Four bits identifying which of the 16 external sources the
+  request belongs to. Selects the enable bit applied to the request, and the
+  trap cause reported to software. \\
+Pending set & in & The interrupt controller's complete pending mask, 16 bits.
+  Presented to software as the machine external half of the pending register,
+  so a handler can see the sources queued behind the one being served. \\
+Enable mask & out & The machine external half of the interrupt-enable register,
+  16 bits, so the external resolver can skip sources this core has masked. \\
+Claim & out & One-cycle pulse in the cycle after the core accepts an
+  interrupt. \\
+End of interrupt & out & One-cycle pulse when a return from trap closes an
+  interrupt level. A return that closes a synchronous exception emits no
+  pulse. \\
+Trap active & out & High while any trap level is open. Provided for
+  observability; the core does not require it to be consumed. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+An interrupt is accepted only when all of the following hold in the same cycle:
+a valid instruction is present in S2, no data transaction is in flight, the
+global interrupt enable is set, and the enable bit selected by the source
+number is set. The middle condition is what makes an accepted interrupt land on
+an instruction boundary and never inside a bus transaction, so the preempted
+instruction can be re-executed unchanged on return.
+
+\begin{figure}[H]
+\centering
+\begin{tikztimingtable}[timing/slope=0,timing/coldist=2pt,xscale=1.05]
+  clk              & 14{C} \\
+  request          & 2L 12H \\
+  accepted in S2   & 4L 2H 8L \\
+  claim            & 6L 2H 6L \\
+  trap active      & 6L 8H \\
+  end of interrupt & 12L 2H \\
+  \extracode
+  \begin{pgfonlayer}{background}
+    \vertlines[help lines]{2,4,6,12}
+  \end{pgfonlayer}
+\end{tikztimingtable}
+\caption{Interrupt claim and return. The request is level sensitive and is held
+by the controller. The core decides to accept it in S2; the claim pulse is
+registered and therefore appears one cycle later, at which point the trap-active
+output rises. The end-of-interrupt pulse follows the return instruction that
+closes this interrupt level. Both pulses are exactly one cycle wide.}
+\label{fig:irqhs}
+\end{figure}
+
+\subsection{Software interface}
+\label{sec:swiface}
+
+The core exposes no memory-mapped registers. Its entire software interface is
+the CSR space, accessed by the CSR instructions. Reading an unimplemented CSR,
+or writing a read-only one, raises an illegal instruction exception rather than
+a bus error, because the CSR space is internal to the core.
+
+\subsubsection{Register map}
+
+\begin{longtable}{@{}L{0.24\linewidth}L{0.17\linewidth}L{0.45\linewidth}@{}}
+\caption{Implemented control and status registers}\label{tab:csrmap}\\
+\toprule
+\textbf{Address and name} & \textbf{Access / reset} & \textbf{Function} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Address and name} & \textbf{Access / reset} & \textbf{Function} \\
+\midrule
+\endhead
+\texttt{0x300}\newline \reg{mstatus} & read/write, 0 & Global interrupt enable and its saved copy. \\
+\texttt{0x301}\newline \reg{misa} & WARL, \texttt{0x4000\_0100} & Reports a 32-bit core implementing the integer base set. Writes are accepted and ignored. \\
+\texttt{0x304}\newline \reg{mie} & read/write, 0 & Per-source interrupt enables, in bits \texttt{[31:16]}. Bits \texttt{[15:0]} read zero and are not writable. \\
+\texttt{0x305}\newline \reg{mtvec} & read/write, 0 & Trap vector base and mode. \\
+\texttt{0x320}\newline --- & absent & Counter inhibit is deliberately not implemented; an access raises an illegal instruction exception. \\
+\texttt{0x323--0x33F}\newline \reg{mhpmevent3..31} & read-only zero & Event selectors, hardwired to zero. \\
+\texttt{0x340}\newline \reg{mscratch} & read/write, 0 & Scratch word for the trap handler. \\
+\texttt{0x341}\newline \reg{mepc} & read/write, 0 & Trap return address. The two least significant bits always read zero. \\
+\texttt{0x342}\newline \reg{mcause} & read/write, 0 & Cause of the most recent trap. \\
+\texttt{0x343}\newline \reg{mtval} & read/write, 0 & Payload associated with the most recent trap. \\
+\texttt{0x344}\newline \reg{mip} & read-only, 0 & Pending interrupts, bits \texttt{[31:16]}, driven by the interrupt controller. \\
+\texttt{0xB00}\newline \reg{mcycle} & read/write, 0 & Free-running cycle counter, low half. \\
+\texttt{0xB02}\newline \reg{minstret} & read/write, 0 & Retired instruction counter, low half. \\
+\texttt{0xB03--0xB07}\newline \reg{mhpmcounter3..7} & read/write, 0 & Performance counters, low halves. See Table~\ref{tab:hpm}. \\
+\texttt{0xB08--0xB1F}\newline \reg{mhpmcounter8..31} & read-only zero & Not provided; read zero and swallow writes. \\
+\texttt{0xB80--0xB87}\newline upper halves & read/write, 0 & Upper halves of the counters above. \\
+\texttt{0xB88--0xB9F}\newline upper halves & read-only zero & Upper halves of the counters that are not provided. \\
+\texttt{0xF11--0xF13}\newline \reg{mvendorid}, \reg{marchid},\ \reg{mimpid} & read-only, 0 & Identification registers, all zero. \\
+\texttt{0xF14}\newline \reg{mhartid} & read-only & Hart identifier; takes the value of the corresponding parameter. \\
+\bottomrule
+\end{longtable}
+
+Any CSR address not listed above is unimplemented. A read or a write to it
+raises an illegal instruction exception.
+
+\subsubsection{Register fields}
+
+\begin{table}[H]
+\centering
+\caption{\reg{mstatus} fields. All other bit positions are WPRI: they read zero
+and ignore writes.}
+\label{tab:mstatus}
+\small
+\begin{tabular}{@{}llL{0.60\linewidth}@{}}
+\toprule
+\textbf{Bits} & \textbf{Field} & \textbf{Meaning} \\
+\midrule
+\texttt{[3]}     & MIE  & Global interrupt enable. Cleared by hardware on trap entry. \\
+\texttt{[7]}     & MPIE & The value MIE had before the most recent trap entry. Restored into MIE by a return from trap, which then sets MPIE. \\
+\texttt{[12:11]} & MPP  & Previous privilege, hardwired to machine mode. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{\reg{mtvec} fields}
+\label{tab:mtvec}
+\small
+\begin{tabular}{@{}llL{0.60\linewidth}@{}}
+\toprule
+\textbf{Bits} & \textbf{Field} & \textbf{Meaning} \\
+\midrule
+\texttt{[31:2]} & BASE & Trap handler base address, word aligned. Fully writable. \\
+\texttt{[1:0]}  & MODE & \texttt{0} = direct, \texttt{1} = vectored. This field is WARL: the reserved encodings \texttt{2} and \texttt{3} are accepted without trapping but read back as direct mode, so a read never reports a mode the core does not implement. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In direct mode every trap enters at BASE. In vectored mode an interrupt enters
+at BASE plus four times its cause code, while a synchronous exception still
+enters at BASE.
+
+\begin{table}[H]
+\centering
+\caption{\reg{mcause} encoding}
+\label{tab:mcause}
+\small
+\begin{tabular}{@{}llL{0.60\linewidth}@{}}
+\toprule
+\textbf{Bits} & \textbf{Field} & \textbf{Meaning} \\
+\midrule
+\texttt{[31]}   & Interrupt & Set for an interrupt, clear for a synchronous exception. \\
+\texttt{[30:5]} & ---       & Zero. \\
+\texttt{[4:0]}  & Code      & Cause code. Synchronous codes are listed in Table~\ref{tab:causes}; an external interrupt from source $n$ reports code $16+n$. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Performance counters}
+
+Every counter is architecturally 64 bits and is read through a pair of 32-bit
+CSR addresses. Software may write either half. A write replaces the addressed
+half while the other half still takes that cycle's increment, so a carry is not
+lost. Within the written half the CSR operation decides what happens to the
+event of that cycle: a plain write replaces the value outright and the event is
+discarded, whereas a set or clear operation applies to the already incremented
+value and therefore keeps it.
+
+\begin{table}[H]
+\centering
+\caption{Counted events}
+\label{tab:hpm}
+\small
+\begin{tabular}{@{}lL{0.66\linewidth}@{}}
+\toprule
+\textbf{Counter} & \textbf{Event} \\
+\midrule
+\reg{mcycle}          & Every clock cycle. \\
+\reg{minstret}        & Every instruction that commits to writeback. \\
+\reg{mhpmcounter3}    & Mispredicted control transfers. \\
+\reg{mhpmcounter4}    & Cycles in which S2 had no instruction to execute. \\
+\reg{mhpmcounter5}    & Cycles in which a data transaction was in flight. \\
+\reg{mhpmcounter6}    & Trap entries, of either kind. \\
+\reg{mhpmcounter7}    & Cycles spent sleeping in wait-for-interrupt. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The event assignment is fixed in hardware. The event selector registers
+therefore exist only as hardwired zero, and there is no counter inhibit
+register; all counters run at all times.
+
+\subsubsection{Programming sequences}
+
+The procedures below follow from the register behaviour above and from the trap
+sequencing described in Section~\ref{sec:trapseq}.
+
+\paragraph{Preparing for traps.} Write \reg{mtvec} before enabling anything that
+can trap. Until it is written it reads zero, so a trap taken before that point
+enters at address zero. In vectored mode the table must have an entry for every
+cause that can occur: an external interrupt from source $n$ enters at
+BASE~$+$~$4\times(16+n)$, so the sixteen external entries occupy the words at
+offset 64 to 124, while every synchronous exception enters at BASE itself.
+
+\paragraph{Enabling an external interrupt.} Three independent enables must all
+permit the source, and they are checked in different places:
+
+\begin{enumerate}[itemsep=2pt,topsep=3pt]
+\item the enable inside the interrupt controller, which decides whether the
+      source is resolved at all;
+\item the corresponding bit of \reg{mie}, which the core also exports to the
+      controller so that its resolver skips sources this core has masked;
+\item \reg{mstatus}.MIE, the global enable.
+\end{enumerate}
+
+The order of the three writes does not create a spurious trap in either
+direction, because a request that passes only some of them is simply not
+accepted. Setting the global enable last is nonetheless the safer habit, since
+it is the point after which a handler can actually be entered.
+
+\paragraph{Inside a handler.} On entry the core has already recorded
+\reg{mepc}, \reg{mcause} and \reg{mtval}, copied \reg{mstatus}.MIE into MPIE
+and cleared MIE. A handler therefore starts with interrupts globally disabled,
+and \textbf{must set MIE itself if it wants to be preemptable}. Bit 31 of
+\reg{mcause} distinguishes an interrupt from a synchronous exception; for an
+interrupt the low bits give $16+n$, for an exception they give the cause code
+from Table~\ref{tab:causes}.
+
+\paragraph{Leaving a handler.} Return with the return-from-trap instruction, not
+with a jump. The instruction is what restores MIE from MPIE and what closes the
+trap level; it is also what emits the end-of-interrupt pulse to the controller
+when the level being closed was an interrupt. A handler that returns by jumping
+leaves the level open, and the controller will hold that source in service
+indefinitely.
+
+\paragraph{Reading a 64-bit counter.} Each counter is read through two 32-bit
+addresses and there is no atomic snapshot, so the low half can wrap between the
+two reads. The standard sequence applies: read the high half, read the low half,
+read the high half again, and repeat if the two high reads differ.
+
+\paragraph{Reading a register without writing it.} A set or clear operation with
+a zero source register --- or a zero immediate in the immediate forms --- is
+architecturally a pure read and is treated as one here: it does not count as a
+write, so it does not raise an exception on a read-only register. This is the
+way to sample \reg{mip} or the identification registers. A read/write operation
+always counts as a write, even when its destination is the zero register, and
+will therefore raise an exception on a read-only register.
+
+\paragraph{Waiting for an interrupt.} The wait instruction suspends execution
+until a source enabled in \reg{mie} becomes pending. The global enable is
+deliberately not part of the wake condition. The consequence is two different
+behaviours: with the global enable set, the wake is taken as a normal interrupt
+and \reg{mepc} points at the instruction \emph{after} the wait, so the return
+does not re-enter it; with the global enable clear, the wait simply completes as
+a no-operation and execution continues in line, with no trap and no handler
+entry.
+
+% ===========================================================================
+\section{Reuse and reusability}
+
+No component of the core is sourced from elsewhere: every block is written for
+this design, so there is no third-party or externally specified element whose
+own documentation would have to be consulted.
+
+The core is written as a self-contained, parameterised block with no shared or
+global state, and is instantiable more than once in the same system. Its
+submodules are individually reusable in the sense that each has a narrow
+interface and no hidden dependency on the others, but they are not intended as
+standalone deliverables.
+
+\begin{table}[H]
+\centering
+\caption{Parameters}
+\label{tab:params}
+\small
+\begin{tabular}{@{}L{0.20\linewidth}L{0.16\linewidth}L{0.52\linewidth}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Effect} \\
+\midrule
+Reset vector & \texttt{0x0000\_0000} & The first address fetched after reset. \\
+\addlinespace
+Hart identifier & \texttt{0} & The value read from \reg{mhartid}. Lets software
+  running on several instances distinguish them, which is what makes a
+  multi-core configuration usable. \\
+\addlinespace
+Predictor entries & \texttt{128} & Depth of the branch target and history
+  arrays. Must be a power of two. Affects prediction accuracy and register
+  count only; no architectural behaviour depends on it. \\
+\addlinespace
+Return stack depth & \texttt{8} & Depth of the return address stack. Zero
+  removes the stack entirely, in which case returns are predicted from the
+  branch target array like any other control transfer. Accuracy only. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both prediction parameters affect accuracy and never correctness, so they may
+be changed without revalidating architectural behaviour. A resolved control
+transfer always computes its own target and redirects the fetch stage if the
+prediction was wrong, so even a predictor that is always wrong costs cycles and
+nothing else.
+
+For a multi-instance configuration the integrator must give each instance a
+distinct hart identifier and provide separate bus paths or arbitration; the
+core arbitrates nothing itself. Since every instance is in-order with blocking
+memory operations, no reservation or atomic-access mechanism is required for
+software running on separate instances to synchronise through shared memory.
+
+% ===========================================================================
+\section{Design of submodules}
+
+\subsection{Instruction fetch}
+
+\subsubsection{Interface description}
+
+Inputs: the redirect request and target from S2, and the prediction produced
+for the address currently being offered. Outputs: the instruction bus read
+channels, the address to be looked up in the predictor, and the instruction
+handed to S2 together with its address, its prediction and a flag marking a
+faulted fetch.
+
+\subsubsection{Functional description}
+
+The block owns the program counter and keeps at most one instruction read in
+flight. Its behaviour is described by three independent conditions rather than
+by a state register: an address request issued but not yet accepted, a read
+accepted and its data still owed, and an in-flight read known to be on the
+wrong path.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (idle) at (0,0)    {IDLE};
+  \node[stb]  (arp)  at (62,0)   {ADDRESS\\[-1pt]NOT ACCEPTED};
+  \node[stb]  (infl) at (31,-30) {READ\\[-1pt]IN FLIGHT};
+
+  \draw[->,draw=accent] (idle) to[bend left=13]
+      node[lbl,above,align=center,pos=0.5]
+      {request issued,\\\scriptsize slave not ready} (arp);
+  \draw[->,draw=accent,looseness=6,out=30,in=-30] (arp) to
+      node[lbl,right=1mm]{\scriptsize slave still not ready} (arp);
+  \draw[->,draw=accent] (arp) to[bend left=13]
+      node[lbl,right=1mm,align=left,pos=0.45]{address accepted} (infl);
+  \draw[->,draw=accent] (infl) to[bend left=13]
+      node[lbl,left=1.5mm,align=right,pos=0.62]
+      {data returned\\\scriptsize and consumed} (idle);
+  \draw[->,draw=accent] (idle) to[bend left=13]
+      node[lbl,right=1.5mm,align=left,pos=0.74]
+      {request accepted\\\scriptsize in the same cycle} (infl);
+
+  \node[align=left,font=\scriptsize,anchor=north west,
+        draw=rulegrey,fill=boxbg,inner sep=5pt] at (-16,-46)
+    {\textbf{The discard condition is independent of the three above.}\\
+     It is armed by a redirect arriving while a read is outstanding and cleared
+     when the unwanted data word is swallowed.\\
+     It cannot be a fourth state: an issued read cannot be cancelled, only its
+     result ignored.};
+\end{tikzpicture}
+\caption{Behaviour of the instruction read slot. The double outline marks the
+condition after reset. None of the three names exists as a state register; they
+are produced by three independent flags, which is why the discard case can
+overlap either busy condition.}
+\label{fig:fetchslot}
+\end{figure}
+
+Two mechanisms deserve attention because they are not obvious from the
+interface.
+
+\paragraph{Discarding a wrong-path fetch.} An AXI read cannot be withdrawn once
+its address has been presented. When S2 redirects the fetch path while a read
+is outstanding, the block therefore marks that read for discard, accepts its
+data word, drops it, and restarts from the redirect target.
+
+\paragraph{Holding register.} If S2 is stalled when an instruction arrives, the
+instruction is parked in a one-entry holding register and no new fetch is
+issued until it drains. S1 can therefore never run more than one instruction
+ahead of S2. The same mechanism is what silences the instruction bus during
+wait-for-interrupt: once the holding register is full, no further address is
+issued.
+
+An error response on a fetch does not stall the block. The word is delivered
+with a fault marker and traps in S2, which means a fetch error on a wrong-path
+instruction is flushed before it can do any harm.
+
+\subsection{Branch predictor}
+
+\subsubsection{Interface description}
+
+A read port used by S1, taking the address being fetched and returning a
+predicted direction and target; and a write port used by S2 at instruction
+commit, carrying the resolved direction and target plus three hints that
+classify the committing instruction as a call, a return, or neither.
+
+\subsubsection{Functional description}
+
+The predictor combines three structures.
+
+\begin{table}[H]
+\centering
+\caption{Predictor structures}
+\label{tab:bp}
+\small
+\begin{tabular}{@{}L{0.22\linewidth}L{0.66\linewidth}@{}}
+\toprule
+\textbf{Structure} & \textbf{Function} \\
+\midrule
+Direction history &
+  One bit per entry, holding the last resolved outcome of the control transfer
+  at that entry. That bit is the prediction for the next encounter. \\
+\addlinespace
+Target buffer &
+  One 32-bit target per entry. It is what makes prediction possible at all: at
+  fetch time the instruction has not been decoded, so a direction bit alone
+  cannot say where to jump. \\
+\addlinespace
+Return address stack &
+  A separate stack of return addresses. A return usually has a different target
+  from the last time it executed, so the stored target predicts it badly; the
+  address to return to, on the other hand, is known exactly at the call. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The arrays are direct mapped and indexed by the low address bits, with the
+remaining address bits stored as a tag. A lookup predicts taken only on a tag
+match with the direction bit set; a miss predicts not taken, which is the only
+possible prediction since there is no stored target to jump to. An entry
+recorded as a return is predicted from the top of the return stack instead of
+from its stored target, falling back to the stored target if the stack is
+empty.
+
+The stack is maintained at the same commit point as the other two arrays, so no
+predictor state is ever speculative. Calls and returns are identified from the destination and source register
+numbers, following the hint encoding defined by the instruction set. An
+instruction that links and also returns is treated by that encoding as two
+different cases: when the two register numbers are equal it is a call only and
+pushes; when they differ it is a return followed by a call, and the stack
+replaces its top entry rather than changing its depth.
+
+Stack overflow wraps and discards the oldest entry, and a pop on an empty stack
+falls back to the stored target. Both cost prediction accuracy only.
+Correctness does not depend on the predictor at any point: the real direction
+and target are always computed in S2, and a wrong prediction is corrected by a
+redirect.
+
+\subsection{Decode and control}
+
+\subsubsection{Interface description}
+
+Input: the instruction word from the pipeline register. Outputs: the extracted
+instruction fields, the immediate value assembled for the instruction format,
+and the control signals that steer the rest of S2.
+
+\subsubsection{Functional description}
+
+Field extraction is pure wiring. The immediate generator assembles the
+immediate for the five instruction formats from the same instruction bits.
+
+The control decoder is strict: it validates the encoding rather than assuming
+it. An unknown opcode, a reserved function field, an undefined load or store
+width, an undefined branch condition, or a system instruction that does not
+match one of the exact defined encodings all raise an illegal instruction
+indication.
+
+An illegal instruction has no architectural effect, but that is guaranteed
+downstream rather than by the decoder withholding its outputs. An unknown
+opcode leaves every control line at its inactive default; a defined opcode with
+a reserved function field still asserts the control lines of its class, and the
+illegal indication is raised alongside them. What makes the instruction
+harmless in both cases is that the exception it raises squashes it before it
+can commit, and that the memory issue is separately conditioned on the
+instruction being legal, so no bus transaction is started either.
+
+Two decoding decisions are worth stating:
+
+\begin{itemize}[itemsep=3pt,topsep=3pt]
+\item The fence instruction is decoded as a no-operation. The core is a single
+      in-order hart with blocking memory accesses, so there is nothing to
+      order. The instruction-fence variant is not implemented and is decoded as
+      illegal.
+\item A CSR instruction produces a register write whose source is the CSR read
+      value. The read value is substituted into the arithmetic result path at
+      the end of S2, so no separate writeback source is needed.
+\end{itemize}
+
+\subsection{Register file and operand forwarding}
+
+\subsubsection{Interface description}
+
+Two combinational read ports addressed from S2, and one write port driven from
+S3.
+
+\subsubsection{Functional description}
+
+Thirty-two 32-bit general purpose registers. Register zero is hardwired: it
+reads zero on both ports regardless of the array contents, and a write to it is
+discarded. All registers are cleared by reset.
+
+The register file write happens on the clock edge that ends S3, so an
+instruction in S2 that reads a register the S3 instruction is writing would
+otherwise read a stale value. A bypass compares the S3 destination against both
+S2 source registers, excluding register zero, and substitutes the writeback
+value for the register file output on a match.
+
+This bypass is also what removes the classic load-use penalty. In a three-stage
+pipeline a load's data has already reached S3 by the time the consuming
+instruction enters S2, so a single backward path covers the case and no stall
+cycle is needed.
+
+\subsection{Arithmetic path}
+
+\subsubsection{Interface description}
+
+Inputs: the two operands, the operand-select control, the operation class from
+the decoder, and the instruction function fields. Output: the result.
+
+\subsubsection{Functional description}
+
+The block resolves the operation in two levels. The decoder produces a coarse
+operation class --- address arithmetic, register or immediate arithmetic,
+immediate pass-through, or program-counter-relative addition --- and the
+arithmetic path refines that class into a concrete operation using the
+instruction's function fields. This is what allows the decoder to remain
+independent of the arithmetic encoding.
+
+\begin{table}[H]
+\centering
+\caption{Operation decode. The class comes from the instruction decoder; the
+function fields come from the instruction. A class the decoder cannot produce
+resolves to addition.}
+\label{tab:aludec}
+\small
+\begin{tabular}{@{}L{0.24\linewidth}ccL{0.34\linewidth}@{}}
+\toprule
+\textbf{Class} & \textbf{funct3} & \textbf{funct7} & \textbf{Operation} \\
+\midrule
+Address arithmetic & --- & --- & Add \\
+Immediate pass-through & --- & --- & Pass the second operand \\
+Program-counter relative & --- & --- & Add \\
+\addlinespace
+Register or immediate\newline arithmetic
+  & \texttt{000} & \texttt{0100000} & Subtract, register form only \\
+  & \texttt{000} & other & Add \\
+  & \texttt{001} & --- & Shift left logical \\
+  & \texttt{010} & --- & Set if less than, signed \\
+  & \texttt{011} & --- & Set if less than, unsigned \\
+  & \texttt{100} & --- & Exclusive or \\
+  & \texttt{101} & \texttt{0100000} & Shift right arithmetic \\
+  & \texttt{101} & other & Shift right logical \\
+  & \texttt{110} & --- & Or \\
+  & \texttt{111} & --- & And \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The subtract entry is conditional on the register form because the immediate
+form has no subtract encoding; with an immediate operand the same function
+fields select an addition.
+Shift amounts use the low five bits of the second operand, so a larger value
+wraps as the ISA requires.
+
+The second operand is selected between the second source register and the
+immediate. For program-counter-relative addressing the first operand is the
+instruction address rather than a register.
+
+\subsection{Branch resolution}
+
+\subsubsection{Interface description}
+
+Inputs: the instruction address, the immediate, both register operands after
+forwarding, and the control indication that this is a branch or a jump.
+Outputs: the resolved target address and the resolved direction.
+
+\subsubsection{Functional description}
+
+The target is the instruction address plus the immediate, except for the
+register-indirect jump, where it is the first source register plus the
+immediate with the least significant bit forced to zero, as the ISA requires.
+
+The direction is the comparison selected by the instruction's function field
+for a conditional branch, and unconditionally taken for a jump.
+
+\begin{table}[H]
+\centering
+\caption{Branch condition decode}
+\label{tab:brdec}
+\small
+\begin{tabular}{@{}cL{0.40\linewidth}@{}}
+\toprule
+\textbf{funct3} & \textbf{Taken when} \\
+\midrule
+\texttt{000} & the operands are equal \\
+\texttt{001} & the operands differ \\
+\texttt{100} & the first is less than the second, signed \\
+\texttt{101} & the first is greater than or equal to the second, signed \\
+\texttt{110} & the first is less than the second, unsigned \\
+\texttt{111} & the first is greater than or equal to the second, unsigned \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The two encodings absent from the table are undefined for a branch and are
+rejected by the decoder as illegal instructions, so they never reach this
+block. It is purely combinational and produces the architecturally correct
+outcome, against which the prediction made in S1 is compared.
+
+\subsection{Load/store unit}
+
+\subsubsection{Interface description}
+
+Inputs from S2: a request, the direction, the access size, the address and the
+store data. Outputs to S2: a busy indication that stalls the stage, a
+completion indication, an error indication, an active indication that blocks
+interrupt acceptance, and the extended load result. Externally, the data bus
+master port.
+
+\subsubsection{Functional description}
+
+The unit contains the only explicitly coded state machine in the core.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (idle) at (0,0)    {IDLE};
+  \node[stb]  (rd)   at (74,26)  {READ};
+  \node[stb]  (wr)   at (74,-26) {WRITE};
+
+  \draw[->,draw=accent] (idle) to[bend left=17]
+      node[lbl,pos=0.30,above left=0mm and -4mm,align=center]
+      {request, load} (rd);
+  \draw[->,draw=accent] (rd) to[bend left=17]
+      node[lbl,pos=0.30,below right=0mm and -4mm,align=center]
+      {read data accepted} (idle);
+
+  \draw[->,draw=accent] (idle) to[bend right=17]
+      node[lbl,pos=0.30,below left=0mm and -4mm,align=center]
+      {request, store} (wr);
+  \draw[->,draw=accent] (wr) to[bend right=17]
+      node[lbl,pos=0.30,above right=0mm and -4mm,align=center]
+      {write response accepted} (idle);
+
+  \draw[->,draw=accent] (rd) to[out=35,in=-35,looseness=6]
+      node[lbl,right=1mm]{\scriptsize waiting for the read data} (rd);
+  \draw[->,draw=accent] (wr) to[out=35,in=-35,looseness=6]
+      node[lbl,right=1mm]{\scriptsize waiting for address, data or response} (wr);
+
+  \node[align=left,font=\scriptsize,anchor=north west,
+        draw=rulegrey,fill=boxbg,inner sep=5pt] at (-16,-46)
+    {Reset condition: IDLE. One transaction at a time.\\
+     The unit returns to IDLE when the response handshake completes,
+     not when the data arrives.};
+\end{tikzpicture}
+\caption{Load/store state machine. The two self-loops are the normal case, not
+an exception: a slave may insert any number of wait states. The state alone does
+not describe progress within a transaction; that is tracked separately, as
+described below.}
+\label{fig:lsufsm}
+\end{figure}
+
+The state does not record how far a transaction has progressed, because a write
+uses three independent channels --- address, data and response --- and the
+address may be accepted before the data or after it. Three per-channel trackers
+record which handshakes have completed. The response channel is only made ready
+once the channels it depends on have completed: for a read, after the address
+handshake; for a write, after both the address and the data handshakes. The
+transaction is finished, and the stage released, only when the response
+handshake itself completes.
+
+The address, write data and byte strobes are captured when the transaction
+starts and driven from that capture thereafter. This is required because the
+forwarded operands are only valid in the first cycle --- S3 receives bubbles
+while S2 is stalled --- and because AXI requires a stable payload while a
+request is waiting to be accepted.
+
+\paragraph{Byte lanes.} A byte or half-word store replicates the data across the
+bus and selects the live lanes with the byte strobes; no read-modify-write is
+performed. A load shifts the returned word by the address offset and then sign-
+or zero-extends according to the instruction, giving the five defined load
+forms.
+
+\paragraph{Errors and alignment.} A misaligned access never reaches the bus: it
+is detected before issue and trapped. An error response on the bus is reported
+to the exception logic, which raises a load or store access fault.
+
+\subsection{Exception detection}
+
+\subsubsection{Interface description}
+
+Inputs: an indication that the instruction in S2 is real and not preempted, the
+fetch fault marker, the illegal indications from the decoder and the CSR file,
+the environment call and breakpoint indications, the resolved control transfer,
+and the state of the data access. Outputs: an exception indication, the cause
+code, the associated value, and a signal that blocks the bus issue for a
+misaligned access.
+
+\subsubsection{Functional description}
+
+All synchronous exceptions are detected in S2 and resolved by a single priority
+chain, so exactly one cause is reported and the cause list exists in one place.
+The chain also selects the value recorded alongside the cause.
+
+\begin{table}[H]
+\centering
+\caption{Synchronous causes, in the order the priority chain evaluates them}
+\label{tab:causes}
+\small
+\begin{tabular}{@{}clL{0.44\linewidth}@{}}
+\toprule
+\textbf{Order} & \textbf{Cause} & \textbf{Recorded value} \\
+\midrule
+1 & Instruction access fault (1)        & The instruction address \\
+2 & Illegal instruction (2)             & The instruction word \\
+3 & Breakpoint (3)                      & The instruction address \\
+4 & Environment call from M-mode (11)   & Zero \\
+5 & Instruction address misaligned (0)  & The computed target address \\
+6 & Load address misaligned (4)         & The effective address \\
+7 & Store address misaligned (6)        & The effective address \\
+8 & Load access fault (5)               & The effective address \\
+9 & Store access fault (7)              & The effective address \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The numbers in parentheses are the architectural cause codes. The evaluation
+order is deliberately not the numeric order: it places the conditions that
+invalidate the instruction itself --- a faulted fetch, an illegal encoding ---
+ahead of conditions computed from that instruction's operands, so that a
+corrupted instruction is never reported as, for example, a misaligned access
+derived from its own decoded fields.
+
+Alignment is checked from the effective address before the access is issued, and
+only before issue: once a transaction is out, its address was already accepted
+as legal, and the arithmetic result feeding the check may change during the
+stall.
+
+Interrupts do not pass through this block. They are evaluated at the top level
+before execution and suppress the instruction instead.
+
+\subsection{Control and status register file}
+
+\subsubsection{Interface description}
+
+A CSR access port from S2 carrying the address, the write data, the operation
+and separate read and write enables, returning the read value and an illegal
+access indication. Separate ports for trap entry and return, for the interrupt
+enable and pending exchange with the interrupt controller, for the resulting
+handler address and return address, and for the counted events.
+
+\subsubsection{Functional description}
+
+The block holds the architectural state listed in Section~\ref{sec:swiface} and
+performs the read-modify-write defined for the three CSR operations. Only the
+fields that exist are stored; reserved positions are masked before the value
+reaches the register rather than being stored and read back, so a later revision
+can define one of them without breaking software that happened to write a one
+there.
+
+Address checking distinguishes four access classes, and confusing them is the
+classic CSR defect, so they are stated explicitly:
+
+\begin{table}[H]
+\centering
+\caption{Control and status register access classes}
+\label{tab:csrclasses}
+\small
+\begin{tabular}{@{}L{0.18\linewidth}L{0.68\linewidth}@{}}
+\toprule
+\textbf{Class} & \textbf{Rule} \\
+\midrule
+Read/write & Reads and writes both take effect. \\
+Read-only  & A write raises an illegal instruction exception and the value is
+             unchanged. Trapping is required: it is what lets software discover
+             the mistake instead of believing the write succeeded. \\
+WARL       & A write is accepted without trapping, but only the legal part of
+             the value is retained. \\
+Tied off   & The register exists but is hardwired to zero. Reads return zero
+             and writes are swallowed; neither traps. \\
+Absent     & Any access raises an illegal instruction exception. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A set or clear operation with a zero source is architecturally a pure read and
+does not count as a write, so it does not trap on a read-only register.
+
+Trap entry is atomic with respect to software: it records the return address,
+the cause and the associated value, copies the global interrupt enable into its
+saved copy, and clears the enable, all on the same clock edge. Trap entry takes
+precedence over a software write in the same cycle, so a trapping instruction
+never commits its own CSR write. A return from trap restores the enable from its
+saved copy and sets the saved copy.
+
+\subsection{Pipeline control}
+
+\subsubsection{Interface description}
+
+Inputs: whether S1 is offering an instruction, whether a data transaction is in
+flight, whether a wait-for-interrupt is sleeping, the three redirect requests
+from S2, and the register numbers needed for the forwarding comparison.
+Outputs: per-stage advance, bubble, squash and redirect commands, and the two
+forwarding selects.
+
+\subsubsection{Functional description}
+
+All stall, flush and forwarding decisions are taken in this one block; no stage
+manages its own progress. The entire control is a small set of combinational
+equations, which means there is no state machine driving the pipeline and
+therefore no invalid pipeline state to reach.
+
+\begin{table}[H]
+\centering
+\caption{Stall and flush sources}
+\label{tab:hazards}
+\small
+\begin{tabular}{@{}L{0.18\linewidth}L{0.68\linewidth}@{}}
+\toprule
+\textbf{Category} & \textbf{Sources} \\
+\midrule
+Stall (two) &
+  A data transaction in flight, and a sleeping wait-for-interrupt. An
+  instruction fetch that is not ready is deliberately \emph{not} a stall: S2
+  advances with a bubble instead, which costs the same throughput and removes a
+  term from the advance condition. \\
+\addlinespace
+Flush (three) &
+  A mispredicted control transfer, trap entry, and return from trap. All three
+  produce the same action --- request a redirect and load a bubble into the
+  pipeline register --- so there is one mechanism rather than three. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Where a stall and a flush are requested together, the flush wins, because it
+invalidates the very instruction the stall was waiting for. The rule has a
+second half that comes from the same term: every flush condition is qualified by
+the stage advance, so a trap cannot leave S2 while a data transaction is still
+outstanding. The bus is therefore never left with a transaction whose response
+nobody will accept.
+
+Both pipeline registers carry a valid bit. A cleared valid bit is what makes a
+bubble safe: nothing downstream examines the payload, so a flush produces a
+guaranteed no-operation whatever the payload holds. The alternative --- injecting
+an encoded no-operation --- would require the flush path to drive 32 correct
+bits and every downstream decoder to interpret them.
+
+\subsection{Trap sequencing and interrupt handshake}
+\label{sec:trapseq}
+
+\subsubsection{Interface description}
+
+Internal to the top level. It consumes the interrupt request and source number,
+the exception indication from the exception logic, and the return instruction
+indication; it drives the CSR trap ports, the redirect target, and the claim,
+end-of-interrupt and trap-active outputs.
+
+\subsubsection{Functional description}
+
+Every architectural decision is taken in S2 in a fixed order:
+
+\begin{center}
+interrupt \; $>$ \; synchronous exception \; $>$ \; return from trap \; $>$ \;
+mispredicted control transfer
+\end{center}
+
+The interrupt is evaluated first, and specifically before the instruction issues
+any data transaction, so that a preempted instruction can be re-executed
+identically after the handler returns. An exception outranks a misprediction
+because a faulting instruction has no correct path left to follow.
+
+The recorded return address differs by trap kind, as the privileged architecture
+requires: an exception records the offending instruction, so that a handler that
+repairs the fault can retry it, while an interrupt records the instruction to
+resume from. A wait-for-interrupt instruction woken by an interrupt is a special
+case of the latter: it records the following instruction, so the return does not
+re-enter the sleep.
+
+\paragraph{Open trap levels.} The core keeps one bit per currently open trap
+level, on a stack sixteen deep, recording whether that level was an interrupt.
+Trap entry pushes; a return pops, and emits the end-of-interrupt pulse only if
+the popped bit says the level was an interrupt.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1mm,y=1mm,>={Stealth[length=2.4mm]},semithick]
+  \node[stbi] (run)  at (0,0)   {RUNNING\\\scriptsize depth $=0$};
+  \node[stb]  (open) at (98,0)  {TRAP OPEN\\\scriptsize depth $\ge 1$};
+
+  \draw[->,draw=accent] (run) to[bend left=16]
+    node[lbl,pos=0.5,above,align=center]
+    {trap accepted: push its kind\\
+     \scriptsize 1 for an interrupt, 0 for an exception} (open);
+
+  \draw[->,draw=accent] (open) to[bend left=16]
+    node[lbl,pos=0.5,below,align=center]
+    {return at depth 1: pop\\
+     \scriptsize end-of-interrupt emitted only if the popped bit is 1} (run);
+
+  \draw[->,draw=accent,looseness=6,out=125,in=55] (open) to
+    node[lbl,above=0.5mm,align=center]{nested trap: push again} (open);
+
+  \draw[->,draw=accent,looseness=6,out=-55,in=-125] (open) to
+    node[lbl,below=0.5mm,align=center]{return at depth $>1$: pop, stay open} (open);
+\end{tikzpicture}
+\caption{Trap level tracking. The two states describe only whether any trap is
+open; the information that matters is carried by the stack of kind bits, one per
+open level. The important transitions are the two self-loops, which are what
+distinguish this from a single in-progress flag.}
+\label{fig:trapstack}
+\end{figure}
+
+A single in-progress flag would be insufficient, because the same return
+instruction closes both kinds of trap and both kinds can be open at once. Two
+nested interrupt handlers would send one end-of-interrupt pulse instead of two,
+leaving the outer level open in the controller with its source permanently in
+service; and a synchronous exception taken inside an interrupt handler would
+send an end-of-interrupt on its own return, releasing the interrupt while its
+handler was still running. One bit per level removes both cases without any
+additional logic: the kind of the trap being closed is the bit popped from the
+stack.
+
+The stack is sixteen levels deep, which is also the number of external
+interrupt sources the interface can express. Beyond sixteen open levels the
+depth counter saturates and the oldest recorded level is shifted out of the
+stack, so the end-of-interrupt sequence is no longer guaranteed to be correct.
+An interrupt controller must therefore not nest deeper than sixteen levels; the
+core does not enforce the limit itself.
+
+% ===========================================================================
+\section{List of bugs and workarounds}
+\label{sec:bugs}
+
+No functional defect is currently open against the core. The entries below are
+implementation limitations and deliberate restrictions that a system integrator
+or a software author needs to know about.
+
+\begin{table}[H]
+\centering
+\caption{Known limitations}
+\label{tab:limitations}
+\small
+\begin{tabular}{@{}L{0.28\linewidth}L{0.60\linewidth}@{}}
+\toprule
+\textbf{Item} & \textbf{Description and consequence} \\
+\midrule
+No synthesis result &
+  The core is written within the synthesisable subset, but no synthesis or
+  timing run has been performed. The long combinational path through S2 noted
+  in Section~\ref{sec:overview} is the expected frequency limiter and has not
+  been measured. \\
+\addlinespace
+Instruction fence not implemented &
+  The ordinary fence is a no-operation, which is correct for a single in-order
+  hart. The instruction-fence variant is decoded as an illegal instruction.
+  Software that modifies its own instruction stream is therefore not supported.
+  \\
+\addlinespace
+Counter inhibit absent &
+  All counters run at all times and cannot be stopped. The privileged
+  architecture permits this; software must not assume it can freeze a counter
+  before reading a pair of halves. \\
+\addlinespace
+Performance counters 8 and above &
+  Not provided. They read zero and swallow writes rather than trapping, as the
+  architecture requires of counters an implementation does not provide. The
+  event selectors are likewise hardwired to zero, so the event assignment in
+  Table~\ref{tab:hpm} cannot be changed by software. \\
+\addlinespace
+No unaligned access support &
+  Every misaligned load or store traps. This is architecturally permitted, but
+  software or a runtime library must emulate unaligned access if it is needed.
+  \\
+\addlinespace
+Interrupt source count fixed at 16 &
+  The source number input is four bits wide and the enable and pending masks
+  are sixteen bits, so the interface cannot express more than sixteen external
+  sources. \\
+\addlinespace
+Protection type outputs are constant &
+  Both ports drive a fixed protection encoding. A system that uses the
+  protection field to distinguish privilege levels cannot do so with this core.
+  \\
+\addlinespace
+Interface deviation from the original requirement &
+  An early requirement described the interrupt interface as a per-source
+  request vector with a three-bit source identifier. The implemented interface
+  is the one specified in Section~\ref{sec:irqiface}: a single prioritised
+  request with a four-bit source number, plus an end-of-interrupt pulse that the
+  original requirement did not mention. Sixteen sources cannot be identified in
+  three bits, and the end-of-interrupt pulse is required for the external
+  controller to unwind nested interrupts correctly. This is a difference
+  between two requirement sets rather than a defect, and needs a decision before
+  the interface is frozen. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ===========================================================================
+\section{Annex}
+
+\subsection{Reset state}
+
+Reset is asynchronous and active low. Every flip-flop in the core is reset,
+including the pipeline register payloads and the predictor arrays, which a
+valid bit would otherwise cover. The rule applied is that no register may leave
+reset holding an undefined value, so that a two-state and a four-state
+simulation agree from the first cycle and no bus output or architectural read
+can ever return an undefined value.
+
+\begin{table}[H]
+\centering
+\caption{Reset state of the architecturally visible elements}
+\label{tab:reset}
+\small
+\begin{tabular}{@{}L{0.32\linewidth}L{0.56\linewidth}@{}}
+\toprule
+\textbf{Element} & \textbf{Reset value} \\
+\midrule
+Program counter & The reset vector parameter \\
+General purpose registers & All zero \\
+\reg{mstatus} & Interrupts globally disabled \\
+\reg{mie}, \reg{mtvec}, \reg{mscratch}, \reg{mepc}, \reg{mcause}, \reg{mtval} & Zero \\
+\reg{misa} & Fixed identification value \\
+\reg{mhartid} & The hart identifier parameter \\
+All counters & Zero \\
+Branch predictor & All entries invalid; return stack empty \\
+Pipeline registers & Invalid, payload set to a no-operation and the reset vector \\
+Load/store unit & Idle, no transaction outstanding \\
+Trap level stack & Empty; trap-active output low \\
+Bus request outputs & Inactive while reset is asserted \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Instruction set coverage}
+
+\begin{table}[H]
+\centering
+\caption{Implemented instruction groups}
+\label{tab:isa}
+\small
+\begin{tabular}{@{}L{0.24\linewidth}L{0.64\linewidth}@{}}
+\toprule
+\textbf{Group} & \textbf{Instructions} \\
+\midrule
+Upper immediate & Load upper immediate; add upper immediate to program counter \\
+Jumps & Jump and link; jump and link register \\
+Branches & Equal, not equal, less than, greater or equal, and the two unsigned forms \\
+Loads & Byte, half-word, word, and the two unsigned forms \\
+Stores & Byte, half-word, word \\
+Register--immediate & Add, set less than (signed and unsigned), exclusive or, or, and, and the three shifts \\
+Register--register & The above plus subtract \\
+Ordering & Fence (executed as a no-operation) \\
+System & Environment call, breakpoint, return from trap, wait for interrupt \\
+CSR access & Read/write, read/set, read/clear, and their immediate forms \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+No instruction outside this list is implemented. Any other encoding raises an
+illegal instruction exception.
+
+\end{document}

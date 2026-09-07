@@ -1,0 +1,1005 @@
+% ===========================================================================
+% Verification Specification - Programmable Interrupt Controller
+% Compile: lualatex (three passes, for the table of contents)
+% ===========================================================================
+\documentclass[11pt]{article}
+
+\newcommand{\doctitle}{Verification Specification --- Programmable Interrupt Controller}
+\newcommand{\docrev}{1.0}
+\newcommand{\docdate}{6 September 2026}
+\newcommand{\docsubject}{Programmable interrupt controller, sixteen sources,
+hardware nesting}
+
+\input{preamble_spec}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{28mm}
+{\color{accent}\rule{\linewidth}{1.2pt}}\\[6mm]
+{\Huge\bfseries Verification Specification}\\[6mm]
+{\LARGE Programmable Interrupt Controller\\[2mm]
+with Advanced Scheduling}\\[4mm]
+{\large Verification environment, methodology,\\
+verification plan and measured results}\\[5mm]
+{\color{accent}\rule{\linewidth}{1.2pt}}
+\vfill
+\identblock{Verification specification}
+\vspace{16mm}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ===========================================================================
+\section{Introduction}
+
+\subsection{Purpose of the document}
+
+This document specifies the verification environment applied to the
+programmable interrupt controller, the methodology behind it, and what that
+environment establishes about the design.
+
+The verification plan in the annex lists what is checked, and where each
+check is applied.
+
+\subsection{Validity of the document}
+
+The document is valid for the interrupt controller as currently implemented and
+for the verification environment as it currently exists: five directed
+block-level tests, two system-level environments, one passive bus protocol
+monitor and one assertion layer.
+
+\subsection{Definitions of terms and abbreviations}
+
+\begin{longtable}{@{}L{0.17\linewidth}L{0.75\linewidth}@{}}
+\toprule
+\textbf{Term} & \textbf{Meaning} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Term} & \textbf{Meaning} \\
+\midrule
+\endhead
+Assertion & A property evaluated on every clock cycle of a run, which fails the
+  run if it is ever violated. \\
+AXI4-Lite & Advanced eXtensible Interface, revision 4, Lite subset. The bus
+  protocol of the controller's register port. \\
+Block level & A test that instantiates the controller on its own and drives its
+  ports directly. \\
+Check & One comparison of an observed value against an expected value,
+  producing one verdict. \\
+Claim & The pulse with which a processor announces that it has entered the
+  handler for the offered source. \\
+Directed test & A test whose stimulus sequence is written explicitly rather
+  than generated. \\
+End of interrupt & The pulse with which a processor announces that one handler
+  is returning. \\
+Monitor & A passive observer that watches an interface and reports protocol
+  violations without driving anything. \\
+Offer & The request line and source number the controller presents. \\
+Regression & The full set of runs, executed together and judged as a whole. \\
+Run & One execution of one test in one configuration. \\
+System level & A test in which the controller is integrated with a real
+  processor and real memories and driven by a program. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Relationship with other documents}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}L{0.30\linewidth}L{0.60\linewidth}@{}}
+\toprule
+\textbf{Document} & \textbf{Relationship} \\
+\midrule
+Design Specification\newline --- Programmable Interrupt Controller &
+  Specifies the design verified here. Register names, field definitions,
+  interface behaviour and the stated limitations are taken from it, and the
+  plan items are written in its terminology. \\
+\addlinespace
+Design Specification\newline --- RV32I Processor Core &
+  Specifies the processor used as the surrounding design in the system-level
+  test, including the conditions under which it accepts an offer and emits the
+  claim and end-of-interrupt pulses. \\
+\addlinespace
+Verification Specification\newline --- RV32I Processor Core &
+  Specifies the same system-level environment from the processor's side. The
+  system-level runs are shared between the two documents; the checks counted
+  here are the ones that bear on the controller. \\
+\addlinespace
+AMBA AXI and ACE Protocol Specification, ARM IHI 0022E &
+  The rule set the protocol monitor and the protocol assertions evaluate. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Notes on the notation used}
+
+\begin{itemize}[itemsep=2pt,topsep=3pt]
+\item Fixed-width type denotes a signal, a register or a field, for example
+      \reg{INT\_ENABLE} or \sig{AWVALID}.
+\item Italic type marks emphasis, or a term where a sentence defines it. Bold
+      type marks a run-in heading.
+\item Verification plan items are identified as \texttt{VP-nn} and are listed in
+      the annex.
+\item ``The controller'' is the design under verification. ``The processor'' is
+      the core used as the surrounding design at system level.
+\item A \emph{check} is one comparison producing one verdict. Counts in this
+      document are counts of verdicts, not of test cases.
+\end{itemize}
+
+% ===========================================================================
+\section{Verification methodology}
+
+\subsection{Overview}
+
+Three mechanisms are used together, because each of them sees something the
+others cannot.
+
+\begin{table}[H]
+\centering
+\caption{Verification mechanisms and their reach}
+\label{tab:mechanisms}
+\small
+\begin{tabular}{@{}L{0.22\linewidth}L{0.68\linewidth}@{}}
+\toprule
+\textbf{Mechanism} & \textbf{What it establishes, and what it cannot} \\
+\midrule
+Directed self-checking tests &
+  Establish that a specific scenario produces a specific result. Each test
+  carries its own expected values and prints a verdict, so a run is judged by
+  counting verdicts rather than by inspecting waveforms. They see only the
+  scenarios someone thought to write. \\
+\addlinespace
+Protocol monitor &
+  Establishes that the register port obeys the bus protocol, continuously and
+  independently of what the design and the driving master believe is happening.
+  It sees protocol violations, not wrong register values. \\
+\addlinespace
+Assertions &
+  Establish invariants that must hold in every cycle of every run in which they
+  are active, including cycles no test was written for. They see rule
+  violations, not wrong values. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+There is one further mechanism in the surrounding environment. A functional
+coverage model bound into the processor records, among other things, how many
+interrupts were claimed and which sources they came from. It observes the
+controller only indirectly, at the processor's boundary, and it is evaluated
+only by the secondary simulator flow described in Section~\ref{sec:sva}. On the
+run measured here every one of its per-source claim bins was reached except the
+source deliberately left masked for the whole run.
+
+\subsection{Implementation strategy}
+
+Verification is applied at two levels, and the split is deliberate.
+
+\textbf{Block level.} The controller is instantiated on its own and driven
+directly on its source lines, its processor-facing pins and its register port.
+This is where the majority of the evidence comes from, for two reasons. Most of
+the controller's behaviour is only reachable by a stimulus a processor would
+never generate --- a source that withdraws in the one cycle between the offer
+and the claim, a rising edge that coincides exactly with a claim, a nesting
+limit lowered below the current depth --- and most of it is only observable by
+reading registers at a moment a running program could not choose.
+
+Five block-level tests are used, each with a distinct purpose rather than a
+distinct feature list.
+
+\begin{table}[H]
+\centering
+\caption{Block-level tests}
+\label{tab:blocktests}
+\small
+\begin{tabular}{@{}L{0.24\linewidth}L{0.66\linewidth}@{}}
+\toprule
+\textbf{Test} & \textbf{Purpose} \\
+\midrule
+Feature test &
+  Walks each capability of the controller once along its natural path: a plain
+  level interrupt, the three levels of the priority comparison, preemption and
+  unwinding, the depth limit, spurious detection, escalation in both modes,
+  software triggers, edge sources, and the bus response codes. \\
+\addlinespace
+Scheduling test &
+  The cases where two things happen in the same cycle, or where a programmable
+  field is set to something other than its default. These are separated from
+  the feature test because a test that only walks the natural path cannot reach
+  them. \\
+\addlinespace
+Reset test &
+  The reset contract, checked from the first cycle. A test that spends its
+  first hundred cycles configuring the block has already destroyed the evidence
+  a reset defect would leave. \\
+\addlinespace
+Access-class test &
+  That every register the map calls read-only is read-only, that every bit it
+  calls reserved is hardwired to zero, and that the write-one-to-clear and
+  write-any-read-legal registers behave as their access class requires. \\
+\addlinespace
+Status test &
+  That the hardware puts the right thing into the per-source status register,
+  field by field and in both directions. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{System level.} The controller is integrated with a real processor and
+real memory models, and the interrupts are produced and consumed by the real
+handshake rather than by a driver. This level exists to establish the things the
+block level cannot: that a real processor's claim timing satisfies the interface
+contract, that the two independent masks interact as intended, and that the
+register interface is usable from a program over real bus transactions.
+
+Two environments do this. The processor block's own system test drives the
+controller from a program alongside everything else the processor does. The
+assembled system adds runs whose subject is the controller itself: a program
+that raises each of the sixteen slots in turn, one that has a handler preempted
+from inside itself, and one that lets a source miss its deadline and then checks
+which handler the processor enters first. Those three reach behaviour a
+peripheral-driven run cannot, because the software trigger channels let a
+program place a request on any slot at a moment of its choosing, including slots
+no device is wired to.
+
+The counted checks are in every case the subset that bears on the controller.
+
+\textbf{Bus timing variation.} The processor system test is repeated under four
+memory timing configurations: nominal, high fixed latency, and two seeds of
+randomised ready-signal backpressure. The interrupt path is sensitive to this
+because the processor defers a claim while a data transaction is in flight, so
+the interval between the offer and the claim changes with the memory timing.
+
+\textbf{Pass criteria.} A run passes only if every self-check matched, no
+protocol monitor recorded a violation, and no assertion fired in a run where
+the assertion layer is active. A test that reaches its end without printing its
+own pass banner counts as a failure, and each test prints a distinct banner, so
+the regression is judged by counting banners rather than by trusting an exit
+code.
+
+\subsection{Verification plans}
+
+The verification plan is organised by design area rather than by test, so that
+a plan item can be traced to the behaviour it covers regardless of which test
+happens to implement it. Each item names the behaviour, how it is stimulated,
+how the expected result is determined, and where the check is applied. The
+items are listed in the annex.
+
+\begin{table}[H]
+\centering
+\caption{Verification plan areas}
+\label{tab:areas}
+\small
+\begin{tabular}{@{}L{0.26\linewidth}L{0.64\linewidth}@{}}
+\toprule
+\textbf{Area} & \textbf{Covers} \\
+\midrule
+Source handling & Trigger types, the edge latch, the per-source enable and the
+  software trigger channel. \\
+Priority and scheduling & The three levels of the priority comparison, band
+  reordering, and the processor's mask inside the resolution. \\
+Nesting and preemption & The nesting stack, the preemption threshold, unwinding,
+  and the depth limit. \\
+Deadline escalation & The elapsed-time counter, both escalation modes, and the
+  effect of an escalation on the offer. \\
+Spurious claims & Detection, the response to it, and the accounting that keeps
+  claims and returns balanced. \\
+Register interface & Access classes, reserved bits, error responses and bus
+  protocol compliance. \\
+Reset & Reset values, reset behaviour at the interfaces, and the asynchronous
+  release. \\
+System integration & The handshake against a real processor, the interaction of
+  the two masks, and use of the register interface from software. \\
+Continuous invariants & The properties the assertion layer evaluates in every
+  cycle of every run in which it is active. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Reference model}
+
+\textbf{No reference model is used.} The environment contains no independent
+implementation of the priority resolution and performs no cycle-by-cycle
+comparison against one.
+
+Expected behaviour is instead determined in one of three ways, depending on the
+check.
+
+\begin{itemize}[itemsep=3pt,topsep=3pt]
+\item \textbf{Precomputed constants.} Reset values, field masks, response codes
+      and register contents after a known sequence are derived by hand from the
+      specification and embedded in the test. This is the majority of the
+      checks.
+\item \textbf{The predicted offer.} For a scheduling scenario the expected
+      winner is worked out by hand from the priority rules and the test waits
+      for exactly that source to be offered, or asserts that a named source is
+      never offered over a bounded window. The negative form matters as much as
+      the positive one: a resolver that offers everything would satisfy every
+      positive check.
+\item \textbf{Protocol rules.} For the register port the expected behaviour is
+      the protocol itself, evaluated continuously rather than compared against a
+      recorded trace.
+\end{itemize}
+
+The consequence is that priority resolution is established only
+for the configurations the directed tests actually program. The environment
+cannot detect a resolver defect that appears at a combination of bands,
+intra-band priorities and slot numbers no test constructs; the largest number of
+sources contending in any current test is six.
+
+% ===========================================================================
+\section{Verification environment}
+
+\subsection{Overview}
+
+\begin{figure}[H]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[x=1mm,y=1mm,font=\small]
+  \node[font=\small\bfseries,color=accent] at (30,33) {STIMULUS};
+  \node[font=\small\bfseries,color=accent] at (120,33) {DESIGN UNDER TEST};
+  \node[font=\small\bfseries,color=accent] at (206,33) {CHECKING};
+  \draw[rulegrey,dashed] (77,-50) -- (77,29);
+  \draw[rulegrey,dashed] (160,-50) -- (160,29);
+
+  \node[blk,minimum width=52mm,minimum height=12mm] (src) at (30,20)
+       {source line driver\\[1pt]\scriptsize levels, pulses, coincident edges};
+  \node[blk,minimum width=52mm,minimum height=12mm] (hs)  at (30,4)
+       {processor handshake driver\\[1pt]\scriptsize claim, end of interrupt};
+  \node[blk,minimum width=52mm,minimum height=12mm] (mst) at (30,-12)
+       {register access master\\[1pt]\scriptsize word and byte-lane writes, reads};
+  \node[blkf,minimum width=44mm,minimum height=10mm] (ck) at (26,-30)
+       {clock and reset generator};
+
+  \node[blk,minimum width=42mm,minimum height=44mm] (dut) at (120,4)
+       {\textbf{interrupt}\\\textbf{controller}\\[4pt]
+        \scriptsize source lines\\\scriptsize processor interface
+        \\\scriptsize register port};
+
+  \node[blkf,minimum width=56mm,minimum height=11mm] (mon) at (206,20)
+       {bus protocol monitor};
+  \node[blkf,minimum width=56mm,minimum height=11mm] (sva) at (206,6)
+       {assertion layer, bound};
+  \node[blk,minimum width=56mm,minimum height=13mm]  (cmp) at (206,-12)
+       {self-checking comparison\\[1pt]\scriptsize verdict per check, error count};
+
+  \draw[flow] (src.east) -- (99,20);
+  \draw[flow] (hs.east)  -- (99,4);
+  \draw[flow] (mst.east) -- (99,-12)
+        node[lbl,pos=0.5,above]{register accesses};
+  \draw[flow] (ck.east) -- (120,-30) -- (dut.south);
+  \node[lbl,above=0.4mm] at (88,-30) {clock, reset};
+
+  \draw[flow] (141,20) -- (178,20) node[lbl,pos=0.5,above]{bus};
+  \draw[flow] (141,6)  -- (178,6);
+  \draw[flow] (141,-12) -- (178,-12)
+        node[lbl,pos=0.5,above]{offer, status readbacks};
+
+  \draw[flow] (52,-18) -- (52,-46) -- (206,-46) -- (cmp.south);
+  \node[lbl,above=0.4mm] at (120,-46) {expected values, precomputed in the test};
+\end{tikzpicture}}
+\caption{Block-level verification environment. Three drivers reach the
+controller and each of them exists because one class of behaviour is only
+reachable through it: the source line driver produces levels, single-cycle
+pulses and edges deliberately aligned with a claim; the handshake driver
+produces the claim and end-of-interrupt pulses a processor would produce, but at
+times a processor could not be made to choose; the register access master issues
+full-word and byte-lane writes and reads, and is the same driver in all five
+block-level tests, so every test exercises the slave in the same way. On the
+right, the bus protocol monitor and the bound assertion layer watch
+continuously and report violations of their own accord, while the self-checking
+comparison evaluates the register readbacks and the offer against values the
+test computed in advance. A run fails if any of the three reports a mismatch.}
+\label{fig:envblock}
+\end{figure}
+
+At system level the arrangement is different in one important way: nothing
+drives the processor interface. The processor decides for itself when to accept
+an offer and when to return, so the claim timing, the interval between the offer
+and the claim, and the nesting behaviour are produced by the real handshake
+rather than by a driver.
+
+\begin{figure}[H]
+\centering
+\resizebox{0.94\linewidth}{!}{%
+\begin{tikzpicture}[x=1mm,y=1mm,font=\small]
+  \node[blk,minimum width=44mm,minimum height=13mm] (per) at (0,0)
+       {peripheral model\\[1pt]\scriptsize raise on event, hold until cleared};
+  \node[blk,minimum width=38mm,minimum height=13mm] (pic) at (74,0)
+       {\textbf{interrupt}\\\textbf{controller}};
+  \node[blk,minimum width=38mm,minimum height=13mm] (cpu) at (160,0)
+       {processor\\[1pt]\scriptsize running the test program};
+  \node[blkf,minimum width=42mm,minimum height=11mm] (mon) at (100,-28)
+       {bus protocol monitor};
+  \node[blk,minimum width=44mm,minimum height=13mm] (sb) at (166,-28)
+       {end-of-run scoreboard\\[1pt]\scriptsize claim counts, memory contents};
+
+  \draw[flow] (per.east) -- (pic.west) node[lbl,midway,above]{source lines};
+  \draw[flow] (93,4) -- (141,4) node[lbl,midway,above]{offer};
+  \draw[flow] (141,-4) -- (93,-4)
+        node[lbl,midway,below]{claim, end of interrupt, mask};
+
+  \draw[flow] (160,-6.5) -- (160,-16) -- (74,-16) -- (74,-6.5);
+  \node[lbl,above=0.4mm] at (128,-16) {register accesses};
+  \draw[flow] (100,-16) -- (mon.north)
+        node[lbl,pos=0.5,right=1mm]{observed};
+
+  \draw[flow] (179,0) -- (198,0) -- (198,-28) -- (sb.east);
+  \node[lbl,right=0.6mm] at (198,-14) {results};
+\end{tikzpicture}}
+\caption{System-level arrangement. The environment plays the peripherals: it
+raises a source line on an event and holds it until the handler clears it, which
+is how a level-triggered peripheral behaves and is what makes the in-service
+suppression path reachable. The processor runs a program that configures the
+controller over the real register port, enables interrupts, and records what
+each handler saw; its claim and end-of-interrupt pulses and its own enable mask
+go back to the controller. The protocol monitor watches the register port
+throughout. At the end of the run the scoreboard compares the number of claims
+per source, the values the handlers left in memory and the processor's final
+architectural state against precomputed values.}
+\label{fig:envsys}
+\end{figure}
+
+\subsection{Control and drivers}
+
+\subsubsection{Clock and reset generation}
+
+A single generator produces the clock and the asynchronous, active-low reset for
+every run. Reset release is the starting point of every test, which is what
+allows the reset test to read every register before any other activity has taken
+place. The reset test additionally drives reset itself, so that it can apply it
+between clock edges from a configured, nested state.
+
+\subsubsection{Source line stimulus}
+
+At block level the source lines are driven directly, and the driver produces
+three distinct shapes because three distinct behaviours depend on them: a held
+level, a single-cycle pulse for an edge-triggered source, and a transition
+deliberately aligned with the same clock edge as a claim. The last of these is
+the only way to reach the arbitration between the edge latch being set and the
+same latch being consumed.
+
+At system level the environment behaves as a peripheral would. It raises a
+source line when the program requests an event and lowers it when the controller
+signals that the source has been claimed, which models a device whose status
+register is cleared by its handler. Seven of the sixteen lines are driven this
+way; one further line is driven by a real block elsewhere in the system, so at
+least one source in the run is not under the environment's control at all.
+
+\subsubsection{Processor handshake stimulus}
+
+At block level the claim and end-of-interrupt pulses are driven by the test.
+Each is a single-cycle pulse, and the claim is deliberately issued one cycle
+after the offer has been observed, so that it lands on the source number the
+controller expects to be claimed. This is the same timing relationship the
+processor produces, and driving it explicitly is what allows the tests to place
+a claim at a moment the processor never would --- immediately after a source has
+withdrawn, or while the depth is at its limit.
+
+The processor's own enable mask is held at all ones in every block-level test
+except the scheduling test, which is the test that exists to exercise it.
+
+\subsubsection{Register access stimulus}
+
+One shared master task drives the register port in all five block-level tests.
+It performs full-word writes, byte-lane writes with an explicit strobe pattern,
+and reads, and it checks the response code of every access against the value the
+test expects --- so an unexpected error response, or an unexpected success, is a
+failure even when the register value happens to be right.
+
+At system level the register accesses are ordinary load and store instructions
+executed by the processor, which means the register interface is exercised
+through a real bus and a real decoder rather than through a task written for the
+purpose.
+
+\subsection{Monitors and checkers}
+
+\subsubsection{Bus protocol monitor}
+
+A passive monitor is attached to the controller's register port in the
+system-level environment. It drives nothing and checks four families of rules:
+
+\begin{itemize}[itemsep=2pt,topsep=3pt]
+\item \textbf{Stability.} Once a channel asserts its valid signal it must hold
+      it, and its payload, until the handshake completes.
+\item \textbf{Ordering and outstanding count.} A read response may only appear
+      when a read is outstanding, a write response only after both write
+      channels have been accepted, and a second request on either direction
+      before its response breaks the one-outstanding contract.
+\item \textbf{Absence of undefined values.} No valid or ready signal, and no
+      payload under an asserted valid signal, may be undefined after reset.
+\item \textbf{Response codes.} The exclusive-access response code does not exist
+      in this protocol subset and must never appear.
+\end{itemize}
+
+The monitor also counts the reads and writes it has seen, and the run checks
+that both counts are non-zero. Without that, a port that was never accessed
+would pass every protocol rule trivially.
+
+\subsubsection{Assertion layer}
+\label{sec:sva}
+
+An assertion layer is bound into the controller without modifying it. It
+contains the controller's own invariants and, separately, the same bus protocol
+rule set expressed as temporal properties on the register port.
+
+The controller invariants are the ones that must hold in every cycle rather than
+at the end of a scenario:
+
+\begin{itemize}[itemsep=2pt,topsep=3pt]
+\item the request line and the source number presented to the processor are the
+      registered result of one and the same resolution;
+\item an offered source is a pending request and is not already in service;
+\item an offered source is not one the processor's mask excludes;
+\item under nesting, the offered source's key is strictly greater than the key
+      at the top of the nesting stack;
+\item the depth limit never exceeds the physical stack, and the depth never
+      exceeds the limit;
+\item the claim and end-of-interrupt pulses never coincide;
+\item the depth changes only in response to a claim or an end of interrupt;
+\item no offer is presented while the depth is at its limit;
+\item an end of interrupt received with an empty stack leaves the depth
+      unchanged.
+\end{itemize}
+
+The assertion layer is compiled and evaluated only by a secondary simulator,
+because the edition of the primary simulator used for the regression does not
+support the assertion language. That flow was run for the revision measured
+here: the controller's assertions were live in twelve runs and none of them
+fired.
+
+The block-level tests run on the primary simulator only, so an assertion covers
+the system-level runs and not those. This is why the protocol monitor duplicates
+part of the same rule set in ordinary logic: the monitor's checks apply
+everywhere.
+
+An assertion is evidence only where the situation it describes actually occurs.
+The property that an end of interrupt at depth zero cannot underflow the stack,
+for instance, holds in every run without ever being tested, because no run
+produces that pulse. The properties credited in the plan are the ones whose
+trigger condition occurs in normal operation.
+
+\subsubsection{Self-checking comparison}
+
+Every check compares one observed value against one expected value and prints a
+verdict naming the property. A mismatch increments an error count, and a test
+ends by printing a pass banner if the count is zero and a failure banner
+otherwise. Tests do not stop at the first mismatch, so a single run reports
+every property it broke rather than only the first.
+
+Two checking conventions are used in addition to the plain value comparison, and
+both exist because the plain comparison is too weak on its own:
+
+\begin{itemize}[itemsep=3pt,topsep=3pt]
+\item \textbf{Bounded negative checks.} Several properties are the absence of
+      something --- a masked source that must never be offered, an edge that
+      must not re-fire, a preemption that must not be allowed. These are checked
+      by watching a named source over a bounded window and failing if it appears
+      at any point in it, not by sampling once.
+\item \textbf{Preconditions that make the check mean something.} A read-only
+      register is only proven
+      read-only if it held something other than zero at the time of the attempt.
+      Every read-only register in the access-class test is therefore first
+      driven to a non-zero value by real activity, and the write attempt is
+      checked both for the error response and for the register still holding
+      what the hardware put there.
+\end{itemize}
+
+\subsection{Simulation environment setup}
+
+\subsubsection{Structure}
+
+The environment is built in four layers, compiled in order into one library:
+the design; the shared verification models --- clock and reset generation, the
+bus models, the passive protocol monitor, the shared register access driver and
+the shared comparison mechanism; the tests themselves; and, for the secondary
+flow only, the assertion layer and its binding.
+
+Compiling every test into one library in a single pass, rather than per test, is
+what makes a name collision or an interface change between the design and a test
+a compile error rather than a silently skipped run.
+
+\subsubsection{Scripts}
+
+There are two entry points. The regression compiles once and then executes every
+test in turn, each in its own elaboration, printing a banner per run. The
+secondary flow compiles the design, the system-level test and the assertion
+layer with a different front end and executes the single system-level run with
+assertions enabled.
+
+Parameterised runs pass their configuration as an elaboration-time override and
+then read the value back out of the elaborated design and print it, so the log
+proves the configuration was actually applied rather than silently ignored.
+
+\subsubsection{Setup and configuration}
+
+The block-level tests take no configuration: each drives the controller from
+reset and programs it through its own register writes, so a run is reproducible
+without external settings. Several of them reset the controller between
+independent cases, so that one case cannot inherit state from the previous one.
+
+The system-level runs differ only in the timing of the memory models: read
+latency, write latency, and the probability with which a model withholds its
+ready signal, with the random sequence seeded explicitly so a failing run can be
+repeated exactly.
+
+% ===========================================================================
+\section{Annex}
+
+\subsection{Verification plan}
+
+Every item below is checked, and passed in the regression measured for this
+revision.
+
+\begin{longtable}{@{}lL{0.155\linewidth}L{0.355\linewidth}L{0.085\linewidth}L{0.195\linewidth}@{}}
+\caption{Verification plan}\label{tab:vplan}\\
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test, checker} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test, checker} \\
+\midrule
+\endhead
+
+\multicolumn{5}{@{}l}{\textbf{Source handling}}\\
+\midrule
+VP-01 & Level source request &
+  A level line raises a request while it is high and withdraws it when it falls,
+  with nothing latched. &
+  Passing & Status test, both directions of the pending bit \\
+VP-02 & Edge source latching &
+  A single-cycle pulse on an edge-configured source is captured and offered
+  after the line has already fallen. &
+  Passing & Feature test, offer observed \\
+VP-03 & Edge request consumed &
+  A latched edge is cleared by the claim and does not re-fire after the handler
+  returns. &
+  Passing & Feature test, bounded negative check \\
+VP-04 & Edge in the claim cycle &
+  A rising edge landing on the same edge as the claim survives it and is offered
+  again after the return. &
+  Passing & Scheduling test, offer observed after the return \\
+VP-05 & Per-source enable &
+  A line held high produces no request, no offer and no pending indication while
+  the source is disabled, and produces all three once it is enabled. &
+  Passing & Reset test and status test, register readback \\
+VP-06 & Software trigger, keyed set &
+  A full-word write carrying the key raises the request and the slot is offered.
+  &
+  Passing & Feature test, readback and offer observed \\
+VP-07 & Software trigger key guard &
+  A write without the key, and a byte write that leaves the key lanes
+  unstrobed, both leave the channel clear. &
+  Passing & Feature test and scheduling test, bounded negative check \\
+VP-08 & Software trigger consumed &
+  The channel clears itself when the slot is claimed. &
+  Passing & Feature test, register readback \\
+VP-09 & Software trigger cleared &
+  Writing zero withdraws a software request that has not been claimed. &
+  Passing & Access-class test, register readback \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Priority and scheduling}}\\
+\midrule
+VP-10 & Inter-band priority &
+  Of two sources requesting together, the one whose band carries the greater
+  urgency is offered first. &
+  Passing & Feature test, offer order \\
+VP-11 & Intra-band priority &
+  Within one band the source with the greater intra-band priority is offered
+  first. &
+  Passing & Feature test, offer order \\
+VP-12 & Slot-number tie-break &
+  Two sources with the same band and the same intra-band priority are ordered by
+  slot number, lower first. &
+  Passing & Feature test, offer order \\
+VP-13 & Band reordering &
+  With the band urgencies reordered, the urgency and not the band number decides
+  the outcome. &
+  Passing & Scheduling test, offer order under a reordered configuration \\
+VP-14 & Processor mask in the resolution &
+  A source the processor has masked is never offered, does not prevent a less
+  urgent source behind it from being offered, and is offered on the first
+  resolution after the mask lifts. &
+  Passing & Scheduling test, bounded negative check plus offer observed \\
+VP-15 & Pending set contents &
+  The pending set reports every pending source, including one held back by the
+  processor's mask, and not only the offered one. &
+  Passing & Scheduling test, port comparison \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Nesting and preemption}}\\
+\midrule
+VP-16 & Claim accounting &
+  A claim raises the depth by one and the in-service source appears in the
+  nesting status and active-source registers. &
+  Passing & Feature test, register readback \\
+VP-17 & Preemption &
+  A source more urgent than the level in service is offered while its handler
+  runs, and its claim opens a further level rather than replacing the current
+  one. &
+  Passing & Feature test, depth and top-of-stack readback \\
+VP-18 & Unwinding &
+  The inner end of interrupt restores the outer level as the top of stack, and
+  the outer one returns the depth to zero. &
+  Passing & Feature test, register readback \\
+VP-19 & In-service suppression &
+  A level source still asserted while its own handler runs is not offered again
+  until the end of interrupt. &
+  Passing & Feature test and status test, offer and status readback \\
+VP-20 & Threshold is strict &
+  A source that is not more urgent than the level in service is not offered at
+  all. &
+  Passing & Feature test, bounded negative check \\
+VP-21 & Live reconfiguration of an in-service source &
+  Moving an in-service source to the most urgent band does not raise the
+  threshold its handler runs under: a source that could preempt it before the
+  change still does. &
+  Passing & Feature test, depth readback after the preemption \\
+VP-22 & Depth limit &
+  At the limit no preemption is offered whatever its priority, the overflow flag
+  is set in both registers that expose it, and relaxing the limit lets the
+  preemption through immediately. &
+  Passing & Feature test, bounded negative check plus flag readback \\
+VP-23 & Depth limit clamping &
+  A write of zero stores one, a write above the physical stack depth stores that
+  depth, and a legal value is stored exactly. &
+  Passing & Access-class test, readback of four written values \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Deadline escalation}}\\
+\midrule
+VP-24 & Escalation, jump mode &
+  A source that waits longer than its deadline moves to the configured target
+  band; the escalation flag, the effective band and the global event flag all
+  change together. &
+  Passing & Feature test and status test, status readback \\
+VP-25 & Escalation changes the offer &
+  After escalating, a source that was previously outranked becomes the offered
+  one, with no source line having moved. &
+  Passing & Feature test, offer order \\
+VP-26 & Escalation preempts &
+  An escalated source becomes urgent enough to preempt a source already in
+  service. &
+  Passing & Feature test, depth readback \\
+VP-27 & Bump mode under a reordered band order &
+  With the bands reordered so that the numerically lower band is the less urgent
+  one, a bump moves the source one step up the urgency order rather than one
+  band number down. &
+  Passing & Scheduling test, offer order plus escalation flag \\
+VP-28 & Repeated escalation &
+  With repeats enabled the effective band walks up one step per elapsed
+  deadline, and each observed transition moves exactly one band. &
+  Passing & Feature test and status test, transitions counted \\
+VP-29 & Elapsed-time counter gating &
+  The counter advances only while the source is pending and not in service, is
+  cleared when the source is claimed and while it is idle, and stays at zero
+  when no deadline is configured. &
+  Passing & Status test, sampled across a full life cycle \\
+VP-30 & Escalation cleared at the end of the wait &
+  The effective band returns to the configured band and the escalation flag
+  clears once the source stops waiting. &
+  Passing & Feature test and status test, status readback \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Spurious claims}}\\
+\midrule
+VP-31 & Spurious claim detection &
+  A source that withdraws between the offer and the claim sets its per-source
+  flag, its sticky log bit and the global event flag. &
+  Passing & Feature test, status test and access-class test, register readback \\
+VP-32 & Legitimate claim not flagged &
+  A source still asserted at the claim and cleared later inside its handler is
+  not flagged, and the sticky log is untouched. &
+  Passing & Status test, negative check \\
+VP-33 & Spurious claim accounted &
+  The depth rises for a spurious claim as for any other, so claims and returns
+  stay balanced. &
+  Passing & Status test, depth readback \\
+VP-34 & Spurious indications cleared &
+  The per-source flag clears when its level is released while the sticky log bit
+  survives the return and is cleared only by software. &
+  Passing & Status test, readback before and after the return \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Register interface}}\\
+\midrule
+VP-35 & Read-only enforcement &
+  Every read-only register rejects a write with an error response and keeps the
+  value the hardware put there. Each read-only register is driven to a non-zero
+  value first, and all sixteen per-source instances are attempted individually.
+  &
+  Passing & Access-class test, response code plus readback \\
+VP-36 & Narrow writes to read-only registers &
+  A byte write on each of the four lanes, and a write with no lanes enabled at
+  all, are rejected exactly as a full-word write is, proving the rejection is
+  decided from the address. &
+  Passing & Access-class test, five attempts plus readback \\
+VP-37 & Unmapped offsets &
+  Reads and writes to every unmapped offset in the window answer with an error
+  response. &
+  Passing & Feature test and access-class test, response code \\
+VP-38 & Reserved bits &
+  After a write of all ones, every bit the map calls reserved reads zero, in
+  each register that has one. &
+  Passing & Access-class test, masked readback per register \\
+VP-39 & Write-only key field &
+  The software-trigger key reads back as zero while the request bit reads its
+  true state. &
+  Passing & Access-class test, readback \\
+VP-40 & Write-one-to-clear behaviour &
+  A written zero does not clear a set bit, a written one to a different bit does
+  not clear it, and a written one to the bit itself does. &
+  Passing & Access-class test, four-step sequence per register \\
+VP-41 & Byte-lane write to a writable register &
+  A single-lane write to a writable register is accepted and updates that lane,
+  which distinguishes an address-based rejection from a strobe-based one. &
+  Passing & Access-class test, readback \\
+VP-42 & Bus protocol compliance &
+  The register port obeys the handshake, ordering, outstanding-count and
+  response-code rules of the protocol throughout the run, with traffic on both
+  directions confirmed non-zero. &
+  Passing & System test, passive protocol monitor \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Reset}}\\
+\midrule
+VP-43 & Reset values &
+  Every mapped register reads its specified reset value on its first access,
+  including all sixteen instances of each per-source register. &
+  Passing & Reset test, register readback \\
+VP-44 & Interfaces during reset &
+  While reset is asserted both bus valid signals are low, the response codes and
+  read data are defined, and the request line and source number are inactive and
+  defined. &
+  Passing & Reset test, port comparison \\
+VP-45 & Internal state free of undefined values &
+  The nesting stack arrays, which no register exposes directly, hold defined
+  values after reset. &
+  Passing & Reset test, direct inspection \\
+VP-46 & Asynchronous, dominant reset &
+  Applied between clock edges from a fully configured state with interrupts in
+  service, reset returns every register to its reset value and drops the request
+  line without waiting for a clock edge. &
+  Passing & Reset test, readback after re-release \\
+VP-47 & Disarmed out of reset &
+  A source line held high across reset produces no request until software
+  enables the source. &
+  Passing & Reset test, bounded negative check \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{System integration}}\\
+\midrule
+VP-48 & Integrated priority order &
+  With two sources raised together, the more urgent one is served first,
+  observed at the processor as the order in which the handlers are entered. &
+  Passing & System test, claim timestamps \\
+VP-49 & Claim shape and timing &
+  The claim is a single-cycle pulse, never asserted twice in succession, and
+  never asserted while a data transaction is in flight. &
+  Passing & System test, cycle-by-cycle invariants \\
+VP-50 & Claim count per source &
+  Each source is claimed exactly the number of times the scenario demands over
+  the whole run. &
+  Passing & System test, per-source claim counters \\
+VP-51 & The two masks are independent &
+  A source enabled in the controller but masked by the processor is never
+  claimed, yet remains visible both in the pending set the processor reports and
+  in its own status register. &
+  Passing & System test, claim counter at zero plus register readback \\
+VP-52 & Offered source is enabled and not in service &
+  Every source presented to the processor is one the controller had enabled when
+  the offer was registered. &
+  Passing & System test, cycle-by-cycle invariant \\
+VP-53 & In-service suppression at system level &
+  A level source held high through its own handler is not offered again until
+  the return, with the real handshake providing the timing. &
+  Passing & System test, cycle-by-cycle invariant \\
+VP-54 & Register interface from software &
+  The enable register, a per-source status register and the global status
+  register read back their expected values when read by a program over real bus
+  transactions, and the active-source register read from inside a handler names
+  that handler's source. &
+  Passing & System test, memory scoreboard \\
+VP-55 & Operation under bus timing variation &
+  The whole system-level scenario holds under nominal timing, high fixed
+  latency, and two seeds of randomised backpressure, which changes the interval
+  between the offer and the claim. &
+  Passing & System test, four configurations \\
+
+VP-56 & Preemption driven by a real processor &
+  A handler re-enables the processor's global interrupt enable and is preempted
+  from inside itself; the depth reaches two, each level is claimed once, and
+  each return releases exactly its own level. &
+  Passing & System test, depth and claim counters sampled every cycle \\
+VP-57 & Every slot reachable from software &
+  Each of the sixteen slots in turn is raised through its software trigger
+  channel and serviced; the source number the handler reads back matches the
+  slot, including the eight slots no device is wired to. &
+  Passing & System test, per-slot claim counters \\
+VP-58 & Escalation changes the service order &
+  A source that misses its deadline while the processor is not yet accepting
+  interrupts is serviced before the source that outranked it, and its neighbour
+  without a deadline is left alone. &
+  Passing & System test, order of handler entries and of claims \\
+VP-59 & Register port under response backpressure &
+  A read or write response is held, with its payload, for as long as the master
+  withholds its ready signal, and no further address is accepted meanwhile. &
+  Passing & Backpressure test, 1, 3 and 10 cycle stalls \\
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Continuous invariants}}\\
+\midrule
+VP-60 & Offer is the registered resolution &
+  The request line and source number presented are the registered result of one
+  and the same resolution, in every cycle. &
+  Passing & Assertion, live in twelve runs \\
+VP-61 & Offer eligibility holds continuously &
+  Every offered source is pending, not in service, not masked by the processor,
+  and under nesting strictly more urgent than the level in service. &
+  Passing & Assertion, live in twelve runs \\
+VP-62 & Depth bounds and motion &
+  The depth never exceeds the limit, the limit never exceeds the physical stack,
+  the depth moves only on a claim or an end of interrupt, and no offer is made
+  at the limit. &
+  Passing & Assertion, live in twelve runs \\
+VP-63 & Claim and end of interrupt never coincide &
+  The two pulses are never asserted in the same cycle in any run, which is the
+  condition the depth accounting relies on. &
+  Passing & Assertion, live in twelve runs \\
+
+\bottomrule
+\end{longtable}
+
+\subsection{Measured results}
+
+The values below were measured on a regression run of the design revision this
+document describes.
+
+\begin{table}[H]
+\centering
+\caption{Regression result for the runs that exercise the controller}
+\label{tab:results}
+\small
+\begin{tabular}{@{}L{0.46\linewidth}ccc@{}}
+\toprule
+\textbf{Run} & \textbf{Runs} & \textbf{Checks} & \textbf{Result} \\
+\midrule
+Feature test                              & 1 & 139 & pass \\
+Scheduling corner cases                   & 1 & 26  & pass \\
+Reset                                     & 1 & 350 & pass \\
+Access classes and reserved bits          & 1 & 478 & pass \\
+Per-source status fields                  & 1 & 424 & pass \\
+Processor system test, controller checks  & 4 & 108 & pass \\
+Source range, through the processor       & 1 & 36  & pass \\
+Preemption and nesting                    & 1 & 16  & pass \\
+Deadline escalation                       & 1 & 12  & pass \\
+Register port under backpressure          & 1 & 14  & pass \\
+Machine timer delivery, controller checks & 1 & 4   & pass \\
+Interrupt masked at the peripheral        & 1 & 3   & pass \\
+\midrule
+\textbf{Total}                            & \textbf{15} & \textbf{1\,610} &
+\textbf{0 failures} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The processor system test figure counts the 27 checks per run that bear on the
+controller, out of 97 in the nominal configuration and 95 in each of the other
+three. The last three rows likewise count only the controller's share of runs
+whose subject is something else. The remaining checks in all of them are
+reported in the specifications for the blocks they belong to.
+
+These runs are drawn from two regressions: the processor regression, of 15 runs
+and 2\,561 checks, and the system regression, of 24 runs and 428 checks. Neither
+reports a failure, and both designs compile into a single library with no errors
+and no warnings.
+
+The secondary simulator flow was run on the same revision. Twelve of its runs,
+across the processor and the system, instantiate the controller with its
+assertions live, and none of them fired.
+
+\end{document}

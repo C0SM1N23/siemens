@@ -1,0 +1,882 @@
+% ===========================================================================
+% Verification Environment Specification - RV32I processor core
+% Compile: lualatex (three passes, for the table of contents)
+% ===========================================================================
+\documentclass[11pt]{article}
+
+\newcommand{\doctitle}{Verification Specification --- RV32I Processor Core}
+\newcommand{\docrev}{1.0}
+\newcommand{\docdate}{4 September 2026}
+
+\newcommand{\docsubject}{RV32I processor core (three-stage pipeline)}
+\input{preamble_spec}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{28mm}
+{\color{accent}\rule{\linewidth}{1.2pt}}\\[6mm]
+{\Huge\bfseries Verification Specification}\\[6mm]
+{\LARGE Processor Core for the RV32I\\[2mm]
+(RISC-V 32-Bit Integer Base) Instruction Set}\\[4mm]
+{\large Verification environment, methodology and plan}\\[5mm]
+{\color{accent}\rule{\linewidth}{1.2pt}}
+\vfill
+\identblock{Verification environment specification}
+\vspace{16mm}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ===========================================================================
+\section{Introduction}
+
+\subsection{Purpose of the document}
+
+This document specifies the verification environment applied to the RV32I
+processor core, the methodology behind it, and what that environment
+establishes about the design.
+
+The verification plan in the annex lists what is checked, and where each
+check is applied.
+
+\subsection{Validity of the document}
+
+The document is valid for the verification environment that targets the
+processor core described in the Design Specification. Results reported here were
+measured on the current revision, on both simulators.
+
+The regression contains further runs that target other blocks. Every figure
+reported here is measured over the runs that exercise the core, and excludes
+those other runs.
+
+\subsection{Definitions of terms and abbreviations}
+
+\begin{longtable}{@{}L{0.15\linewidth}L{0.77\linewidth}@{}}
+\toprule
+\textbf{Term} & \textbf{Definition} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Term} & \textbf{Definition} \\
+\midrule
+\endhead
+AMBA & Advanced Microcontroller Bus Architecture. The ARM bus interface
+       family that AXI4-Lite belongs to.  \\
+Assertion & A property stated in a temporal language and evaluated on every
+       clock cycle of every simulation in which it is active.  \\
+AXI4-Lite & The register-access subset of the AMBA Advanced eXtensible
+       Interface, revision 4.  \\
+Backpressure & Withholding a ready signal to delay a transfer, used here to
+       vary bus timing.  \\
+Block-level test & A test that drives one design block on its own ports,
+       independently of any program running on the core.  \\
+Checker & Logic that compares observed behaviour against expected behaviour and
+       records a mismatch.  \\
+CSR & Control and Status Register.  \\
+Directed test & A test with hand-chosen stimulus aimed at a specific behaviour,
+       as opposed to randomly generated stimulus.  \\
+Functional coverage & A set of named scenarios, each counted when it occurs, used
+       to show which planned situations a run actually reached.  \\
+ISA & Instruction Set Architecture.  \\
+Monitor & A passive observer of an interface that reports protocol violations
+       without driving anything.  \\
+Reference model & An independent implementation of the expected behaviour,
+       against which the design's output is compared automatically.  \\
+Regression & The complete set of runs, executed together from one compilation
+       to confirm that previously working behaviour still works.  \\
+RV32I & The 32-bit integer base instruction set of the RISC-V ISA.  \\
+Scoreboard & A record of expected results accumulated during a run and compared
+       at its end.  \\
+Self-checking test & A test that contains its own expected results and reports a
+       verdict, rather than producing output for a human to inspect.  \\
+System-level test & A test in which real software executes on the core against
+       behavioural memories.  \\
+WARL & Write Any Values, Reads Legal Values.  \\
+WFI & Wait For Interrupt.  \\
+\bottomrule
+\end{longtable}
+
+\subsection{Relationship with other documents}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}L{0.30\linewidth}L{0.60\linewidth}@{}}
+\toprule
+\textbf{Document} & \textbf{Relationship} \\
+\midrule
+Design Specification\newline --- RV32I Processor Core &
+  Specifies the design this environment verifies. Every behaviour referred to
+  here is defined there; this document does not restate architectural detail.
+  Section numbers of that document are cited where a verification item maps
+  directly onto a specified behaviour. \\
+\addlinespace
+The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA, version
+20191213 &
+  Source of the expected instruction behaviour used to derive directed
+  stimulus. \\
+\addlinespace
+The RISC-V Instruction Set Manual, Volume II: Privileged Architecture, version
+20211203 &
+  Source of the expected trap, CSR and interrupt behaviour used to derive
+  directed stimulus. \\
+\addlinespace
+AMBA AXI and ACE Protocol Specification, ARM IHI 0022E &
+  Source of the protocol rules checked by the bus monitors and the bus
+  assertions. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Notes on the notation used}
+
+\begin{itemize}[itemsep=2pt,topsep=3pt]
+\item Fixed-width type denotes a signal, a register or a literal value.
+\item Italic type marks emphasis; bold type marks a run-in heading.
+\item Verification plan items are identified as \texttt{VP-nn} and are listed in
+      the annex.
+\item ``The core'' is the design under verification; ``the controller'' is the
+      interrupt controller instantiated with it.
+\end{itemize}
+
+% ===========================================================================
+\section{Verification methodology}
+
+\subsection{Overview}
+
+Four mechanisms are used together, because each of them sees something the
+others cannot.
+
+\begin{table}[H]
+\centering
+\caption{Verification mechanisms and their reach}
+\label{tab:mechanisms}
+\small
+\begin{tabular}{@{}L{0.22\linewidth}L{0.68\linewidth}@{}}
+\toprule
+\textbf{Mechanism} & \textbf{What it establishes, and what it cannot} \\
+\midrule
+Directed self-checking tests &
+  Establish that a specific scenario produces a specific result. Each test
+  carries its own expected values and prints a verdict, so a run is judged by
+  counting verdicts rather than by inspecting waveforms. They see only the
+  scenarios someone thought to write. \\
+\addlinespace
+Protocol monitors &
+  Establish that both bus interfaces obey the protocol, continuously and
+  independently of what the design and the memory models believe is happening.
+  They see protocol violations, not wrong results. \\
+\addlinespace
+Assertions &
+  Establish invariants that must hold in every cycle of every run in which they
+  are active, including cycles no test was written for. They see rule
+  violations, not wrong values. \\
+\addlinespace
+Functional coverage &
+  Establishes which planned scenarios a run actually reached. It proves nothing
+  about correctness; it shows where the directed tests are silent. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Implementation strategy}
+
+Verification is applied at two levels, and the split is deliberate.
+
+\textbf{System level.} The core executes a real program, assembled from source
+into an instruction image, against behavioural memory models. The program is
+the checker: it computes results, stores them where the environment can read
+them, and drives the sequence of events. This is the closest approximation to
+how the core is used, and it is the level at which the interaction between
+fetch, execution, the memory interface and the trap mechanism is exercised as a
+whole. A second system-level test instantiates two cores against one shared
+memory through an arbiter.
+
+\textbf{Block level.} Individual design blocks are driven directly on their own
+ports. This level exists for properties a running program cannot isolate:
+
+\begin{itemize}[itemsep=2pt,topsep=3pt]
+\item reset values, which a program-driven test has already destroyed by the
+      time it observes anything;
+\item behaviour at operand boundaries that a hand-written program does not
+      naturally produce;
+\item each trap cause on its own, so that a single wrong cause is a failing
+      test rather than one line among many;
+\item structural properties such as full index coverage of the predictor
+      arrays, and the boundaries of the return address stack;
+\item parameter settings that no core-level run instantiates.
+\end{itemize}
+
+\textbf{Bus timing variation.} Every system-level run is repeated under four
+memory timing configurations: nominal, high fixed latency, and two seeds of
+randomised ready-signal backpressure. A design that only works when every slave
+answers immediately has not been verified. The mechanisms that hold state
+across a response --- the outstanding-transaction tracking in the fetch stage
+and the per-channel handshake tracking in the load/store unit --- are precisely
+the ones that fail only when a slave takes its time.
+
+\textbf{Two simulators.} The regression runs on the primary simulator. A second,
+independent simulator additionally compiles and runs the assertion layer and the
+functional coverage model, which the primary simulator's available edition
+cannot. Both flows are run for every revision, so an assertion is live evidence
+rather than a description. Compiling the same sources with two front ends is
+itself a check, since each tolerates different oversights.
+
+\textbf{Pass criteria.} A run passes only if all of the following hold: every
+self-check matched, no protocol monitor recorded a violation, no assertion
+fired, and every required functional coverage bin was reached. A missed required
+coverage bin fails the run in the same way a mismatched value does, because a
+scenario the plan claims and the stimulus never reaches is a hole in the plan,
+not a detail.
+
+\subsection{Verification plans}
+
+The verification plan is organised by design area rather than by test, so that
+a plan item can be traced to the behaviour it covers regardless of which test
+happens to implement it. Each item names the behaviour, how it is stimulated,
+how the expected result is determined, and where the check is applied. The items
+are listed in the annex.
+
+Items are grouped into five areas:
+
+\begin{table}[H]
+\centering
+\caption{Verification plan areas}
+\label{tab:areas}
+\small
+\begin{tabular}{@{}L{0.24\linewidth}L{0.66\linewidth}@{}}
+\toprule
+\textbf{Area} & \textbf{Covers} \\
+\midrule
+Instruction execution & Instruction decode, the arithmetic path, operand
+  forwarding, control transfers and branch prediction. \\
+Memory interface & The two bus ports, byte lanes, alignment and error
+  responses. \\
+Traps and exceptions & Cause selection, recorded state, precision, and the
+  vector mode. \\
+Interrupts & Acceptance conditions, the claim and end-of-interrupt handshake,
+  nesting, masking, and wait-for-interrupt. \\
+Control and status registers & Access classes, field behaviour, reset values
+  and the counters. \\
+System properties & Operation of more than one instance, and sustained
+  throughput. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Reference model}
+
+\textbf{No reference model is used.} The environment contains no independent
+implementation of the instruction set and performs no instruction-by-instruction
+comparison against one.
+
+Expected behaviour is instead determined in one of three ways, depending on the
+check:
+
+\begin{itemize}[itemsep=3pt,topsep=3pt]
+\item \textbf{Precomputed constants.} For directed tests, the expected value of
+      each check is derived by hand from the architecture specification and
+      embedded in the test. This is the majority of the checks.
+\item \textbf{Self-consistency within the program.} At system level many results
+      are chained, so that each value depends on the previous one. A broken
+      forwarding path or a lost result therefore propagates into a later value
+      rather than cancelling out.
+\item \textbf{Protocol rules.} For the bus interfaces the expected behaviour is
+      the protocol itself, evaluated continuously rather than compared against a
+      recorded trace.
+\end{itemize}
+
+The consequence is that instruction-level correctness is
+established only for the operand values and instruction sequences the directed
+tests actually use. The environment cannot detect an arithmetic error at an
+operand value no test applies. This is the main structural limitation of the
+current environment, and the reason the arithmetic path additionally receives a
+dedicated boundary-value test at block level.
+
+% ===========================================================================
+\section{Verification environment}
+
+\subsection{Overview}
+
+\begin{figure}[H]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[x=1mm,y=1mm,font=\small]
+  \begin{scope}[on background layer]
+    \fill[boxbg]    (-6,-42) rectangle (52,26);
+    \fill[boxbg!50] (62,-42) rectangle (118,26);
+    \fill[boxbg]    (126,-42) rectangle (188,26);
+  \end{scope}
+  \node[font=\small\bfseries,color=accent,anchor=west] at (-4,23) {STIMULUS};
+  \node[font=\small\bfseries,color=accent,anchor=west] at (64,23) {DESIGN UNDER TEST};
+  \node[font=\small\bfseries,color=accent,anchor=west] at (128,23) {CHECKING};
+
+  \node[blk,minimum width=44,minimum height=12] (prog) at (23,14)
+        {test program image\\\scriptsize assembled from source};
+  \node[blk,minimum width=44,minimum height=14] (mem) at (23,0)
+        {behavioural memory models\\\scriptsize latency and backpressure knobs};
+  \node[blk,minimum width=44,minimum height=12] (irq) at (23,-18)
+        {interrupt source driver\\\scriptsize plus real interrupt controller};
+
+  \node[blk,minimum width=40,minimum height=30] (dut) at (90,2)
+        {\textbf{processor core}\\[3pt]\scriptsize instruction port
+         \\\scriptsize data port\\\scriptsize interrupt interface};
+  \node[blkf,minimum width=40,minimum height=11] (clk) at (90,-26)
+        {clock and reset generator};
+
+  \node[blkf,minimum width=54,minimum height=10] (mon) at (156,16)
+        {bus protocol monitors};
+  \node[blkf,minimum width=54,minimum height=10] (sva) at (156,4)
+        {assertion layer, bound};
+  \node[blkf,minimum width=54,minimum height=10] (cov) at (156,-8)
+        {functional coverage counters};
+  \node[blk,minimum width=54,minimum height=12]  (sb)  at (156,-24)
+        {end-of-run scoreboard\\\scriptsize verdict and error count};
+
+  % stimulus into the core, one path each
+  \draw[flow] (45,14) -- (70,14) node[lbl,midway,above]{instructions};
+  \draw[flow] (45,0)  -- (70,0)  node[lbl,midway,above]{bus responses};
+  \draw[flow] (45,-18) -- (58,-18) -- (58,-8) -- (70,-8)
+        node[lbl,pos=0.12,above]{requests};
+  \draw[flow] (clk.north) -- (dut.south);
+
+  % core observed by the three passive observers
+  \draw[flow] (110,12) -- (120,12) -- (120,16) -- (129,16);
+  \draw[flow] (110,4)  -- (129,4);
+  \draw[flow] (110,-4) -- (120,-4) -- (120,-8) -- (129,-8);
+
+  % end-of-run evidence: architectural state from the core, contents from memory
+  \draw[flow] (110,-10) -- (114,-10) -- (114,-21) -- (129,-21)
+        node[lbl,pos=0.62,above]{register state};
+  \draw[flow] (23,-7) -- (23,-36) -- (156,-36) -- (sb.south)
+        node[lbl,pos=0.55,above]{memory contents, read back at the end of the run};
+\end{tikzpicture}}
+\caption{System-level verification environment. Stimulus enters from the left:
+the assembled program supplies instructions, the behavioural memories answer
+both bus ports with configurable timing, and the interrupt path is driven
+through a real interrupt controller so the core sees realistic request
+sequencing. On the right, three independent observers watch the core --- passive
+protocol monitors on each bus, an assertion layer bound into the design, and
+functional coverage counters --- while the end-of-run scoreboard compares the
+memory contents and the register state left behind by the program against
+precomputed values. A run fails if any observer or the scoreboard reports a
+mismatch.}
+\label{fig:env}
+\end{figure}
+
+At block level the structure is simpler: the block is instantiated on its own,
+a directed driver applies stimulus to its ports, and the same self-checking
+comparison mechanism records the verdicts. There are no monitors or coverage
+counters at that level; the checks are direct.
+
+\subsection{Control and drivers}
+
+\subsubsection{Clock and reset generation}
+
+A single generator produces the clock and the asynchronous, active-low reset for
+every run. Reset release is the starting point of every test, which is what
+allows the block-level tests to check reset values before any other activity.
+
+\subsubsection{Instruction supply}
+
+The system-level stimulus is a program written in assembly and translated into
+an instruction image loaded by the instruction memory model. The translation
+step also emits the address of every label in the program, and the environment
+uses those addresses in its checks. This matters for maintainability: a change
+to the program that shifts a label updates the corresponding expected value
+automatically, instead of silently invalidating a hand-written address constant.
+
+The program is written to exercise every instruction group, every synchronous
+trap cause, the CSR access rules and the interrupt sequence, and to leave its
+results in architectural registers and in a region of data memory that the
+environment reads at the end of the run.
+
+\subsubsection{Bus slave models}
+
+Both bus ports are answered by a behavioural AXI4-Lite slave model with internal
+memory. Each model decodes its own address range and answers an access outside
+that range with a decode error, which is how access-fault behaviour is
+stimulated without an interconnect.
+
+The models carry the timing knobs that make the bus timing sweep possible:
+
+\begin{table}[H]
+\centering
+\caption{Bus model configuration}
+\label{tab:memcfg}
+\small
+\begin{tabular}{@{}L{0.24\linewidth}L{0.66\linewidth}@{}}
+\toprule
+\textbf{Knob} & \textbf{Effect} \\
+\midrule
+Fixed read latency &
+  Wait cycles inserted before read data is presented. \\
+Fixed write latency &
+  Wait cycles inserted before the write response is presented. \\
+Backpressure rate &
+  Probability per cycle that a ready signal is withheld, plus a random number of
+  extra response wait states. \\
+Seed &
+  Makes a randomised configuration reproducible; the same seed replays the same
+  run exactly. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Interrupt stimulus}
+
+The core's interrupt interface is not driven directly with hand-made request
+patterns. Instead the real interrupt controller is instantiated between the
+environment and the core, and the environment plays the peripheral sources the
+way real peripherals would: a source is raised on an event and held until the
+handler clears it. This gives the core realistic request sequencing, including
+requests that remain asserted through their own handler.
+
+The source movements are chosen to create specific situations rather than to be
+plausible: one source is enabled in the controller but never in the core, so
+that it must never be accepted; two sources rise together so that priority order
+is observable; and one source rises while a data transaction is in flight, so
+that the acceptance boundary is exercised.
+
+At block level, interrupts are applied directly to the core's interface, which
+is what allows individual source numbers to be selected deterministically.
+
+\subsection{Monitors and checkers}
+
+\subsubsection{Bus protocol monitors}
+
+One passive monitor instance observes each bus. Monitors drive nothing; they
+observe the same signals the design and the slave models exchange and flag a
+violation in the cycle it occurs. Checked rules:
+
+\begin{itemize}[itemsep=2pt,topsep=3pt]
+\item \textbf{Stability.} Once a valid signal is asserted it remains asserted,
+      and its payload remains unchanged, until the handshake completes. Applied
+      to all five channels.
+\item \textbf{Ordering.} Read data appears only with a read outstanding; a write
+      response appears only after both the address and the data handshakes have
+      completed; a second request on a channel before the response of the first
+      violates the single-outstanding rule.
+\item \textbf{Defined values.} No undefined value on a valid or ready signal out
+      of reset, and none on a payload while its valid signal is asserted.
+\item \textbf{Response legality.} The exclusive-access response encoding is not
+      legal on AXI4-Lite and is flagged.
+\end{itemize}
+
+Each monitor exposes an error count that must be zero at the end of the run, and
+read and write transaction counts. The counts are checked to be non-zero, which
+prevents a silent bus from being mistaken for a clean one.
+
+\subsubsection{Assertion layer}
+
+Assertions are bound into the design rather than written into it, so no design
+source is modified for verification. Two groups exist.
+
+\begin{table}[H]
+\centering
+\caption{Assertion groups}
+\label{tab:sva}
+\small
+\begin{tabular}{@{}L{0.24\linewidth}L{0.66\linewidth}@{}}
+\toprule
+\textbf{Group} & \textbf{Properties} \\
+\midrule
+Bus protocol &
+  The same stability, ordering, outstanding-transaction and response-legality
+  rules the monitors apply, expressed as temporal properties and bound to each
+  port. The instruction port additionally asserts that every address is word
+  aligned, and that no request is issued while reset is asserted. \\
+\addlinespace
+Core invariants &
+  The claim and end-of-interrupt outputs are each exactly one cycle wide; a
+  claim never occurs without the trap-active output; an end-of-interrupt only
+  follows a return instruction; an interrupt is never accepted while a data
+  transaction is active; trap entry always raises the trap-active output, a
+  return at the last open level always drops it and a return at an inner level
+  always leaves it raised; a trapping instruction never
+  reaches writeback; a stalled execute stage always feeds a bubble to writeback;
+  register zero reads zero on both read ports; the byte strobe pattern is always
+  one of the seven legal shapes; a read and a write are never issued together on
+  the data port; and no new instruction fetch is issued while the core is
+  sleeping in wait-for-interrupt. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The assertion layer is compiled and evaluated by the secondary simulator only;
+the regression on the primary simulator runs the same tests without it. An
+assertion therefore contributes evidence for the system-level run of the
+secondary flow and not for the block-level runs, which is why the protocol
+monitors duplicate part of the same rule set in ordinary logic: the monitor
+checks apply everywhere.
+
+One property in this group was wrong until the trap-active output was exercised
+under nesting. It required every return to drop the output, which holds only
+when a single trap level is open; a return closing an inner level has to leave
+it raised. The behaviour stated above --- a return at the last open level drops
+it --- is what the core has always done, and the property now says so, split
+into the two cases so that both directions are checked.
+
+\subsubsection{Self-checking comparison}
+
+All directed checks use one comparison mechanism. It compares expected against
+observed using a match that treats an undefined value as a mismatch, so a signal
+that never resolved cannot pass a check by accident. Each comparison prints a
+labelled verdict and increments an error counter on mismatch. A run ends with a
+single banner reporting either that all checks passed or how many failed.
+
+This is why the regression is validated by counting banners and verdict lines
+rather than by trusting a process exit code.
+
+\subsubsection{Functional coverage}
+\label{sec:fcov}
+
+The coverage model counts named scenarios in the cycle they occur, sampled at
+four points: instruction commit, trap entry, control transfer resolution, and
+bus response handshakes. Counted scenarios include the instruction classes, the
+load and store widths, each branch condition in both directions, the four
+combinations of prediction against outcome, each trap cause, the CSR operation
+forms, the forwarding combinations, the wait-for-interrupt scenarios, the return
+stack push and pop cases, the interrupt claims per source, and the bus response
+codes including error responses and backpressure.
+
+Each bin is marked required or optional. A required bin that is never reached
+fails the run. The optional bins are those that a nominal run legitimately does
+not reach: the negative cases that must never occur, and the bins that only the
+randomised-backpressure configurations produce.
+
+The coverage report is produced by the secondary simulator flow. On the run
+measured for this revision, 88 of 92 bins were reached. The four that were not
+are all optional and all of them are bins the nominal configuration cannot
+produce: the interrupt source that is deliberately left masked for the whole run
+and never claimed, and the two backpressure bins that only the randomised
+timing configurations reach. No required bin was missed, so the coverage gate
+passed.
+
+\subsection{Simulation environment setup}
+
+\subsubsection{Structure}
+
+The environment is organised in four layers, compiled bottom-up in dependency
+order:
+
+\begin{enumerate}[itemsep=2pt,topsep=3pt]
+\item the design, ordered from leaf blocks up to the core;
+\item the shared verification models --- clock and reset generation, the bus
+      slave model, the protocol monitor, and a minimal address decoder and
+      arbiter used to build small bus topologies;
+\item the system-level tests, which instantiate the core together with those
+      models;
+\item the block-level tests, each of which instantiates one design block.
+\end{enumerate}
+
+Interface wiring for the bus bundles is factored into shared definitions so that
+a port list appears once rather than once per test, and the self-checking
+comparison is likewise shared.
+
+The compile order is not strictly required by the simulator, which resolves
+module instances at elaboration. It is maintained because macro and include
+visibility does depend on order, because a missing block is then reported at the
+level that needed it, and because downstream tools do require definition before
+use.
+
+\subsubsection{Scripts}
+
+Three entry points exist, each doing one thing:
+
+\begin{table}[H]
+\centering
+\caption{Environment entry points}
+\label{tab:scripts}
+\small
+\begin{tabular}{@{}L{0.26\linewidth}L{0.64\linewidth}@{}}
+\toprule
+\textbf{Entry point} & \textbf{Function} \\
+\midrule
+Program assembly &
+  Translates the test program sources into instruction images and emits the
+  label address definitions used by the checks. Must run before any
+  system-level test. \\
+\addlinespace
+Regression &
+  One compilation followed by every run in sequence, each configured through
+  elaboration-time parameter overrides and each ending in its own verdict
+  banner. \\
+\addlinespace
+Assertion and coverage run &
+  Builds the same tests on the secondary simulator with the assertion layer and
+  the coverage model included, runs the system-level test, and applies the pass
+  criteria of Section~2.2, including the coverage gate. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Setup and configuration}
+
+Per-run configuration is applied at elaboration through parameter overrides on
+the bus models --- read latency, write latency, backpressure rate and seed. Each
+configured run echoes the values read back from the elaborated design before it
+starts, so the log itself is evidence that the intended configuration was
+applied rather than silently ignored.
+
+The prerequisites for running the environment are the two simulators, and a
+Python interpreter for the program assembly step. No other tool is required and
+no license-managed tool is needed for the assertion flow, which is why the
+assertion and coverage layer can also run unattended.
+
+% ===========================================================================
+\section{Annex}
+
+\subsection{Verification plan}
+
+Every item below is checked, and passed in the regression measured for this
+revision.
+
+\begin{longtable}{@{}lL{0.16\linewidth}L{0.38\linewidth}L{0.085\linewidth}L{0.165\linewidth}@{}}
+\caption{Verification plan}\label{tab:vplan}\\
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test, checker} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test, checker} \\
+\midrule
+\endhead
+
+\multicolumn{5}{@{}l}{\textbf{Instruction execution}}\\
+\midrule
+VP-01 & Instruction group execution &
+  Every implemented instruction group executes and produces the architectural
+  result. Results are chained so a lost value propagates. &
+  Passing & System test, register and memory scoreboard \\
+VP-02 & Arithmetic operation decode &
+  The mapping from operation class and function fields to the concrete
+  operation, exhaustive over the encodings the decoder can produce. &
+  Passing & Arithmetic block test, per-case comparison \\
+VP-03 & Arithmetic boundary values &
+  Add and subtract at the sign boundary, all shift amounts for all three
+  shifts, signed against unsigned comparison, and the bitwise operations over a
+  boundary-pattern matrix. &
+  Passing & Arithmetic block test, per-case comparison \\
+VP-04 & Operand forwarding &
+  A result produced in writeback is used by the immediately following
+  instruction, for each source operand and for both together. &
+  Passing & System test, chained results; coverage counters \\
+VP-05 & Branch direction and target &
+  Each branch condition taken and not taken, and both jump forms including the
+  link value. &
+  Passing & System test, register and memory scoreboard \\
+VP-06 & Predictor learning &
+  A control transfer records its outcome and target and predicts accordingly on
+  the next encounter, in both directions. &
+  Passing & Predictor block test, port-level comparison \\
+VP-07 & Predictor indexing and tagging &
+  All entries individually addressable; two addresses sharing an index evict
+  each other rather than producing a false hit. &
+  Passing & Predictor block test, exhaustive over the index \\
+VP-08 & Return stack behaviour &
+  Push and pop ordering, routing of a return-tagged entry, fall-back when the
+  stack is empty, overflow beyond the configured depth, and the call-and-return
+  instruction that replaces the top of stack. &
+  Passing & Predictor block test, port-level comparison \\
+VP-09 & Return stack disabled &
+  With the stack depth parameter set to zero, a return-tagged entry predicts
+  from the stored target and no output is undefined. &
+  Passing & Predictor block test, second instance \\
+VP-10 & Predictor reset &
+  All entries invalid after reset, no undefined value on any output, and return
+  to that state from a fully trained predictor. &
+  Passing & Predictor block test, port and array inspection \\
+VP-11 & Illegal instruction has no effect &
+  An illegal encoding writes no register and issues no bus transaction. &
+  Passing & System test and trap test, memory scoreboard \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Memory interface}}\\
+\midrule
+VP-12 & Load and store widths &
+  All five load forms and all three store forms, including sign and zero
+  extension and byte lane selection. &
+  Passing & System test, register and memory scoreboard \\
+VP-13 & Byte strobe shapes &
+  Byte and half-word stores drive only the lanes they are supposed to, and every
+  write presents one of the seven legal strobe patterns. &
+  Passing & System test, memory scoreboard per lane; assertion in the secondary
+  flow \\
+VP-14 & Store-to-load ordering &
+  A value stored and immediately reloaded returns what was stored. &
+  Passing & System test, memory scoreboard \\
+VP-15 & Bus protocol compliance &
+  Handshake stability, channel ordering, single outstanding transaction, and
+  response legality on both ports. &
+  Passing & Protocol monitors, every run; assertions in the secondary flow \\
+VP-16 & Bus timing variation &
+  All system-level behaviour repeated under high fixed latency and under two
+  seeds of randomised backpressure. &
+  Passing & System test, four configurations \\
+VP-17 & Single outstanding transaction &
+  Neither port issues a second request before the response of the first, and the
+  data port never issues a read and a write together. &
+  Passing & Protocol monitors; assertion in the secondary flow \\
+VP-18 & Instruction bus quiet during sleep &
+  No new fetch is issued while the core sleeps in wait-for-interrupt. &
+  Passing & System test measurement; assertion in the secondary flow \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Traps and exceptions}}\\
+\midrule
+VP-19 & Each synchronous cause &
+  One isolated test per cause, checking the recorded cause, return address,
+  associated value and the handler address actually entered. &
+  Passing & Trap test, one case per cause \\
+VP-20 & Cause reachability and count &
+  All nine synchronous causes reached within one program, with the number of
+  handler entries counted exactly so a missing or duplicated trap cannot cancel
+  out. &
+  Passing & System test, counter in memory \\
+VP-21 & Trap precision &
+  A trapping instruction never reaches writeback. &
+  Passing & Assertion (secondary flow); negative checks in the trap test \\
+VP-22 & Misaligned access issues nothing &
+  A misaligned load or store produces no bus transaction. &
+  Passing & Trap test, bus observation \\
+VP-23 & Vectored trap entry &
+  In vectored mode an interrupt enters at the base plus four times its cause,
+  while an exception still enters at the base. &
+  Passing & Trap test and system test \\
+VP-24 & Return address by trap kind &
+  An exception records the offending instruction; an interrupt records the
+  instruction to resume from; an interrupt that ends a sleep records the
+  following instruction. &
+  Passing & System test and trap test, recorded value compared \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Interrupts}}\\
+\midrule
+VP-25 & Acceptance at an instruction boundary &
+  No interrupt is accepted while a data transaction is in flight; a request
+  raised during a transaction is held and accepted afterwards, with the
+  transaction result intact. &
+  Passing & System test, event ordering; assertion in the secondary flow \\
+VP-26 & Claim and end-of-interrupt shape &
+  Both pulses are exactly one cycle wide, the claim is accompanied by the
+  trap-active output, and an end-of-interrupt only follows a return. &
+  Passing & System test invariants; assertions in the secondary flow \\
+VP-27 & Return from exception emits no end-of-interrupt &
+  A synchronous exception taken inside an interrupt handler returns without
+  releasing the interrupt level, and the trap-active output stays asserted
+  across it. &
+  Passing & Trap test, end-of-interrupt counter sampled inside the handler \\
+VP-28 & Two masks compose &
+  A source enabled in the controller but masked in the core is never accepted,
+  and does not prevent other sources from being served. &
+  Passing & System test, claim counters per source \\
+VP-29 & Individual source numbers &
+  Interrupts on the lowest, a middle and the highest source number are accepted
+  and report the correct cause. &
+  Passing & Trap test, three isolated cases \\
+VP-30 & Wait-for-interrupt &
+  Sleep entry, wake by an enabled pending interrupt, and fall-through when the
+  global enable is clear. &
+  Passing & System test, recorded values and sleep duration \\
+VP-31 & Two nested interrupt handlers &
+  A second interrupt preempts a handler that has re-enabled interrupts; each
+  level is claimed once and each return releases exactly its own level. &
+  Passing & Trap test, claim and end-of-interrupt counters \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{Control and status registers}}\\
+\midrule
+VP-32 & Reset values &
+  The reset value of every implemented register. &
+  Passing & CSR block test, read after reset \\
+VP-33 & Read-only enforcement &
+  A write to each read-only register traps and leaves the value unchanged, for
+  all three CSR operations. &
+  Passing & CSR block test, per-register \\
+VP-34 & Read-only fields &
+  Reserved fields inside writable registers read zero and ignore writes. &
+  Passing & CSR block test, per-field \\
+VP-35 & WARL behaviour &
+  Writes to the identification register and to the trap vector mode are accepted
+  without trapping, and only a legal value is read back. &
+  Passing & CSR block test \\
+VP-36 & Tied-off registers &
+  The unimplemented counters and event selectors read zero and swallow writes
+  without trapping, across all their addresses. &
+  Passing & CSR block test, all addresses \\
+VP-37 & Absent registers &
+  A read or write of an unimplemented address raises an illegal instruction
+  exception. &
+  Passing & CSR block test \\
+VP-38 & Pure read exemption &
+  A set or clear operation with a zero source does not count as a write and does
+  not trap on a read-only register. &
+  Passing & CSR block test \\
+VP-39 & Hart identifier &
+  The identifier register follows its parameter, so two instances are
+  distinguishable. &
+  Passing & CSR block test with a non-zero parameter; dual-instance test \\
+VP-40 & Counter increment &
+  Each counted event increments its counter. Architecturally exact where the
+  count is deterministic; non-zero where it depends on bus timing. &
+  Passing & System test, values read by the program \\
+VP-41 & Counter write behaviour &
+  A write to one half of a counter takes effect while the other half still
+  takes that cycle's increment, and counting resumes afterwards. &
+  Passing & System test, before and after comparison \\
+
+\midrule
+\multicolumn{5}{@{}l}{\textbf{System properties}}\\
+\midrule
+VP-42 & Multi-instance operation &
+  Two instances with distinct identifiers make progress through one arbitrated
+  shared memory and complete a handshake through it. &
+  Passing & Dual-instance test, result and flag comparison \\
+VP-43 & Sustained throughput &
+  One instruction per cycle on straight-line code with an instruction memory
+  that answers immediately. Measured as 33 cycles for a window of 33
+  instructions. &
+  Passing & System test, cycle window measured by the program itself \\
+\bottomrule
+\end{longtable}
+
+\subsection{Measured results}
+
+The values below were measured on a regression run of the design revision this
+document describes.
+
+\begin{table}[H]
+\centering
+\caption{Regression result for the runs that exercise the core}
+\label{tab:results}
+\small
+\begin{tabular}{@{}L{0.42\linewidth}ccc@{}}
+\toprule
+\textbf{Run} & \textbf{Configurations} & \textbf{Checks} & \textbf{Result} \\
+\midrule
+System test, nominal timing            & 1 & 97 & pass \\
+System test, high fixed latency        & 1 & 95 & pass \\
+System test, randomised backpressure   & 2 & 190 & pass \\
+Dual-instance test                     & 1 & 5 & pass \\
+CSR access, fields and reset           & 1 & 288 & pass \\
+Trap causes, one case each             & 1 & 120 & pass \\
+Branch predictor                       & 1 & 68 & pass \\
+Arithmetic path                        & 1 & 57 & pass \\
+\midrule
+\textbf{Total}                         & \textbf{9} & \textbf{920} & \textbf{0 failures} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Run in full, the regression comprises 15 runs and 2\,561 checks with no
+failures. The whole design compiles into a single library with no errors and no
+warnings.
+
+The secondary flow was run on the same revision, with every assertion live. It
+reported 97 passing checks, no assertion failure, and the coverage result in
+Section~\ref{sec:fcov}.
+
+\end{document}

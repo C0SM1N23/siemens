@@ -1,0 +1,99 @@
+% ---------------------------------------------------------------------------
+% Shared preamble for the specification set.
+% Compiled with LuaLaTeX.
+% ---------------------------------------------------------------------------
+\usepackage{fontspec}
+\setmainfont{Latin Modern Roman}[SmallCapsFont={Latin Modern Roman Caps}]
+\setsansfont{Latin Modern Sans}
+\setmonofont{Latin Modern Mono}[BoldFont={Latin Modern Mono}]
+
+\usepackage[a4paper,top=27mm,bottom=25mm,left=25mm,right=22mm,headheight=15pt]{geometry}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{tikz-timing}
+\usetikzlibrary{arrows.meta,positioning,automata,calc,fit,backgrounds,
+                shapes.geometric,shapes.misc,decorations.pathreplacing}
+\usepackage[hidelinks,bookmarksnumbered]{hyperref}
+
+% --- palette ---------------------------------------------------------------
+\definecolor{accent}{RGB}{0,72,110}
+\definecolor{rulegrey}{RGB}{120,120,120}
+\definecolor{boxbg}{RGB}{244,246,248}
+
+% --- head / foot -----------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\nouppercase{\leftmark}}
+\fancyhead[R]{\small\thepage}
+\fancyfoot[L]{\footnotesize\doctitle}
+\fancyfoot[R]{\footnotesize Rev.\ \docrev\ --- \docdate}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyfoot[L]{\footnotesize\doctitle}%
+  \fancyfoot[R]{\footnotesize Rev.\ \docrev\ --- \docdate}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0.4pt}%
+}
+
+\titleformat{\section}{\normalfont\Large\bfseries\color{accent}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{\thesubsubsection}{0.7em}{}
+\titlespacing*{\section}{0pt}{16pt}{8pt}
+
+\captionsetup{font=small,labelfont={bf,color=accent},skip=5pt}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+
+% --- macros ----------------------------------------------------------------
+\newcommand{\sig}[1]{\texttt{#1}}
+\newcommand{\reg}[1]{\texttt{#1}}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+\tikzset{
+  blk/.style={draw=accent,fill=white,rounded corners=1.5pt,align=center,
+              inner sep=5pt,font=\small,minimum height=9mm},
+  blkf/.style={blk,fill=boxbg},
+  regbox/.style={draw=rulegrey,fill=boxbg,align=center,inner sep=4pt,font=\footnotesize},
+  flow/.style={-{Stealth[length=2.4mm]},thick,draw=accent},
+  flowd/.style={flow,dashed},
+  lbl/.style={font=\scriptsize,inner sep=1.5pt,fill=white},
+  stb/.style={draw=accent,fill=white,rounded corners=2pt,align=center,
+              font=\small,inner xsep=5pt,inner ysep=4pt,
+              minimum height=8mm,minimum width=19mm},
+  stbi/.style={stb,double,double distance=0.6pt},
+}
+
+% identification block used on the title page of every document in the set
+\providecommand{\docsubject}{}
+\newcommand{\identblock}[1]{%
+\begin{center}
+\begin{tabular}{@{}L{0.28\linewidth}L{0.60\linewidth}@{}}
+\toprule
+Document & \doctitle \\
+Document type & #1 \\
+Subject & \docsubject \\
+Revision & \docrev \\
+Date & \docdate \\
+Author & Bunea Cosmin-Andrei \\
+Status & Released for review \\
+\bottomrule
+\end{tabular}
+\end{center}}
