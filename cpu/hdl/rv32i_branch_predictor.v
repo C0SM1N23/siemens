@@ -44,7 +44,7 @@
 
 `timescale 1ns/1ps
 
-module branch_predictor #(
+module rv32i_branch_predictor #(
     parameter RAS_DEPTH = 8,    // return-address stack entries; 0 disables (D24)
     parameter ENTRIES   = 128   // BTB/BHT entries, power of 2 (index = PC[IDX_W+1:2])
 )(

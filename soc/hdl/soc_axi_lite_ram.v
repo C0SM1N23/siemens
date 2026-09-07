@@ -37,7 +37,7 @@
 
 `timescale 1ns/1ps
 
-module axi_lite_ram #(
+module soc_axi_lite_ram #(
     parameter integer WORDS      = 2048, // depth in 32-bit words
     parameter         INIT_FILE  = "",   // optional $readmemh image, "" = none
     parameter integer READ_LAT   = 0,    // verification only, see the header

@@ -72,17 +72,33 @@ wire [31:0] reg_wdata, reg_rdata;
 wire [3:0]  reg_wstrb;
 
 axi_lite_slave tmr_slv (
-    .clk_i(clk_i), .rst_n_i(rst_n_i),
-    .s_axi_awaddr_i(s_axi_awaddr_i), .s_axi_awvalid_i(s_axi_awvalid_i), .s_axi_awready_o(s_axi_awready_o),
-    .s_axi_wdata_i(s_axi_wdata_i), .s_axi_wstrb_i(s_axi_wstrb_i),
-    .s_axi_wvalid_i(s_axi_wvalid_i), .s_axi_wready_o(s_axi_wready_o),
-    .s_axi_bresp_o(s_axi_bresp_o), .s_axi_bvalid_o(s_axi_bvalid_o), .s_axi_bready_i(s_axi_bready_i),
-    .s_axi_araddr_i(s_axi_araddr_i), .s_axi_arvalid_i(s_axi_arvalid_i), .s_axi_arready_o(s_axi_arready_o),
-    .s_axi_rdata_o(s_axi_rdata_o), .s_axi_rresp_o(s_axi_rresp_o),
-    .s_axi_rvalid_o(s_axi_rvalid_o), .s_axi_rready_i(s_axi_rready_i),
-    .wr_en_o(reg_wr), .wr_addr_o(reg_waddr), .wr_data_o(reg_wdata), .wr_strb_o(reg_wstrb),
+    .clk_i(clk_i),
+    .rst_n_i(rst_n_i),
+    .s_axi_awaddr_i(s_axi_awaddr_i),
+    .s_axi_awvalid_i(s_axi_awvalid_i),
+    .s_axi_awready_o(s_axi_awready_o),
+    .s_axi_wdata_i(s_axi_wdata_i),
+    .s_axi_wstrb_i(s_axi_wstrb_i),
+    .s_axi_wvalid_i(s_axi_wvalid_i),
+    .s_axi_wready_o(s_axi_wready_o),
+    .s_axi_bresp_o(s_axi_bresp_o),
+    .s_axi_bvalid_o(s_axi_bvalid_o),
+    .s_axi_bready_i(s_axi_bready_i),
+    .s_axi_araddr_i(s_axi_araddr_i),
+    .s_axi_arvalid_i(s_axi_arvalid_i),
+    .s_axi_arready_o(s_axi_arready_o),
+    .s_axi_rdata_o(s_axi_rdata_o),
+    .s_axi_rresp_o(s_axi_rresp_o),
+    .s_axi_rvalid_o(s_axi_rvalid_o),
+    .s_axi_rready_i(s_axi_rready_i),
+    .wr_en_o(reg_wr),
+    .wr_addr_o(reg_waddr),
+    .wr_data_o(reg_wdata),
+    .wr_strb_o(reg_wstrb),
     .wr_ok_i(reg_waddr <= OFF_CMP_HI),
-    .rd_addr_o(reg_raddr), .rd_data_i(reg_rdata), .rd_ok_i(reg_raddr <= OFF_CMP_HI)
+    .rd_addr_o(reg_raddr),
+    .rd_data_i(reg_rdata),
+    .rd_ok_i(reg_raddr <= OFF_CMP_HI)
 );
 
 // byte-lane merge for register writes (WSTRB per AXI, like the DP-SRAM)

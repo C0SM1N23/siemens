@@ -15,9 +15,9 @@
 
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module control (
+module rv32i_control (
     input      [6:0]  opcode_i,
     input      [2:0]  funct3_i,
     input      [6:0]  funct7_i,

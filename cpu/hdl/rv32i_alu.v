@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module alu (
+module rv32i_alu (
     input      [31:0] operand_a_i,
     input      [31:0] operand_b_i,
     input      [3:0]  alu_ctrl_i,

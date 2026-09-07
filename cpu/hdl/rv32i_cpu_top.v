@@ -51,9 +51,9 @@
 
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module cpu_top #(
+module rv32i_cpu_top #(
     parameter RESET_PC   = 32'h0000_0000, // reset vector, until the memory map is settled
     parameter HART_ID    = 32'd0,         // mhartid value; lets 2..N cores share one SoC
     parameter BP_ENTRIES = 128,           // BTB/BHT entries, power of 2 (D9)
@@ -132,7 +132,9 @@ wire [31:0] f_instr, f_pc, f_ptg;
 wire [31:0] bp_lookup_pc, bp_target;
 wire        bp_taken;
 
-fetch_unit #(.RESET_PC(RESET_PC)) fetch_unit_inst (
+rv32i_fetch_unit #(
+    .RESET_PC(RESET_PC)
+) fetch_unit_inst (
     .clk_i           (clk_i),
     .rst_n_i         (rst_n_i),
     .ibus_araddr_o   (ibus_axi_araddr_o),
@@ -160,7 +162,10 @@ fetch_unit #(.RESET_PC(RESET_PC)) fetch_unit_inst (
 wire        bp_update_en;
 wire [31:0] actual_target;
 
-branch_predictor #(.ENTRIES(BP_ENTRIES), .RAS_DEPTH(RAS_DEPTH)) branch_predictor_inst (
+rv32i_branch_predictor #(
+    .ENTRIES(BP_ENTRIES),
+    .RAS_DEPTH(RAS_DEPTH)
+) branch_predictor_inst (
     .clk_i           (clk_i),
     .rst_n_i         (rst_n_i),
     .lookup_pc_i     (bp_lookup_pc),
@@ -184,7 +189,7 @@ always @(posedge clk_i or negedge rst_n_i) begin
         ifdx_valid_q <= ~if_dx_bubble;
 end
 
-// IF/DX instruction word: the payload bit whose reset is load-bearing. control.v
+// IF/DX instruction word: the payload bit whose reset is load-bearing. rv32i_control.v
 // decodes it combinationally, so an X here makes MemRead/MemWrite/illegal X from
 // time 0. Those are masked by dec_live while valid=0, but on the first cycle
 // valid rises the AND resolves to X for one delta before the decoder re-runs,
@@ -224,7 +229,7 @@ wire [4:0]  rd, rs1, rs2;
 wire [2:0]  funct3;
 wire [31:0] imm_out;
 
-decode decode_inst (
+rv32i_decode decode_inst (
     .instr_i  (ifdx_instr_q),
     .opcode_o (opcode),
     .rd_o     (rd),
@@ -234,7 +239,7 @@ decode decode_inst (
     .funct7_o (funct7)
 );
 
-imm_gen imm_gen_inst (
+rv32i_imm_gen imm_gen_inst (
     .instr_i   (ifdx_instr_q),
     .imm_out_o (imm_out)
 );
@@ -246,7 +251,7 @@ wire        csr_instr, csr_imm, ctrl_mret, ctrl_ecall, ctrl_ebreak, ctrl_illegal
 wire        ctrl_wfi;
 wire [1:0]  csr_op;
 
-control control_inst (
+rv32i_control control_inst (
     .opcode_i    (opcode),
     .funct3_i    (funct3),
     .funct7_i    (funct7),
@@ -276,7 +281,7 @@ control control_inst (
 wire [31:0] rs1_data, rs2_data, wb_data;
 wire        fwd_rs1, fwd_rs2;
 
-regfile regfile_inst (
+rv32i_regfile regfile_inst (
     .clk_i      (clk_i),
     .rst_n_i    (rst_n_i),
     .rs1_addr_i (rs1),
@@ -330,7 +335,7 @@ assign s2_pc4 = ifdx_pc_q + 32'd4;
 wire [31:0] alu_result;
 wire [31:0] alu_opa = (ALUOp == `ALUOP_AUIPC) ? ifdx_pc_q : rs1_v;
 
-alu_top alu_top_inst (
+rv32i_alu_top alu_top_inst (
     .operand_a_i     (alu_opa),
     .operand_b_reg_i (rs2_v),
     .operand_b_imm_i (imm_out),
@@ -344,7 +349,7 @@ alu_top alu_top_inst (
 // real direction + target of the control transfer
 wire pc_src;
 
-branch_unit branch_unit_inst (
+rv32i_branch_unit branch_unit_inst (
     .pc_in_i         (ifdx_pc_q),
     .imm_out_i       (imm_out),
     .rs1_data_i      (rs1_v),
@@ -376,7 +381,9 @@ wire [4:0]  trap_code = irq_take ? {1'b1, cpu_irq_vec_i} : exc_cause;  // irq: 1
 wire [31:0] exc_tval;
 wire [31:0] trap_val = irq_take ? 32'b0 : exc_tval;
 
-csr_file #(.HART_ID(HART_ID)) csr_file_inst (
+rv32i_csr_file #(
+    .HART_ID(HART_ID)
+) csr_file_inst (
     .clk_i         (clk_i),
     .rst_n_i       (rst_n_i),
     .csr_addr_i    (ifdx_instr_q[31:20]),
@@ -414,7 +421,7 @@ wire [31:0] lsu_rdata;
 wire        lsu_req = dec_live && (MemRead | MemWrite) &&
                       !ctrl_illegal && !mem_misaligned;
 
-lsu lsu_inst (
+rv32i_lsu lsu_inst (
     .clk_i          (clk_i),
     .rst_n_i        (rst_n_i),
     .req_i          (lsu_req),
@@ -448,7 +455,7 @@ lsu lsu_inst (
     .dbus_rready_o  (dbus_axi_rready_o)
 );
 
-exception_unit exception_unit_inst (
+rv32i_exception_unit exception_unit_inst (
     .valid_i          (ifdx_valid_q && !irq_take),
     .fetch_fault_i    (ifdx_fault_q),
     .illegal_i        (ctrl_illegal | csr_illegal),
@@ -495,7 +502,7 @@ assign redirect_pc = trap_take ? trap_vector :
                      mret_exec ? mepc_out    :
                      ctl_taken ? actual_target : s2_pc4;
 
-hazard_unit hazard_unit_inst (
+rv32i_hazard_unit hazard_unit_inst (
     .fetch_valid_i  (f_valid),
     .lsu_busy_i     (lsu_busy),
     .wfi_wait_i     (wfi_wait),
@@ -625,7 +632,7 @@ always @(posedge clk_i or negedge rst_n_i) begin
 end
 
 // S3: writeback
-writeback_mux writeback_mux_inst (
+rv32i_writeback_mux writeback_mux_inst (
     .alu_result_i (dxwb_result_q),
     .mem_data_i   (dxwb_mem_q),
     .pc_plus4_i   (dxwb_pc4_q),

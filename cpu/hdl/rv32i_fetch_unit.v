@@ -32,7 +32,7 @@
 
 `timescale 1ns/1ps
 
-module fetch_unit #(
+module rv32i_fetch_unit #(
     parameter RESET_PC = 32'h0000_0000  // reset vector, until the memory map is settled
 )(
     input             clk_i,

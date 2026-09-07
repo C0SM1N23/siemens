@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module imm_gen (
+module rv32i_imm_gen (
     input      [31:0] instr_i,
     output reg [31:0] imm_out_o
 );

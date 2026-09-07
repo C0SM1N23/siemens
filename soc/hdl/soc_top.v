@@ -43,7 +43,7 @@ module soc_top #(
     parameter BP_ENTRIES = 128,
     parameter RAS_DEPTH  = 8,
 
-    // Memory timing, verification only - see the header of axi_lite_ram.v.
+    // Memory timing, verification only - see the header of soc_axi_lite_ram.v.
     // They are surfaced here so the regression can sweep bus timing with -G
     // without editing anything. All zero is the real hardware.
     parameter IMEM_READ_LAT   = 0,
@@ -110,7 +110,7 @@ wire [15:0] cpu_irq_mask, pic_pending;
 
 assign cpu_irq_o = cpu_irq;
 
-cpu_top #(
+rv32i_cpu_top #(
     .RESET_PC   (RESET_PC),
     .HART_ID    (32'd0),
     .BP_ENTRIES (BP_ENTRIES),
@@ -168,7 +168,7 @@ wire [31:0] imem_rdata;
 wire [1:0]  imem_rresp;
 wire        imem_rvalid, imem_rready;
 
-axi_lite_dec #(
+soc_axi_lite_dec #(
     .N    (1),
     .BASE (`SOC_IMEM_BASE),
     .MASK (`SOC_IMEM_MASK)
@@ -217,7 +217,7 @@ axi_lite_dec #(
     .s_rready_o  (imem_rready)
 );
 
-axi_lite_ram #(
+soc_axi_lite_ram #(
     .WORDS      (`SOC_IMEM_WORDS),
     .INIT_FILE  (IMEM_INIT),
     .READ_LAT   (IMEM_READ_LAT),
@@ -284,7 +284,7 @@ wire [31:0] xl_rdata;
 wire [1:0]  xl_rresp;
 wire        xl_rvalid, xl_rready;
 
-axi_full2lite bridge_inst (
+soc_axi_full2lite bridge_inst (
     .clk_i       (clk_i),
     .rst_n_i     (rst_n_i),
 
@@ -345,7 +345,7 @@ wire [ND*2-1:0]  d_bresp, d_rresp;
 wire [ND-1:0]    d_awvalid, d_awready, d_wvalid, d_wready;
 wire [ND-1:0]    d_bvalid, d_bready, d_arvalid, d_arready, d_rvalid, d_rready;
 
-axi_lite_dec #(
+soc_axi_lite_dec #(
     .N    (ND),
     .BASE ({`SOC_DMA_BASE, `SOC_TMR_BASE, `SOC_PIC_BASE, `SOC_SRAM_BASE, `SOC_DMEM_BASE}),
     .MASK ({`SOC_DMA_MASK, `SOC_TMR_MASK, `SOC_PIC_MASK, `SOC_SRAM_MASK, `SOC_DMEM_MASK})
@@ -403,7 +403,7 @@ wire [NX*2-1:0]  x_bresp, x_rresp;
 wire [NX-1:0]    x_awvalid, x_awready, x_wvalid, x_wready;
 wire [NX-1:0]    x_bvalid, x_bready, x_arvalid, x_arready, x_rvalid, x_rready;
 
-axi_lite_dec #(
+soc_axi_lite_dec #(
     .N    (NX),
     .BASE ({`SOC_SRAM_BASE, `SOC_DMEM_BASE}),
     .MASK ({`SOC_SRAM_MASK, `SOC_DMEM_MASK})
@@ -462,7 +462,9 @@ wire        dmem_awvalid, dmem_awready, dmem_wvalid, dmem_wready;
 wire        dmem_bvalid, dmem_bready, dmem_arvalid, dmem_arready;
 wire        dmem_rvalid, dmem_rready;
 
-axi_lite_arb #(.M(2)) arb_dmem (
+soc_axi_lite_arb #(
+    .M(2)
+) arb_dmem (
     .clk_i       (clk_i),
     .rst_n_i     (rst_n_i),
 
@@ -507,7 +509,7 @@ axi_lite_arb #(.M(2)) arb_dmem (
     .s_rready_o  (dmem_rready)
 );
 
-axi_lite_ram #(
+soc_axi_lite_ram #(
     .WORDS      (`SOC_DMEM_WORDS),
     .INIT_FILE  (DMEM_INIT),
     .READ_LAT   (DMEM_READ_LAT),

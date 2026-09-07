@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module decode (
+module rv32i_decode (
     input  [31:0] instr_i,
     output [6:0]  opcode_o,
     output [4:0]  rd_o,

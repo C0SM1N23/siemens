@@ -39,9 +39,9 @@
 
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module csr_file #(
+module rv32i_csr_file #(
     parameter HART_ID = 32'd0
 )(
     input             clk_i,

@@ -1,8 +1,8 @@
 // Shared encodings: one name per bit pattern, so a value produced in one file and
 // tested in another (control -> cpu_top, decode -> imm_gen) reads the same
 // everywhere. Values only, no behavior lives here.
-`ifndef CPU_DEFINES_VH
-`define CPU_DEFINES_VH
+`ifndef RV32I_DEFINES_VH
+`define RV32I_DEFINES_VH
 
 // RV32I major opcodes (instr[6:0])
 `define OPC_LUI     7'b0110111

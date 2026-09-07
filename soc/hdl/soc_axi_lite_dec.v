@@ -43,7 +43,7 @@
 
 `timescale 1ns/1ps
 
-module axi_lite_dec #(
+module soc_axi_lite_dec #(
     parameter integer     N    = 2,     // number of slave ports
     parameter [N*32-1:0]  BASE = 0,     // window base per slave, packed
     parameter [N*32-1:0]  MASK = 0      // window mask per slave, packed

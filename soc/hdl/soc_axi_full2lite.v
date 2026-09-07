@@ -35,7 +35,7 @@
 
 `timescale 1ns/1ps
 
-module axi_full2lite (
+module soc_axi_full2lite (
     input             clk_i,
     input             rst_n_i,
 

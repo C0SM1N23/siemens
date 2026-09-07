@@ -1,18 +1,20 @@
 // Assertion binds shared by the CPU flow and the SoC flow.
 //
-// Split out of bind_sva.sv so the SoC regression runs the same CPU and PIC
+// Split out of rv32i_bind_sva.sv so the SoC regression runs the same CPU and PIC
 // checkers the block regression does. Before the split the SoC flow compiled
 // only axi_lite_sva and bound nothing from here, so cpu_core_sva and pic_sva
 // were dark in every SoC run while soc_bind_sva.sv's header claimed otherwise.
 //
 // Only assertions live here. The functional-coverage bind stays in
-// bind_sva.sv, because its gate is calibrated for the CPU block's own program
+// rv32i_bind_sva.sv, because its gate is calibrated for the CPU block's own program
 // and would report a miss against any other stimulus.
 //
 `timescale 1ns/1ps
 
-bind cpu_top axi_lite_sva #(
-    .NAME("ibus"), .HAS_WRITE(0), .CHECK_ALIGN(1)
+bind rv32i_cpu_top axi_lite_sva #(
+    .NAME("ibus"),
+    .HAS_WRITE(0),
+    .CHECK_ALIGN(1)
 ) ibus_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -36,8 +38,10 @@ bind cpu_top axi_lite_sva #(
 );
 
 // AXI4-Lite protocol on the data port (byte addresses are legal here)
-bind cpu_top axi_lite_sva #(
-    .NAME("dbus"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+bind rv32i_cpu_top axi_lite_sva #(
+    .NAME("dbus"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) dbus_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -63,7 +67,9 @@ bind cpu_top axi_lite_sva #(
 // AXI4-Lite protocol on the PIC's slave port (checks the PIC's slave side
 // and, through it, whatever fabric leg drives it)
 bind pic axi_lite_sva #(
-    .NAME("pic_s"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+    .NAME("pic_s"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) pic_port_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),
@@ -87,7 +93,7 @@ bind pic axi_lite_sva #(
 );
 
 // CPU pipeline invariants
-bind cpu_top cpu_core_sva core_sva_i (
+bind rv32i_cpu_top rv32i_cpu_core_sva core_sva_i (
     .clk_i          (clk_i),
     .rst_n_i        (rst_n_i),
     .cpu_irq_ack_i  (cpu_irq_ack_o),
@@ -96,6 +102,7 @@ bind cpu_top cpu_core_sva core_sva_i (
     .irq_take_i     (irq_take),
     .trap_take_i    (trap_take),
     .mret_exec_i    (mret_exec),
+    .trap_depth_i   (trap_depth_q),
     .s2_advance_i   (s2_advance),
     .lsu_active_i   (lsu_active),
     .dxwb_valid_i   (dxwb_valid_q),
@@ -114,7 +121,9 @@ bind cpu_top cpu_core_sva core_sva_i (
 
 // AXI4-Lite protocol on the mtimer's slave port (D27)
 bind mtimer axi_lite_sva #(
-    .NAME("tmr_s"), .HAS_WRITE(1), .CHECK_ALIGN(0)
+    .NAME("tmr_s"),
+    .HAS_WRITE(1),
+    .CHECK_ALIGN(0)
 ) tmr_port_sva_i (
     .clk_i     (clk_i),
     .rst_n_i   (rst_n_i),

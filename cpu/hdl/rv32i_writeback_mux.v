@@ -1,8 +1,8 @@
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module writeback_mux (
+module rv32i_writeback_mux (
     input      [31:0] alu_result_i,       // ALU result (or the CSR read value, muxed in S2)
     input      [31:0] mem_data_i,
     input      [31:0] pc_plus4_i,

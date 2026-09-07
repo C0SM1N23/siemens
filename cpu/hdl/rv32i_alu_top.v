@@ -1,13 +1,13 @@
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module alu_top (
+module rv32i_alu_top (
     input  [31:0] operand_a_i,        // rs1_data
     input  [31:0] operand_b_reg_i,    // rs2_data
     input  [31:0] operand_b_imm_i,    // immediate
     input         ALUSrc_i,           // 0=rs2, 1=imm
-    input  [3:0]  ALUOp_i,            // generic operation class from control.v
+    input  [3:0]  ALUOp_i,            // generic operation class from rv32i_control.v
     input  [2:0]  funct3_i,
     input  [6:0]  funct7_i,
 
@@ -42,7 +42,7 @@ always @(*) begin
     endcase
 end
 
-alu alu_inst (
+rv32i_alu alu_inst (
     .operand_a_i (operand_a_i),
     .operand_b_i (operand_b),
     .alu_ctrl_i  (alu_ctrl),

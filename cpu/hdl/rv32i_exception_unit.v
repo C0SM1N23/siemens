@@ -22,9 +22,9 @@
 
 `timescale 1ns/1ps
 
-`include "defines.vh"
+`include "rv32i_defines.vh"
 
-module exception_unit (
+module rv32i_exception_unit (
     input             valid_i,          // real, non-preempted instruction in S2
     input             fetch_fault_i,    // AXI error on this instruction's fetch
     input             illegal_i,        // decoder or CSR access is illegal

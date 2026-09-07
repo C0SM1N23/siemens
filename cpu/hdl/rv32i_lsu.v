@@ -30,7 +30,7 @@
 
 `timescale 1ns/1ps
 
-module lsu (
+module rv32i_lsu (
     input             clk_i,
     input             rst_n_i,
 

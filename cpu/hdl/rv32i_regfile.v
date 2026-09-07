@@ -2,7 +2,7 @@
 // port (Stage 3 writeback) and two combinational read ports (Stage 2), reset 0.
 `timescale 1ns/1ps
 
-module regfile (
+module rv32i_regfile (
     input             clk_i,
     input             rst_n_i,            // asynchronous reset, active low
     input      [4:0]  rs1_addr_i,

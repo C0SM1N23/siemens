@@ -3,18 +3,19 @@
 // Each assertion states one architectural promise from the README/ARCHITECTURE,
 // so a passing regression proves the promise, not just the test program:
 // - REQ4:  cpu_irq_ack_i is a one-cycle claim pulse; cpu_irq_eoi_i a one-cycle return pulse;
-//          cpu_in_trap_i rises with the claim and holds to MRET
+//          cpu_in_trap_i rises with the claim and holds to the MRET that
+//          closes the last open level
 // - D2:    an interrupt is accepted only at an instruction boundary, never mid data transaction
 // - D3:    a trapping instruction never commits (precise traps)
 // - REQ10: x0 reads zero on both register-file ports
 // - REQ11: WSTRB is one of the SB/SH/SW shapes — the DP-SRAM byte-lane contract
 // - D12:   the dbus never carries a read and a write at once
 //
-// Bound from bind_sva.sv — no RTL is touched.
+// Bound from rv32i_bind_sva.sv — no RTL is touched.
 
 `timescale 1ns/1ps
 
-module cpu_core_sva (
+module rv32i_cpu_core_sva (
     input        clk_i,
     input        rst_n_i,
 
@@ -27,6 +28,7 @@ module cpu_core_sva (
     input        irq_take_i,
     input        trap_take_i,
     input        mret_exec_i,
+    input [4:0]  trap_depth_i,
     input        s2_advance_i,
     input        lsu_active_i,
     input        dxwb_valid_i,
@@ -84,9 +86,19 @@ trap_sets_in_trap: assert property (@(posedge clk_i) disable iff (!rst_n_i)
     trap_take_i && s2_advance_i |=> cpu_in_trap_i)
     else $error("[core] trap entry did not raise cpu_in_trap_i");
 
-mret_clears_in_trap: assert property (@(posedge clk_i) disable iff (!rst_n_i)
-    mret_exec_i && s2_advance_i && !trap_take_i |=> !cpu_in_trap_i)
-    else $error("[core] MRET did not drop cpu_in_trap_i");
+// cpu_in_trap_i is "some trap level is still open", so the return that clears
+// it is the one closing the last level. A return from an inner level has to
+// leave it up, or an interrupt controller counting on it would believe the core
+// had left the handler it is still inside.
+mret_clears_last_level: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    mret_exec_i && s2_advance_i && !trap_take_i && (trap_depth_i == 5'd1)
+    |=> !cpu_in_trap_i)
+    else $error("[core] the last MRET did not drop cpu_in_trap_i");
+
+mret_keeps_outer_level: assert property (@(posedge clk_i) disable iff (!rst_n_i)
+    mret_exec_i && s2_advance_i && !trap_take_i && (trap_depth_i > 5'd1)
+    |=> cpu_in_trap_i)
+    else $error("[core] a nested MRET dropped cpu_in_trap_i early");
 
 in_trap_holds: assert property (@(posedge clk_i) disable iff (!rst_n_i)
     cpu_in_trap_i && !(mret_exec_i && s2_advance_i) |=> cpu_in_trap_i)

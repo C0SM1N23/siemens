@@ -27,7 +27,7 @@
 
 `timescale 1ns/1ps
 
-module axi_lite_arb #(
+module soc_axi_lite_arb #(
     parameter integer M = 2                  // number of master ports
 )(
     input                  clk_i,

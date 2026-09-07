@@ -17,7 +17,7 @@
 
 `timescale 1ns/1ps
 
-module hazard_unit (
+module rv32i_hazard_unit (
     // pipeline state
     input        fetch_valid_i,   // S1 offers an instruction this cycle
     input        lsu_busy_i,      // data AXI op still in flight in S2
