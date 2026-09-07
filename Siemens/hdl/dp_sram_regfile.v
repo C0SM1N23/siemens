@@ -33,11 +33,11 @@ module dp_sram_regfile #(
     output wire [31:0]             b_reg_rdata_o,
     output wire                    b_reg_error_o,  // 1 = SLVERR for Port B's current write (blocked by write_conflict)
 
-    //axi4lite_slave_fsm.v
+    //dp_sram_axi4lite_slave_fsm.v
     input  wire                    a_mem_valid_i,
     input  wire                    b_mem_valid_i,
 
-    //collision_arbiter.v
+    //dp_sram_collision_det.v
     input  wire                    collision_event_i,  //real collision
     input  wire                    cooldown_event_i,  //entering cooldown
     output wire                    force_priority_o,         
@@ -56,7 +56,13 @@ module dp_sram_regfile #(
     localparam ADDR_COOLDOWN_CYCLES     = 6;
 
 
-    localparam WIN_W = 10;
+    // Counter widths. The two counters deliberately do NOT share a width:
+    // window_cnt only ever reaches WINDOW_CYCLES-1, but the active counters must
+    // be able to hold WINDOW_CYCLES itself, because a fully active window counts
+    // every one of its cycles (see the NOTE further down). Sizing both with
+    // $clog2(WINDOW_CYCLES) would silently truncate that maximum to 0.
+    localparam CNT_W = $clog2(WINDOW_CYCLES);   // window_cnt:      0 .. WINDOW_CYCLES-1
+    localparam ACT_W = $clog2(WINDOW_CYCLES+1); // a/b_active_cnt:  0 .. WINDOW_CYCLES
 
     
     wire a_writes = a_reg_valid_i & a_reg_write_i;
@@ -90,18 +96,23 @@ module dp_sram_regfile #(
     reg        force_priority_reg; // FORCE_PRIORITY R/W 1b
     reg [7:0]  collision_threshold_reg; // COLLISION_THRESHOLD  R/W
     reg [7:0]  cooldown_cycles_reg;     // COOLDOWN_CYCLES  R/W
-    reg [WIN_W-1:0] window_cnt;    // counts the cycles
-    reg [WIN_W-1:0] a_active_cnt;  // Port A active cycles
-    reg [WIN_W-1:0] b_active_cnt;  // Port B active cycles
+    reg [CNT_W-1:0] window_cnt;    // counts the cycles
+    reg [ACT_W-1:0] a_active_cnt;  // Port A active cycles
+    reg [ACT_W-1:0] b_active_cnt;  // Port B active cycles
     reg [31:0] bandwidth_a_reg;    // BANDWIDTH_A RO
     reg [31:0] bandwidth_b_reg;    // BANDWIDTH_B RO
 
     wire window_done = (window_cnt == WINDOW_CYCLES-1);
-    // NOTE: the cycle where window_cnt reaches WINDOW_CYCLES-1 always resets
-    // a_active_cnt/b_active_cnt for the NEW window instead of incrementing
-    // the OLD one -- so only WINDOW_CYCLES-1 (not WINDOW_CYCLES) of the
-    // window's cycles ever get counted. Max BANDWIDTH_A/B is WINDOW_CYCLES-1,
-    // even under 100% continuous activity. Documented, not fixed (by request).
+    // NOTE: on window_done, a_active_cnt/b_active_cnt are not cleared to 0 but
+    // seeded with that cycle's mem_valid -- the activity is credited to the NEW
+    // window rather than discarded. No cycle is lost at the boundary, so each
+    // window accounts for exactly WINDOW_CYCLES cycles and the maximum
+    // BANDWIDTH_A/B under 100% continuous activity is WINDOW_CYCLES.
+    // Verified in simulation (tests 5.4 / 5.7c): saturation is 16, 32, 64 and 1024
+    // for the corresponding WINDOW_CYCLES, and a 42-cycle burst
+    // straddling a boundary is published as 29 + 13 = 42 exactly.
+    // (An earlier version of this note claimed the maximum was WINDOW_CYCLES-1;
+    // that was incorrect -- the seeding on window_done is what preserves it.)
 
   
     // int_status_reg (W1C)
@@ -176,9 +187,9 @@ module dp_sram_regfile #(
     // window_cnt 
     always @(posedge clk_i or negedge rst_n_i)
         if (~rst_n_i)
-            window_cnt <= {WIN_W{1'b0}}; 
+            window_cnt <= {CNT_W{1'b0}}; 
         else if (window_done)
-            window_cnt <= {WIN_W{1'b0}};
+            window_cnt <= {CNT_W{1'b0}};
         else
             window_cnt <= window_cnt + 1'b1;
 
@@ -186,9 +197,9 @@ module dp_sram_regfile #(
     // a_active_cnt
     always @(posedge clk_i or negedge rst_n_i)
         if (~rst_n_i)
-            a_active_cnt <= {WIN_W{1'b0}};
+            a_active_cnt <= {ACT_W{1'b0}};
         else if (window_done)
-            a_active_cnt <= a_mem_valid_i ? {{WIN_W-1{1'b0}}, 1'b1} : {WIN_W{1'b0}}; 
+            a_active_cnt <= {{ACT_W-1{1'b0}}, a_mem_valid_i}; 
         else if (a_mem_valid_i)
             a_active_cnt <= a_active_cnt + 1'b1;
 
@@ -196,9 +207,9 @@ module dp_sram_regfile #(
     // b_active_cnt
     always @(posedge clk_i or negedge rst_n_i)
         if (~rst_n_i)
-            b_active_cnt <= {WIN_W{1'b0}};
+            b_active_cnt <= {ACT_W{1'b0}};
         else if (window_done)
-            b_active_cnt <= b_mem_valid_i ? {{WIN_W-1{1'b0}}, 1'b1} : {WIN_W{1'b0}};
+            b_active_cnt <= {{ACT_W-1{1'b0}}, b_mem_valid_i};
         else if (b_mem_valid_i)
             b_active_cnt <= b_active_cnt + 1'b1;
 
@@ -208,7 +219,7 @@ module dp_sram_regfile #(
         if (~rst_n_i)
             bandwidth_a_reg <= 32'd0;
         else if (window_done)
-            bandwidth_a_reg <= {{(32-WIN_W){1'b0}}, a_active_cnt}; // extend to 32 bits for bus read
+            bandwidth_a_reg <= {{(32-ACT_W){1'b0}}, a_active_cnt}; // extend to 32 bits for bus read
 
 
     // bandwidth_b_reg (RO)
@@ -216,7 +227,7 @@ module dp_sram_regfile #(
         if (~rst_n_i)
             bandwidth_b_reg <= 32'd0;
         else if (window_done)
-            bandwidth_b_reg <= {{(32-WIN_W){1'b0}}, b_active_cnt};
+            bandwidth_b_reg <= {{(32-ACT_W){1'b0}}, b_active_cnt};
 
 
     // reads

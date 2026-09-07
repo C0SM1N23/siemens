@@ -1,60 +1,1474 @@
-# ERROR: No extended dataflow license exists
-# do {.\compile.do}
+# do compile.do
 # ** Warning: (vlib-34) Library already exists at "work".
-# Model Technology ModelSim - Intel FPGA Edition vmap 2020.1 Lib Mapping Utility 2020.02 Feb 28 2020
+# Model Technology ModelSim - Intel FPGA Edition vmap 10.5b Lib Mapping Utility 2016.10 Oct  5 2016
 # vmap work work 
 # Modifying modelsim.ini
-# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
-# Start time: 10:11:20 on Aug 11,2026
-# vlog -reportprogress 300 -work work ../../hdl/axi4lite_slave_fsm.v 
-# -- Compiling module axi4lite_slave_fsm
+# Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+# Start time: 12:00:09 on Sep 07,2026
+# vlog -work work ../../hdl/dp_sram_axi4lite_slave_fsm.v 
+# -- Compiling module dp_sram_axi4lite_slave_fsm
 # 
 # Top level modules:
-# 	axi4lite_slave_fsm
-# End time: 10:11:21 on Aug 11,2026, Elapsed time: 0:00:01
+# 	dp_sram_axi4lite_slave_fsm
+# End time: 12:00:09 on Sep 07,2026, Elapsed time: 0:00:00
 # Errors: 0, Warnings: 0
-# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
-# Start time: 10:11:21 on Aug 11,2026
-# vlog -reportprogress 300 -work work ../../hdl/collision_det.v 
-# -- Compiling module collision_det
+# Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+# Start time: 12:00:09 on Sep 07,2026
+# vlog -work work ../../hdl/dp_sram_collision_det.v 
+# -- Compiling module dp_sram_collision_det
 # 
 # Top level modules:
-# 	collision_det
-# End time: 10:11:21 on Aug 11,2026, Elapsed time: 0:00:00
+# 	dp_sram_collision_det
+# End time: 12:00:09 on Sep 07,2026, Elapsed time: 0:00:00
 # Errors: 0, Warnings: 0
-# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
-# Start time: 10:11:21 on Aug 11,2026
-# vlog -reportprogress 300 -work work ../../hdl/mem_array.v 
-# -- Compiling module mem_array
+# Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+# Start time: 12:00:09 on Sep 07,2026
+# vlog -work work ../../hdl/dp_sram_mem_array.v 
+# -- Compiling module dp_sram_mem_array
 # 
 # Top level modules:
-# 	mem_array
-# End time: 10:11:21 on Aug 11,2026, Elapsed time: 0:00:00
+# 	dp_sram_mem_array
+# End time: 12:00:09 on Sep 07,2026, Elapsed time: 0:00:00
 # Errors: 0, Warnings: 0
-# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
-# Start time: 10:11:21 on Aug 11,2026
-# vlog -reportprogress 300 -work work ../../hdl/regfile.v 
-# -- Compiling module regfile
+# Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+# Start time: 12:00:09 on Sep 07,2026
+# vlog -work work ../../hdl/dp_sram_regfile.v 
+# -- Compiling module dp_sram_regfile
 # 
 # Top level modules:
-# 	regfile
-# End time: 10:11:22 on Aug 11,2026, Elapsed time: 0:00:01
+# 	dp_sram_regfile
+# End time: 12:00:09 on Sep 07,2026, Elapsed time: 0:00:00
 # Errors: 0, Warnings: 0
-# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
-# Start time: 10:11:22 on Aug 11,2026
-# vlog -reportprogress 300 -work work ../../hdl/dp_sram_top.v 
-# -- Compiling module dp_sram_top
+# Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+# Start time: 12:00:09 on Sep 07,2026
+# vlog -work work ../../hdl/dp_sram.v 
+# -- Compiling module dp_sram
 # 
 # Top level modules:
-# 	dp_sram_top
-# End time: 10:11:22 on Aug 11,2026, Elapsed time: 0:00:00
+# 	dp_sram
+# End time: 12:00:09 on Sep 07,2026, Elapsed time: 0:00:00
 # Errors: 0, Warnings: 0
-# Model Technology ModelSim - Intel FPGA Edition vlog 2020.1 Compiler 2020.02 Feb 28 2020
-# Start time: 10:11:22 on Aug 11,2026
-# vlog -reportprogress 300 -work work ../hdl/tb_dp_sram_top.v 
+# Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+# Start time: 12:00:09 on Sep 07,2026
+# vlog -work work ../hdl/tb_dp_sram_top.v 
 # -- Compiling module tb_dp_sram_top
 # 
 # Top level modules:
 # 	tb_dp_sram_top
-# End time: 10:11:22 on Aug 11,2026, Elapsed time: 0:00:00
+# End time: 12:00:09 on Sep 07,2026, Elapsed time: 0:00:00
+# Errors: 0, Warnings: 0
+#  vsim work.tb_dp_sram_top
+# vsim work.tb_dp_sram_top 
+# Start time: 12:00:11 on Sep 07,2026
+# Loading work.tb_dp_sram_top
+# Loading work.dp_sram
+# Loading work.dp_sram_axi4lite_slave_fsm
+# Loading work.dp_sram_collision_det
+# Loading work.dp_sram_mem_array
+# Loading work.dp_sram_regfile
+#  run -all
+# [PASS] linia 17 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 17 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 17 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 17 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 17 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 17 (STAGGER: raspuns OKAY dupa AW/W esalonate): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 18 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 18 (READ: date corecte): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 19 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 22 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 22 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 22 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 22 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 22 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 22 (STAGGER: raspuns OKAY dupa AW/W esalonate): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 23 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 23 (READ: date corecte): asteptat=0x00000007, obtinut=0x00000007
+# [PASS] linia 24 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 33 (BACKTOBACK: OKAY pe prima scriere): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 33 (BACKTOBACK: OKAY pe a doua scriere): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 34 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 34 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 35 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 35 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 36 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 37 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 46 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 46 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 46 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 46 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 46 (STAGGER: ARREADY=0 in asteptare): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 46 (STAGGER: raspuns OKAY dupa AW/W esalonate): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 47 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 47 (READ: date corecte): asteptat=0x0000000a, obtinut=0x0000000a
+# [PASS] linia 48 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 64 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 65 (RWCONFLICT: scriitorul -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 65 (RWCONFLICT: cititorul -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 66 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 66 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 67 (SLOWCLEAR: bit sters, stabil): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 67 (SLOWCLEAR: bit sters, stabil): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 67 (SLOWCLEAR: bit sters, stabil): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 67 (SLOWCLEAR: bit sters, stabil): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 67 (SLOWCLEAR: bit sters, stabil): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 67 (SLOWCLEAR: raspuns OKAY pe Port A): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 68 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 68 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 69 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 73 (SLOWWRITE: raspuns OKAY dupa BREADY intarziat): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 74 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 74 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 75 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 79 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 80 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0xcafebabe, obtinut=0xcafebabe
+# [PASS] linia 80 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0xcafebabe, obtinut=0xcafebabe
+# [PASS] linia 80 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0xcafebabe, obtinut=0xcafebabe
+# [PASS] linia 80 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0xcafebabe, obtinut=0xcafebabe
+# [PASS] linia 80 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0xcafebabe, obtinut=0xcafebabe
+# [PASS] linia 80 (SLOWREAD: raspuns OKAY dupa RREADY intarziat): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 80 (SLOWREAD: date corecte dupa RREADY intarziat): asteptat=0xcafebabe, obtinut=0xcafebabe
+# [PASS] linia 86 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 87 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 88 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 88 (READ: date corecte): asteptat=0xffffffaa, obtinut=0xffffffaa
+# [PASS] linia 89 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 90 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 90 (READ: date corecte): asteptat=0xffffbbaa, obtinut=0xffffbbaa
+# [PASS] linia 91 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 92 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 92 (READ: date corecte): asteptat=0xffccbbaa, obtinut=0xffccbbaa
+# [PASS] linia 93 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 94 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 94 (READ: date corecte): asteptat=0xddccbbaa, obtinut=0xddccbbaa
+# [PASS] linia 98 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 99 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 100 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 100 (READ: date corecte): asteptat=0x12345678, obtinut=0x12345678
+# [PASS] linia 104 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 105 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 105 (READ: date corecte): asteptat=0xa5a55a5a, obtinut=0xa5a55a5a
+# [PASS] linia 109 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 110 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 111 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 111 (READ: date corecte): asteptat=0x33441122, obtinut=0x33441122
+# [PASS] linia 117 (RWCONFLICT: scriitorul -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 117 (RWCONFLICT: cititorul -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 118 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 118 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 118 (WWCONFLICT: memoria are data castigatorului): asteptat=0x22222222, obtinut=0x22222222
+# [PASS] linia 119 (RWCONFLICT: scriitorul -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 119 (RWCONFLICT: cititorul -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 120 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 120 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 120 (WWCONFLICT: memoria are data castigatorului): asteptat=0x55555555, obtinut=0x55555555
+# [PASS] linia 121 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 121 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 128 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 129 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 130 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 130 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 130 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 131 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 131 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 131 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 132 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 132 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 133 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 135 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 135 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 135 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 136 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 136 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 138 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 139 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 143 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 143 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 143 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 144 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 144 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 144 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 145 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 145 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 145 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 146 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 146 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 146 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000007, obtinut=0x00000007
+# [PASS] linia 147 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 147 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 149 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 150 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 150 (READ: date corecte): asteptat=0xaaaaaaaa, obtinut=0xaaaaaaaa
+# [PASS] linia 151 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 152 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 152 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 152 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000009, obtinut=0x00000009
+# [PASS] linia 153 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 153 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 153 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000b, obtinut=0x0000000b
+# [PASS] linia 154 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 154 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 154 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000d, obtinut=0x0000000d
+# [PASS] linia 155 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 155 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 155 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000f, obtinut=0x0000000f
+# [PASS] linia 156 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 156 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 161 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 162 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 162 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 162 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 163 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 163 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 168 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 169 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 169 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 169 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 170 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 170 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 170 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 171 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 171 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 171 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 172 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 172 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 172 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000004, obtinut=0x00000004
+# [PASS] linia 173 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 173 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 173 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 174 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 174 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 174 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000006, obtinut=0x00000006
+# [PASS] linia 175 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 175 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 175 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000007, obtinut=0x00000007
+# [PASS] linia 176 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 176 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 176 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000008, obtinut=0x00000008
+# [PASS] linia 177 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 177 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 177 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000009, obtinut=0x00000009
+# [PASS] linia 178 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 178 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 178 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000a, obtinut=0x0000000a
+# [PASS] linia 179 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 179 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 179 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000b, obtinut=0x0000000b
+# [PASS] linia 180 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 180 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 180 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000c, obtinut=0x0000000c
+# [PASS] linia 181 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 181 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 181 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000d, obtinut=0x0000000d
+# [PASS] linia 182 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 182 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 182 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000e, obtinut=0x0000000e
+# [PASS] linia 183 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 183 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 183 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000f, obtinut=0x0000000f
+# [PASS] linia 184 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 184 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 185 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 185 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 185 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ff, obtinut=0x000000ff
+# [PASS] linia 186 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 186 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 188 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 193 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 194 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 194 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 194 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 195 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 195 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 195 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 196 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 196 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 196 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 197 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 197 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 197 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000004, obtinut=0x00000004
+# [PASS] linia 198 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 198 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 198 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 199 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 199 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 199 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000006, obtinut=0x00000006
+# [PASS] linia 200 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 200 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 200 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000007, obtinut=0x00000007
+# [PASS] linia 201 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 201 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 201 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000008, obtinut=0x00000008
+# [PASS] linia 202 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 202 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 202 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000009, obtinut=0x00000009
+# [PASS] linia 203 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 203 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 203 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000a, obtinut=0x0000000a
+# [PASS] linia 204 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 204 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 204 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000b, obtinut=0x0000000b
+# [PASS] linia 205 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 205 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 205 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000c, obtinut=0x0000000c
+# [PASS] linia 206 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 206 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 206 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000d, obtinut=0x0000000d
+# [PASS] linia 207 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 207 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 207 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000e, obtinut=0x0000000e
+# [PASS] linia 208 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 208 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 208 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000000f, obtinut=0x0000000f
+# [PASS] linia 209 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 209 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 209 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000010, obtinut=0x00000010
+# [PASS] linia 210 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 210 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 210 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000011, obtinut=0x00000011
+# [PASS] linia 211 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 211 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 211 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000012, obtinut=0x00000012
+# [PASS] linia 212 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 212 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 212 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000013, obtinut=0x00000013
+# [PASS] linia 213 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 213 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 213 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000014, obtinut=0x00000014
+# [PASS] linia 214 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 214 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 214 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000015, obtinut=0x00000015
+# [PASS] linia 215 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 215 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 215 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000016, obtinut=0x00000016
+# [PASS] linia 216 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 216 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 216 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000017, obtinut=0x00000017
+# [PASS] linia 217 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 217 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 217 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000018, obtinut=0x00000018
+# [PASS] linia 218 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 218 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 218 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000019, obtinut=0x00000019
+# [PASS] linia 219 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 219 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 219 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000001a, obtinut=0x0000001a
+# [PASS] linia 220 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 220 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 220 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000001b, obtinut=0x0000001b
+# [PASS] linia 221 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 221 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 221 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000001c, obtinut=0x0000001c
+# [PASS] linia 222 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 222 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 222 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000001d, obtinut=0x0000001d
+# [PASS] linia 223 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 223 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 223 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000001e, obtinut=0x0000001e
+# [PASS] linia 224 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 224 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 224 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000001f, obtinut=0x0000001f
+# [PASS] linia 225 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 225 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 225 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000020, obtinut=0x00000020
+# [PASS] linia 226 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 226 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 226 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000021, obtinut=0x00000021
+# [PASS] linia 227 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 227 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 227 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000022, obtinut=0x00000022
+# [PASS] linia 228 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 228 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 228 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000023, obtinut=0x00000023
+# [PASS] linia 229 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 229 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 229 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000024, obtinut=0x00000024
+# [PASS] linia 230 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 230 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 230 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000025, obtinut=0x00000025
+# [PASS] linia 231 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 231 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 231 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000026, obtinut=0x00000026
+# [PASS] linia 232 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 232 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 232 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000027, obtinut=0x00000027
+# [PASS] linia 233 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 233 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 233 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000028, obtinut=0x00000028
+# [PASS] linia 234 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 234 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 234 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000029, obtinut=0x00000029
+# [PASS] linia 235 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 235 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 235 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000002a, obtinut=0x0000002a
+# [PASS] linia 236 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 236 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 236 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000002b, obtinut=0x0000002b
+# [PASS] linia 237 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 237 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 237 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000002c, obtinut=0x0000002c
+# [PASS] linia 238 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 238 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 238 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000002d, obtinut=0x0000002d
+# [PASS] linia 239 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 239 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 239 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000002e, obtinut=0x0000002e
+# [PASS] linia 240 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 240 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 240 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000002f, obtinut=0x0000002f
+# [PASS] linia 241 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 241 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 241 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000030, obtinut=0x00000030
+# [PASS] linia 242 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 242 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 242 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000031, obtinut=0x00000031
+# [PASS] linia 243 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 243 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 243 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000032, obtinut=0x00000032
+# [PASS] linia 244 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 244 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 244 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000033, obtinut=0x00000033
+# [PASS] linia 245 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 245 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 245 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000034, obtinut=0x00000034
+# [PASS] linia 246 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 246 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 246 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000035, obtinut=0x00000035
+# [PASS] linia 247 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 247 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 247 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000036, obtinut=0x00000036
+# [PASS] linia 248 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 248 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 248 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000037, obtinut=0x00000037
+# [PASS] linia 249 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 249 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 249 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000038, obtinut=0x00000038
+# [PASS] linia 250 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 250 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 250 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000039, obtinut=0x00000039
+# [PASS] linia 251 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 251 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 251 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000003a, obtinut=0x0000003a
+# [PASS] linia 252 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 252 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 252 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000003b, obtinut=0x0000003b
+# [PASS] linia 253 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 253 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 253 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000003c, obtinut=0x0000003c
+# [PASS] linia 254 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 254 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 254 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000003d, obtinut=0x0000003d
+# [PASS] linia 255 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 255 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 255 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000003e, obtinut=0x0000003e
+# [PASS] linia 256 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 256 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 256 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000003f, obtinut=0x0000003f
+# [PASS] linia 257 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 257 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 257 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000040, obtinut=0x00000040
+# [PASS] linia 258 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 258 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 258 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000041, obtinut=0x00000041
+# [PASS] linia 259 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 259 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 259 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000042, obtinut=0x00000042
+# [PASS] linia 260 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 260 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 260 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000043, obtinut=0x00000043
+# [PASS] linia 261 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 261 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 261 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000044, obtinut=0x00000044
+# [PASS] linia 262 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 262 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 262 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000045, obtinut=0x00000045
+# [PASS] linia 263 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 263 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 263 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000046, obtinut=0x00000046
+# [PASS] linia 264 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 264 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 264 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000047, obtinut=0x00000047
+# [PASS] linia 265 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 265 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 265 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000048, obtinut=0x00000048
+# [PASS] linia 266 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 266 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 266 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000049, obtinut=0x00000049
+# [PASS] linia 267 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 267 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 267 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000004a, obtinut=0x0000004a
+# [PASS] linia 268 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 268 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 268 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000004b, obtinut=0x0000004b
+# [PASS] linia 269 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 269 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 269 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000004c, obtinut=0x0000004c
+# [PASS] linia 270 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 270 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 270 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000004d, obtinut=0x0000004d
+# [PASS] linia 271 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 271 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 271 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000004e, obtinut=0x0000004e
+# [PASS] linia 272 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 272 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 272 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000004f, obtinut=0x0000004f
+# [PASS] linia 273 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 273 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 273 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000050, obtinut=0x00000050
+# [PASS] linia 274 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 274 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 274 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000051, obtinut=0x00000051
+# [PASS] linia 275 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 275 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 275 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000052, obtinut=0x00000052
+# [PASS] linia 276 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 276 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 276 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000053, obtinut=0x00000053
+# [PASS] linia 277 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 277 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 277 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000054, obtinut=0x00000054
+# [PASS] linia 278 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 278 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 278 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000055, obtinut=0x00000055
+# [PASS] linia 279 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 279 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 279 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000056, obtinut=0x00000056
+# [PASS] linia 280 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 280 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 280 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000057, obtinut=0x00000057
+# [PASS] linia 281 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 281 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 281 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000058, obtinut=0x00000058
+# [PASS] linia 282 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 282 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 282 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000059, obtinut=0x00000059
+# [PASS] linia 283 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 283 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 283 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000005a, obtinut=0x0000005a
+# [PASS] linia 284 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 284 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 284 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000005b, obtinut=0x0000005b
+# [PASS] linia 285 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 285 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 285 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000005c, obtinut=0x0000005c
+# [PASS] linia 286 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 286 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 286 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000005d, obtinut=0x0000005d
+# [PASS] linia 287 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 287 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 287 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000005e, obtinut=0x0000005e
+# [PASS] linia 288 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 288 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 288 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000005f, obtinut=0x0000005f
+# [PASS] linia 289 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 289 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 289 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000060, obtinut=0x00000060
+# [PASS] linia 290 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 290 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 290 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000061, obtinut=0x00000061
+# [PASS] linia 291 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 291 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 291 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000062, obtinut=0x00000062
+# [PASS] linia 292 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 292 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 292 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000063, obtinut=0x00000063
+# [PASS] linia 293 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 293 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 293 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000064, obtinut=0x00000064
+# [PASS] linia 294 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 294 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 294 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000065, obtinut=0x00000065
+# [PASS] linia 295 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 295 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 295 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000066, obtinut=0x00000066
+# [PASS] linia 296 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 296 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 296 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000067, obtinut=0x00000067
+# [PASS] linia 297 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 297 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 297 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000068, obtinut=0x00000068
+# [PASS] linia 298 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 298 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 298 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000069, obtinut=0x00000069
+# [PASS] linia 299 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 299 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 299 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000006a, obtinut=0x0000006a
+# [PASS] linia 300 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 300 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 300 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000006b, obtinut=0x0000006b
+# [PASS] linia 301 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 301 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 301 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000006c, obtinut=0x0000006c
+# [PASS] linia 302 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 302 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 302 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000006d, obtinut=0x0000006d
+# [PASS] linia 303 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 303 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 303 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000006e, obtinut=0x0000006e
+# [PASS] linia 304 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 304 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 304 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000006f, obtinut=0x0000006f
+# [PASS] linia 305 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 305 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 305 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000070, obtinut=0x00000070
+# [PASS] linia 306 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 306 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 306 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000071, obtinut=0x00000071
+# [PASS] linia 307 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 307 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 307 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000072, obtinut=0x00000072
+# [PASS] linia 308 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 308 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 308 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000073, obtinut=0x00000073
+# [PASS] linia 309 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 309 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 309 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000074, obtinut=0x00000074
+# [PASS] linia 310 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 310 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 310 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000075, obtinut=0x00000075
+# [PASS] linia 311 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 311 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 311 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000076, obtinut=0x00000076
+# [PASS] linia 312 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 312 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 312 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000077, obtinut=0x00000077
+# [PASS] linia 313 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 313 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 313 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000078, obtinut=0x00000078
+# [PASS] linia 314 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 314 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 314 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000079, obtinut=0x00000079
+# [PASS] linia 315 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 315 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 315 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000007a, obtinut=0x0000007a
+# [PASS] linia 316 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 316 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 316 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000007b, obtinut=0x0000007b
+# [PASS] linia 317 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 317 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 317 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000007c, obtinut=0x0000007c
+# [PASS] linia 318 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 318 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 318 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000007d, obtinut=0x0000007d
+# [PASS] linia 319 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 319 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 319 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000007e, obtinut=0x0000007e
+# [PASS] linia 320 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 320 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 320 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000007f, obtinut=0x0000007f
+# [PASS] linia 321 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 321 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 321 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000080, obtinut=0x00000080
+# [PASS] linia 322 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 322 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 322 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000081, obtinut=0x00000081
+# [PASS] linia 323 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 323 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 323 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000082, obtinut=0x00000082
+# [PASS] linia 324 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 324 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 324 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000083, obtinut=0x00000083
+# [PASS] linia 325 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 325 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 325 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000084, obtinut=0x00000084
+# [PASS] linia 326 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 326 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 326 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000085, obtinut=0x00000085
+# [PASS] linia 327 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 327 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 327 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000086, obtinut=0x00000086
+# [PASS] linia 328 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 328 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 328 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000087, obtinut=0x00000087
+# [PASS] linia 329 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 329 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 329 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000088, obtinut=0x00000088
+# [PASS] linia 330 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 330 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 330 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000089, obtinut=0x00000089
+# [PASS] linia 331 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 331 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 331 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000008a, obtinut=0x0000008a
+# [PASS] linia 332 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 332 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 332 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000008b, obtinut=0x0000008b
+# [PASS] linia 333 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 333 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 333 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000008c, obtinut=0x0000008c
+# [PASS] linia 334 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 334 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 334 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000008d, obtinut=0x0000008d
+# [PASS] linia 335 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 335 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 335 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000008e, obtinut=0x0000008e
+# [PASS] linia 336 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 336 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 336 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000008f, obtinut=0x0000008f
+# [PASS] linia 337 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 337 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 337 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000090, obtinut=0x00000090
+# [PASS] linia 338 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 338 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 338 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000091, obtinut=0x00000091
+# [PASS] linia 339 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 339 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 339 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000092, obtinut=0x00000092
+# [PASS] linia 340 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 340 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 340 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000093, obtinut=0x00000093
+# [PASS] linia 341 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 341 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 341 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000094, obtinut=0x00000094
+# [PASS] linia 342 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 342 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 342 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000095, obtinut=0x00000095
+# [PASS] linia 343 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 343 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 343 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000096, obtinut=0x00000096
+# [PASS] linia 344 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 344 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 344 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000097, obtinut=0x00000097
+# [PASS] linia 345 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 345 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 345 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000098, obtinut=0x00000098
+# [PASS] linia 346 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 346 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 346 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000099, obtinut=0x00000099
+# [PASS] linia 347 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 347 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 347 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000009a, obtinut=0x0000009a
+# [PASS] linia 348 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 348 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 348 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000009b, obtinut=0x0000009b
+# [PASS] linia 349 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 349 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 349 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000009c, obtinut=0x0000009c
+# [PASS] linia 350 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 350 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 350 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000009d, obtinut=0x0000009d
+# [PASS] linia 351 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 351 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 351 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000009e, obtinut=0x0000009e
+# [PASS] linia 352 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 352 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 352 (WWCONFLICT: memoria are data castigatorului): asteptat=0x0000009f, obtinut=0x0000009f
+# [PASS] linia 353 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 353 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 353 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a0, obtinut=0x000000a0
+# [PASS] linia 354 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 354 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 354 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a1, obtinut=0x000000a1
+# [PASS] linia 355 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 355 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 355 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a2, obtinut=0x000000a2
+# [PASS] linia 356 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 356 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 356 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a3, obtinut=0x000000a3
+# [PASS] linia 357 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 357 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 357 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a4, obtinut=0x000000a4
+# [PASS] linia 358 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 358 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 358 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a5, obtinut=0x000000a5
+# [PASS] linia 359 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 359 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 359 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a6, obtinut=0x000000a6
+# [PASS] linia 360 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 360 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 360 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a7, obtinut=0x000000a7
+# [PASS] linia 361 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 361 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 361 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a8, obtinut=0x000000a8
+# [PASS] linia 362 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 362 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 362 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000a9, obtinut=0x000000a9
+# [PASS] linia 363 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 363 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 363 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000aa, obtinut=0x000000aa
+# [PASS] linia 364 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 364 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 364 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ab, obtinut=0x000000ab
+# [PASS] linia 365 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 365 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 365 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ac, obtinut=0x000000ac
+# [PASS] linia 366 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 366 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 366 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ad, obtinut=0x000000ad
+# [PASS] linia 367 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 367 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 367 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ae, obtinut=0x000000ae
+# [PASS] linia 368 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 368 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 368 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000af, obtinut=0x000000af
+# [PASS] linia 369 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 369 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 369 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b0, obtinut=0x000000b0
+# [PASS] linia 370 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 370 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 370 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b1, obtinut=0x000000b1
+# [PASS] linia 371 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 371 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 371 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b2, obtinut=0x000000b2
+# [PASS] linia 372 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 372 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 372 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b3, obtinut=0x000000b3
+# [PASS] linia 373 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 373 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 373 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b4, obtinut=0x000000b4
+# [PASS] linia 374 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 374 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 374 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b5, obtinut=0x000000b5
+# [PASS] linia 375 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 375 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 375 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b6, obtinut=0x000000b6
+# [PASS] linia 376 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 376 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 376 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b7, obtinut=0x000000b7
+# [PASS] linia 377 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 377 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 377 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b8, obtinut=0x000000b8
+# [PASS] linia 378 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 378 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 378 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000b9, obtinut=0x000000b9
+# [PASS] linia 379 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 379 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 379 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ba, obtinut=0x000000ba
+# [PASS] linia 380 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 380 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 380 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000bb, obtinut=0x000000bb
+# [PASS] linia 381 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 381 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 381 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000bc, obtinut=0x000000bc
+# [PASS] linia 382 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 382 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 382 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000bd, obtinut=0x000000bd
+# [PASS] linia 383 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 383 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 383 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000be, obtinut=0x000000be
+# [PASS] linia 384 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 384 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 384 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000bf, obtinut=0x000000bf
+# [PASS] linia 385 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 385 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 385 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c0, obtinut=0x000000c0
+# [PASS] linia 386 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 386 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 386 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c1, obtinut=0x000000c1
+# [PASS] linia 387 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 387 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 387 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c2, obtinut=0x000000c2
+# [PASS] linia 388 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 388 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 388 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c3, obtinut=0x000000c3
+# [PASS] linia 389 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 389 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 389 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c4, obtinut=0x000000c4
+# [PASS] linia 390 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 390 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 390 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c5, obtinut=0x000000c5
+# [PASS] linia 391 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 391 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 391 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c6, obtinut=0x000000c6
+# [PASS] linia 392 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 392 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 392 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c7, obtinut=0x000000c7
+# [PASS] linia 393 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 393 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 393 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c8, obtinut=0x000000c8
+# [PASS] linia 394 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 394 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 394 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000c9, obtinut=0x000000c9
+# [PASS] linia 395 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 395 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 395 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ca, obtinut=0x000000ca
+# [PASS] linia 396 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 396 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 396 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000cb, obtinut=0x000000cb
+# [PASS] linia 397 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 397 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 397 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000cc, obtinut=0x000000cc
+# [PASS] linia 398 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 398 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 398 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000cd, obtinut=0x000000cd
+# [PASS] linia 399 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 399 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 399 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ce, obtinut=0x000000ce
+# [PASS] linia 400 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 400 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 400 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000cf, obtinut=0x000000cf
+# [PASS] linia 401 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 401 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 401 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d0, obtinut=0x000000d0
+# [PASS] linia 402 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 402 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 402 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d1, obtinut=0x000000d1
+# [PASS] linia 403 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 403 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 403 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d2, obtinut=0x000000d2
+# [PASS] linia 404 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 404 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 404 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d3, obtinut=0x000000d3
+# [PASS] linia 405 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 405 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 405 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d4, obtinut=0x000000d4
+# [PASS] linia 406 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 406 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 406 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d5, obtinut=0x000000d5
+# [PASS] linia 407 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 407 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 407 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d6, obtinut=0x000000d6
+# [PASS] linia 408 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 408 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 408 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d7, obtinut=0x000000d7
+# [PASS] linia 409 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 409 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 409 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d8, obtinut=0x000000d8
+# [PASS] linia 410 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 410 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 410 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000d9, obtinut=0x000000d9
+# [PASS] linia 411 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 411 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 411 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000da, obtinut=0x000000da
+# [PASS] linia 412 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 412 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 412 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000db, obtinut=0x000000db
+# [PASS] linia 413 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 413 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 413 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000dc, obtinut=0x000000dc
+# [PASS] linia 414 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 414 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 414 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000dd, obtinut=0x000000dd
+# [PASS] linia 415 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 415 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 415 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000de, obtinut=0x000000de
+# [PASS] linia 416 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 416 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 416 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000df, obtinut=0x000000df
+# [PASS] linia 417 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 417 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 417 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e0, obtinut=0x000000e0
+# [PASS] linia 418 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 418 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 418 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e1, obtinut=0x000000e1
+# [PASS] linia 419 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 419 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 419 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e2, obtinut=0x000000e2
+# [PASS] linia 420 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 420 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 420 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e3, obtinut=0x000000e3
+# [PASS] linia 421 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 421 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 421 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e4, obtinut=0x000000e4
+# [PASS] linia 422 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 422 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 422 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e5, obtinut=0x000000e5
+# [PASS] linia 423 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 423 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 423 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e6, obtinut=0x000000e6
+# [PASS] linia 424 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 424 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 424 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e7, obtinut=0x000000e7
+# [PASS] linia 425 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 425 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 425 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e8, obtinut=0x000000e8
+# [PASS] linia 426 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 426 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 426 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000e9, obtinut=0x000000e9
+# [PASS] linia 427 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 427 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 427 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ea, obtinut=0x000000ea
+# [PASS] linia 428 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 428 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 428 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000eb, obtinut=0x000000eb
+# [PASS] linia 429 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 429 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 429 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ec, obtinut=0x000000ec
+# [PASS] linia 430 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 430 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 430 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ed, obtinut=0x000000ed
+# [PASS] linia 431 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 431 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 431 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ee, obtinut=0x000000ee
+# [PASS] linia 432 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 432 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 432 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ef, obtinut=0x000000ef
+# [PASS] linia 433 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 433 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 433 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f0, obtinut=0x000000f0
+# [PASS] linia 434 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 434 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 434 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f1, obtinut=0x000000f1
+# [PASS] linia 435 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 435 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 435 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f2, obtinut=0x000000f2
+# [PASS] linia 436 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 436 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 436 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f3, obtinut=0x000000f3
+# [PASS] linia 437 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 437 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 437 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f4, obtinut=0x000000f4
+# [PASS] linia 438 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 438 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 438 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f5, obtinut=0x000000f5
+# [PASS] linia 439 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 439 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 439 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f6, obtinut=0x000000f6
+# [PASS] linia 440 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 440 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 440 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f7, obtinut=0x000000f7
+# [PASS] linia 441 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 441 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 441 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f8, obtinut=0x000000f8
+# [PASS] linia 442 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 442 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 442 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000f9, obtinut=0x000000f9
+# [PASS] linia 443 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 443 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 443 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000fa, obtinut=0x000000fa
+# [PASS] linia 444 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 444 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 444 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000fb, obtinut=0x000000fb
+# [PASS] linia 445 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 445 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 445 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000fc, obtinut=0x000000fc
+# [PASS] linia 446 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 446 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 446 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000fd, obtinut=0x000000fd
+# [PASS] linia 447 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 447 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 447 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000fe, obtinut=0x000000fe
+# [PASS] linia 448 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 448 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 449 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 449 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 449 (WWCONFLICT: memoria are data castigatorului): asteptat=0x000000ab, obtinut=0x000000ab
+# [PASS] linia 450 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 450 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 452 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 456 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 457 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 457 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 457 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 458 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 458 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 458 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 459 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 459 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 459 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 460 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 460 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 460 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000007, obtinut=0x00000007
+# [PASS] linia 461 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 461 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 462 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 463 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 463 (READ: date corecte): asteptat=0x12121212, obtinut=0x12121212
+# [PASS] linia 465 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 469 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 470 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 470 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 470 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 471 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 471 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 471 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 472 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 472 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 472 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 473 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 473 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 473 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000007, obtinut=0x00000007
+# [PASS] linia 474 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 474 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 475 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 476 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 476 (READ: date corecte): asteptat=0x34343434, obtinut=0x34343434
+# [PASS] linia 478 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 485 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 486 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 486 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 486 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 487 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 487 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 487 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 488 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 488 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 488 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 489 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 489 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 489 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000007, obtinut=0x00000007
+# [PASS] linia 490 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 490 (READ: date corecte): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 491 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 492 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 492 (READ: date corecte): asteptat=0x56565656, obtinut=0x56565656
+# [PASS] linia 494 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 504 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 505 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 505 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 505 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 506 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 506 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 506 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 507 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 507 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 507 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 508 (RWCONFLICT: scriitorul -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 508 (RWCONFLICT: cititorul -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 509 (STALLMEAS: durata stall in cicluri): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 509 (STALLMEAS: OKAY dupa stall): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 512 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 513 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 513 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 513 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 514 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 514 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 514 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 515 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 515 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 515 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 516 (RWCONFLICT: scriitorul -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 516 (RWCONFLICT: cititorul -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 517 (STALLMEAS: durata stall in cicluri): asteptat=0x0000000f, obtinut=0x0000000f
+# [PASS] linia 517 (STALLMEAS: OKAY dupa stall): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 520 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 521 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 521 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 521 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 522 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 522 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 522 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000003, obtinut=0x00000003
+# [PASS] linia 523 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 523 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 523 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 524 (RWCONFLICT: scriitorul -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 524 (RWCONFLICT: cititorul -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 525 (STALLMEAS: durata stall in cicluri): asteptat=0x000000fe, obtinut=0x000000fe
+# [PASS] linia 525 (STALLMEAS: OKAY dupa stall): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 529 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 529 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 530 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 531 (WWCONFLICT: B castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 531 (WWCONFLICT: A pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 531 (WWCONFLICT: memoria are data castigatorului): asteptat=0x22220000, obtinut=0x22220000
+# [PASS] linia 532 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 532 (READ: date corecte): asteptat=0x22220000, obtinut=0x22220000
+# [PASS] linia 533 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 537 (DUALWRITE: Port A -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 537 (DUALWRITE: Port B -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 537 (DUALWRITE: adresa A are data lui A): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 537 (DUALWRITE: adresa B are data lui B): asteptat=0xdead0000, obtinut=0xdead0000
+# [PASS] linia 538 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 538 (READ: date corecte): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 539 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 539 (READ: date corecte): asteptat=0xdead0000, obtinut=0xdead0000
+# [PASS] linia 540 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 546 (DUALWRITE: Port A -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 546 (DUALWRITE: Port B -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 546 (DUALWRITE: adresa A are data lui A): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 546 (DUALWRITE: adresa B are data lui B): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 547 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 547 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 548 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 548 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 549 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 550 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 554 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 555 (REGRW: scriitorul (A) -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 555 (REGRW: cititorul (B) -> OKAY, nu SLVERR): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 555 (REGRW: cititorul vede valoarea veche): asteptat=0x00000005, obtinut=0x00000005
+# [PASS] linia 556 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 556 (READ: date corecte): asteptat=0x0000000a, obtinut=0x0000000a
+# [PASS] linia 557 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 563 (WWCONFLICT: A castigator -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 563 (WWCONFLICT: B pierzator -> SLVERR): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 563 (WWCONFLICT: memoria are data castigatorului): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 564 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 564 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 565 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 574 (SLOWWRITE: raspuns OKAY dupa BREADY intarziat): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 575 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 575 (READ: date corecte): asteptat=0x0000001d, obtinut=0x0000001d
+# [PASS] linia 577 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 577 (READ: date corecte): asteptat=0x0000000d, obtinut=0x0000000d
+# [PASS] linia 587 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 587 (READ: date corecte): asteptat=0x00000010, obtinut=0x00000010
+# [PASS] linia 591 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 592 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 592 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 599 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 601 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 601 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 604 (SLOWWRITE: raspuns OKAY dupa BREADY intarziat): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 606 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 606 (READ: date corecte): asteptat=0x0000000e, obtinut=0x0000000e
+# [PASS] linia 613 (SLOWWRITE: raspuns OKAY dupa BREADY intarziat): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 614 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 614 (READ: date corecte): asteptat=0x00000020, obtinut=0x00000020
+# [PASS] linia 621 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 623 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 623 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 625 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 625 (READ: date corecte): asteptat=0x00000001, obtinut=0x00000001
+# [PASS] linia 629 (SLOWWRITE: raspuns OKAY dupa BREADY intarziat): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 630 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 630 (READ: date corecte): asteptat=0x00000020, obtinut=0x00000020
+# [PASS] linia 631 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 631 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 635 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: RDATA stabil pe parcursul asteptarii): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 636 (SLOWREAD: raspuns OKAY dupa RREADY intarziat): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 636 (SLOWREAD: date corecte dupa RREADY intarziat): asteptat=0x5a5a5a5a, obtinut=0x5a5a5a5a
+# [PASS] linia 637 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 637 (READ: date corecte): asteptat=0x00000020, obtinut=0x00000020
+# [PASS] linia 643 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 643 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 644 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 645 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 645 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 646 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 646 (READ: date corecte): asteptat=0x10101010, obtinut=0x10101010
+# [PASS] linia 647 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 647 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 648 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 649 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 649 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 650 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 650 (READ: date corecte): asteptat=0x10101011, obtinut=0x10101011
+# [PASS] linia 651 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 651 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 652 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 653 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 653 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 654 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 654 (READ: date corecte): asteptat=0x10101012, obtinut=0x10101012
+# [PASS] linia 655 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 655 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 656 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 657 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 657 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 658 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 658 (READ: date corecte): asteptat=0x10101013, obtinut=0x10101013
+# [PASS] linia 659 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 659 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 660 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 661 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 661 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 662 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 662 (READ: date corecte): asteptat=0x10101014, obtinut=0x10101014
+# [PASS] linia 663 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 663 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 664 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 665 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 665 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 666 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 666 (READ: date corecte): asteptat=0x10101015, obtinut=0x10101015
+# [PASS] linia 667 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 667 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 668 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 669 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 669 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 670 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 670 (READ: date corecte): asteptat=0x10101016, obtinut=0x10101016
+# [PASS] linia 671 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 671 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 672 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 673 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 673 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 674 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 674 (READ: date corecte): asteptat=0x10101017, obtinut=0x10101017
+# [PASS] linia 675 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 675 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 676 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 677 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 677 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 678 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 678 (READ: date corecte): asteptat=0x10101018, obtinut=0x10101018
+# [PASS] linia 679 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 679 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 680 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 681 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 681 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 682 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 682 (READ: date corecte): asteptat=0x10101019, obtinut=0x10101019
+# [PASS] linia 685 (RESETMID: scriere noua dupa reset -> OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 686 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 686 (READ: date corecte): asteptat=0x00000002, obtinut=0x00000002
+# [PASS] linia 687 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 691 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 692 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 692 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 693 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 694 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 694 (READ: date corecte): asteptat=0xb0000000, obtinut=0xb0000000
+# [PASS] linia 695 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 696 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 697 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 697 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 698 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 699 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 699 (READ: date corecte): asteptat=0xb0000001, obtinut=0xb0000001
+# [PASS] linia 700 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 701 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 702 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 702 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 703 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 704 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 704 (READ: date corecte): asteptat=0xb0000002, obtinut=0xb0000002
+# [PASS] linia 705 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 706 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 707 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 707 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 708 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 709 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 709 (READ: date corecte): asteptat=0xb0000003, obtinut=0xb0000003
+# [PASS] linia 710 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 711 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 712 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 712 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 713 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 714 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 714 (READ: date corecte): asteptat=0xb0000004, obtinut=0xb0000004
+# [PASS] linia 715 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 716 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 717 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 717 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 718 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 719 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 719 (READ: date corecte): asteptat=0xb0000005, obtinut=0xb0000005
+# [PASS] linia 720 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 721 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 722 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 722 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 723 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 724 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 724 (READ: date corecte): asteptat=0xb0000006, obtinut=0xb0000006
+# [PASS] linia 725 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 726 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 727 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 727 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 728 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 729 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 729 (READ: date corecte): asteptat=0xb0000007, obtinut=0xb0000007
+# [PASS] linia 730 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 734 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 734 (READ: date corecte): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 735 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 736 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 736 (READ: date corecte): asteptat=0x11111111, obtinut=0x11111111
+# [PASS] linia 737 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 738 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 738 (READ: date corecte): asteptat=0x22222222, obtinut=0x22222222
+# [PASS] linia 739 (WRITE: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 740 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 740 (READ: date corecte): asteptat=0x33333333, obtinut=0x33333333
+# [PASS] linia 741 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 741 (READ: date corecte): asteptat=0x11111111, obtinut=0x11111111
+# [PASS] linia 742 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 742 (READ: date corecte): asteptat=0x22222222, obtinut=0x22222222
+# [PASS] linia 743 (READ: raspuns OKAY): asteptat=0x00000000, obtinut=0x00000000
+# [PASS] linia 743 (READ: date corecte): asteptat=0x33333333, obtinut=0x33333333
+# Rezultate: 1399 PASS, 0 FAIL din 1399 verificari
+# TOATE TESTELE AU TRECUT
+# ** Note: $finish    : ../hdl/tb_dp_sram_top.v(963)
+#    Time: 38345 ns  Iteration: 1  Instance: /tb_dp_sram_top
+# End time: 12:00:12 on Sep 07,2026, Elapsed time: 0:00:01
 # Errors: 0, Warnings: 0
