@@ -114,10 +114,10 @@ widening the SoC window does not help — the port is 10 bits wide.
 Widen `ADDR_W` to 11, or declare the array `[0:247]` so its size states what is
 reachable.
 
-**10. `regfile.v` is dead code that breaks a shared library.**
+**10. `rv32i_regfile.v` is dead code that breaks a shared library.**
 
 `dp_sram_top` instantiates `dp_sram_regfile`, and the block's own `compile.do`
-does not build `regfile.v`, but the file is still on the branch and still defines
+does not build `rv32i_regfile.v`, but the file is still on the branch and still defines
 a module called `regfile` — the same name as the CPU's register file. Compiled
 into one library the second definition overwrites the first:
 
@@ -133,39 +133,28 @@ say so once instead of leaving each integrator to work it out.
 
 ## CPU, PIC and integration — `cpu/`, `soc/`
 
-**11. Two address maps that can drift.**
-
-`cpu/debug/sim/soc_map.vh` and `soc/hdl/soc_addr_map.vh` define the same base
-addresses independently. They agree today and nothing enforces it.
-
-**12. Three injected defects still survive the suite.**
-
-| Defect | Why nothing catches it |
-|---|---|
-| `BRESP` stickiness removed in the bridge | no test produces an error on a beat inside a burst |
-| `WIN_W` back to a literal | every test runs at `WINDOW_CYCLES = 1024` |
-| `INT_ENABLE` ignored when forming `irq` | the DMA bench unmasks before checking, but never checks that a masked channel stays quiet |
-
-The third closes with the negative case in item 3: set `INT_ENABLE = 0` and
-require `irq` to stay low. The `WIN_W` row is no longer a mutation — item 6 is
-the delivered state of the block.
-
-**13. The CPU brief and the PIC brief specify different interrupt interfaces.**
+**11. The CPU brief and the PIC brief specify different interrupt interfaces.**
 
 The CPU brief asks for `cpu_irq[7:0]`, a one-hot `cpu_irq_ack[7:0]` and a 3-bit
 `cpu_irq_id`; the PIC brief asks for 16 sources. Sixteen identifiers do not fit
 in three bits, so the RTL follows the PIC brief and adds an end-of-interrupt
 pulse that neither brief mentions, plus `cpu_mask_i` and `pending_o`. The PIC
-brief also says the acknowledge clears the active state, while the RTL uses it to
-push and the end-of-interrupt to pop, which is what nesting requires.
+brief also says the acknowledge clears the active state, while the RTL uses it
+to push and the end-of-interrupt to pop, which is what nesting requires.
 
 Needs a decision from the mentor before the interface can be signed off.
 
-**14. No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository.
+**12. No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository.
 
-**15. Untested at system level:** DMA channels 1..3 and round-robin; the machine
-timer, wired to PIC source 7 but never armed by an SoC program; PIC preemption,
-spurious detection and deadline escalation through the CPU rather than in the
-block bench; PIC sources 8..15; backpressure on the SRAM and the peripherals,
-since the timing sweep reaches only IMEM and DMEM; an error response on a beat
-inside a DMA burst.
+**13. Spurious interrupt detection is not reachable at system level.**
+
+A claim is spurious when the source withdraws in the one cycle between the offer
+being sampled and the claim landing. No master in this SoC can time a write to
+that cycle: software cannot, and the peripheral source lines are driven by real
+blocks rather than by the bench. Reaching it would need either an external
+interrupt pin on `soc_top` or a bench-controlled source line.
+
+The controller's own bench covers the behaviour itself, including the negative
+case of a source still asserted at the claim and the balanced accounting a
+spurious claim still produces. What is missing is only the confirmation that a
+real core's claim timing can produce the race at all.

@@ -26,11 +26,14 @@ verification.
   mutation testing, coverage, and what no test covers.
 - [TO_MODIFY.md](TO_MODIFY.md) — every defect and gap found, per block, with
   file and line.
+- [docs/](docs/) — everything that is a document rather than a design: the
+  internship report for the faculty, the built engineering PDFs, the Siemens
+  briefs and the drawio sources.
 
-The core keeps its own docs: [cpu/README.md](cpu/README.md) and
-[cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md). The LaTeX engineering report covers
-the CPU, the PIC and the machine timer, so it lives on the `RISCV` branch under
-`docs/` rather than here.
+The core keeps its own docs: [cpu/README.md](cpu/README.md),
+[cpu/ARCHITECTURE.md](cpu/ARCHITECTURE.md), and [cpu/docs/](cpu/docs/) for the
+Design and Verification Specifications of the core and the interrupt
+controller.
 
 ## The system
 
@@ -178,7 +181,7 @@ CPU's `mie[16+n]` gated by `mstatus.MIE`.
 ```
   cpu_top (cpu/)              mc_dma_top (dma/)           dp_sram_top (sram/)
   --------------------------  --------------------------  --------------------------
-  fetch_unit                  axi4_lite_slave  (regs)     axi4lite_slave_fsm  x2
+  rv32i_fetch_unit                  axi4_lite_slave  (regs)     axi4lite_slave_fsm  x2
   branch_predictor + RAS      dma_channel      x4         collision_det
   decode / control            priority_arbiter            mem_array  256 x 32
   alu_top / branch_unit       axi4_full_master            sram_regfile
@@ -196,7 +199,7 @@ CPU's `mie[16+n]` gated by `mstatus.MIE`.
 
 **The DMA speaks a different protocol from every slave.** It is an AXI4-Full
 master issuing eight-beat INCR bursts; every slave is AXI4-Lite, which has no
-bursts. [axi_full2lite.v](soc/hdl/axi_full2lite.v) splits each burst into one
+bursts. [soc_axi_full2lite.v](soc/hdl/soc_axi_full2lite.v) splits each burst into one
 Lite transaction per beat and rebuilds `RLAST` and the single write response.
 
 **The SRAM is not arbitrated, on purpose.** Two independent ports mean the CPU
@@ -227,31 +230,31 @@ make asm         # rebuild the test program images
 four bus timings each (nominal, high fixed latency, two seeds of random READY
 backpressure):
 
-1. **[tb_addr_map](soc/debug/hdl/tb_addr_map.v)** — the address map against the
+1. **[tb_addr_map](soc/debug/hdl/soc_tb_addr_map.v)** — the address map against the
    decoder that implements it: every window's first and last register, and the
    first address past the end of each. No working program can reach this, since
    correct software never issues an address that should not decode.
 
-2. **[tb_full2lite](soc/debug/hdl/tb_full2lite.v)** — the burst bridge alone:
+2. **[tb_full2lite](soc/debug/hdl/soc_tb_full2lite.v)** — the burst bridge alone:
    8-beat and single-beat bursts, byte strobes, FIXED bursts, `RLAST`
    placement, and the unsupported cases (WRAP, narrow) which must return
    `SLVERR` with memory untouched.
 
-3. **[tb_soc_top](soc/debug/hdl/tb_soc_top.v)** — the whole SoC. The bench
+3. **[tb_soc_top](soc/debug/hdl/soc_tb_top.v)** — the whole SoC. The bench
    supplies a clock, a reset and a program image;
    [program_soc.s](soc/debug/sim/program_soc.s) does the checking: it builds a
    descriptor, programs a DMA channel, sleeps on `WFI`, is woken by the
    completion interrupt through the PIC, and compares what the DMA moved
    against what it was asked to move.
 
-4. **[tb_soc_stress](soc/debug/hdl/tb_soc_stress.v)** — the same SoC with the
+4. **[tb_soc_stress](soc/debug/hdl/soc_tb_stress.v)** — the same SoC with the
    CPU working the bus throughout. This is the run that reaches the contention
    logic: the arbiter with both masters asking, both SRAM ports busy in one
    cycle, real address collisions, and an unmapped access returning `DECERR`.
    It measures each and **fails if they did not happen**. The transfers must
    stay bit-perfect regardless.
 
-5. **[tb_soc_dma_len](soc/debug/hdl/tb_soc_dma_len.v)** — five DMA transfer
+5. **[tb_soc_dma_len](soc/debug/hdl/soc_tb_dma_len.v)** — five DMA transfer
    lengths that are not whole 32-byte bursts: 64, 40, 20, 8 and 4 bytes, each
    into its own slot over a guard pattern. The other two system programs move
    exact multiples of the burst size, so nothing else makes the channel issue a

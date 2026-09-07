@@ -25,7 +25,7 @@ machine, no arbitration, no collision detection was modified.
 Integration once carried three more, all of them now settled upstream: the DMA's
 two RTL fixes are on its own branch, and the DP-SRAM's `regfile` collision was
 resolved by its owner renaming the module `dp_sram_regfile`. One file is left out
-rather than changed — `regfile.v`, which the block no longer instantiates or
+rather than changed — `rv32i_regfile.v`, which the block no longer instantiates or
 compiles but still ships, still defining a module named `regfile` that collides
 with the CPU's. See item 10 of [TO_MODIFY.md](TO_MODIFY.md).
 
@@ -110,7 +110,7 @@ repository root, which had drifted from the copy under `Siemens/`.
 Nothing here replaces anything in the three blocks; it is the fabric between
 them, in [soc/hdl/](soc/hdl/).
 
-**`axi_full2lite.v` — the reason a plain interconnect was not enough.** The DMA
+**`soc_axi_full2lite.v` — the reason a plain interconnect was not enough.** The DMA
 is an AXI4-Full master issuing eight-beat INCR bursts; every slave in the
 system is AXI4-Lite, which has no bursts. The bridge splits each burst into one
 Lite transaction per beat and rebuilds `RLAST` and the single write response.
@@ -119,7 +119,7 @@ so an error inside a burst cannot be lost; and an unsupported burst (WRAP, or a
 narrow transfer) is answered `SLVERR` with nothing issued on the bus, rather
 than mistranslated into the wrong addresses.
 
-**`axi_lite_dec.v` — one master to N slaves, with `DECERR`.** Anything outside
+**`soc_axi_lite_dec.v` — one master to N slaves, with `DECERR`.** Anything outside
 every window is answered rather than left to hang. One real bug surfaced here:
 routing the *response* phase by the live address closes a combinational loop on
 the instruction bus, because the fetch unit issues the next `AR` in the same
@@ -128,11 +128,11 @@ limit 5000`. The fix is to route the response by the select latched at the
 address handshake — correct on its own terms, since a response can only follow
 its own address handshake.
 
-**`axi_lite_arb.v` — M masters to one slave.** Round-robin, one transaction per
+**`soc_axi_lite_arb.v` — M masters to one slave.** Round-robin, one transaction per
 grant, released on the response beat. Used only in front of the data memory,
 which is single-ported.
 
-**`axi_lite_ram.v` — the instruction and data memories.** A synthesizable
+**`soc_axi_lite_ram.v` — the instruction and data memories.** A synthesizable
 AXI4-Lite RAM with byte enables and a `$readmemh` image, so the SoC is a
 complete design rather than one that only elaborates with a behavioural model
 attached. The array is zeroed before the image loads, so no X reaches the CPU.
@@ -158,15 +158,15 @@ like from the inside.
 
 | Where | Defect | Fix |
 |---|---|---|
-| `cpu_top.v` | one in-progress bit could not tell an interrupt return from an exception return | one bit per open trap level |
-| `pic.v` + `cpu_top.v` | a source masked in `mie` was still selected, so it starved everything behind it | `mie[31:16]` takes part in the resolution |
-| `pic.v` + `cpu_top.v` | `mip` showed only the offered source | the PIC exports its whole pending set |
+| `rv32i_cpu_top.v` | one in-progress bit could not tell an interrupt return from an exception return | one bit per open trap level |
+| `pic.v` + `rv32i_cpu_top.v` | a source masked in `mie` was still selected, so it starved everything behind it | `mie[31:16]` takes part in the resolution |
+| `pic.v` + `rv32i_cpu_top.v` | `mip` showed only the offered source | the PIC exports its whole pending set |
 | `soc_addr_map.vh` | 64 KB windows over blocks that decode 8 address bits | 256 B windows, the size of each register file |
 | `pic.v` | bump escalation assumed band 0 is always the most urgent | it steps up the urgency order `BAND_CONFIG` defines |
 | `pic.v` | an edge arriving in the claim cycle was cleared | the edge outranks the claim |
 | `pic.v` | the software-trigger key was compared, not required to be written | both key lanes must be strobed |
-| `csr_file.v` | `mtvec.MODE` stored the reserved encodings 2 and 3 | a reserved MODE folds to direct |
-| `csr_file.v` | `CSRRS`/`CSRRC` on a counter dropped that cycle's event | they apply to the incremented value |
+| `rv32i_csr_file.v` | `mtvec.MODE` stored the reserved encodings 2 and 3 | a reserved MODE folds to direct |
+| `rv32i_csr_file.v` | `CSRRS`/`CSRRC` on a counter dropped that cycle's event | they apply to the incremented value |
 
 Two of these deserve more than a table row.
 
@@ -230,9 +230,9 @@ compiled into the SoC flow too; until they were split out of the coverage bind
 they were dark in every SoC run.
 
 Every defect in section 4 has a test that fails without its fix. The three PIC
-ones are in `cpu/debug/hdl/tb_pic_sched.v`, the two nesting ones in
-`cpu/debug/hdl/tb_traps.v`, the address map in `soc/debug/hdl/tb_addr_map.v`,
-`mtvec.MODE` in `cpu/debug/hdl/tb_csr_ro.v`, and the interrupt mask in the
+ones are in `cpu/debug/hdl/pic_tb_sched.v`, the two nesting ones in
+`cpu/debug/hdl/rv32i_tb_traps.v`, the address map in `soc/debug/hdl/soc_tb_addr_map.v`,
+`mtvec.MODE` in `cpu/debug/hdl/rv32i_tb_csr_ro.v`, and the interrupt mask in the
 channel sweep of `cpu/debug/sim/program_axi.s`.
 
 Details, including mutation testing and the list of what no test covers, are in

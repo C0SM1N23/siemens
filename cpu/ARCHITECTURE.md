@@ -126,7 +126,7 @@ signal, `s2_advance`.
 
 ## 3. Module descriptions
 
-### fetch_unit.v — S1 (REQ5, REQ12; D6, D7, D8)
+### rv32i_fetch_unit.v — S1 (REQ5, REQ12; D6, D7, D8)
 
 Owns the PC and the `ibus` AXI master. One transaction in flight, next
 ARVALID raised in the same cycle the current R beat is accepted, so a
@@ -147,7 +147,7 @@ Implementation choices:
   would otherwise request `RESET_PC` while reset is still asserted, which
   AXI forbids (found by the SVA layer, see debug/VERIFICATION.md).
 
-### branch_predictor.v — BHT + BTB + RAS (REQ8; D9, D10, D11, D24)
+### rv32i_branch_predictor.v — BHT + BTB + RAS (REQ8; D9, D10, D11, D24)
 
 ```
 lookup (S1):  PC ──► index [8:2] ──► {valid, tag, dir bit, is_ret, target}
@@ -172,7 +172,7 @@ update (S2 commit): PC, taken, real target, is_ret, push/pop
   Overflow wraps, underflow falls back to the stored target. Both cases
   only cost accuracy — correctness always comes from branch_unit.
 
-### decode.v / imm_gen.v / control.v (REQ7; D23)
+### rv32i_decode.v / rv32i_imm_gen.v / rv32i_control.v (REQ7; D23)
 
 `decode` slices the fixed RV32I fields, `imm_gen` builds the immediate for
 the 5 encoding formats, `control` turns the opcode into S2's control
@@ -188,12 +188,12 @@ nothing is written back.
   (imm12 = 0x105, D23) and the six CSR forms. funct3=100 is reserved →
   illegal.
 
-### regfile.v (REQ10)
+### rv32i_regfile.v (REQ10)
 
 32×32, x0 hardwired to zero, two combinational read ports (S2), one write
 port (S3), reset to zero.
 
-### alu.v / alu_top.v / branch_unit.v
+### rv32i_alu.v / rv32i_alu_top.v / rv32i_branch_unit.v
 
 `alu_top` selects the operands (register vs immediate, PC for AUIPC) and
 derives the ALU opcode from funct3/funct7. `branch_unit` computes the real
@@ -201,7 +201,7 @@ direction and target of every control transfer; that result is compared
 against the prediction, trains the predictor and masks bit 0 for JALR as
 the ISA requires.
 
-### csr_file.v (REQ9; D3, D5, D15, D16, D25)
+### rv32i_csr_file.v (REQ9; D3, D5, D15, D16, D25)
 
 | CSR | Addr | Implemented fields |
 |---|---|---|
@@ -243,7 +243,7 @@ the ISA requires.
   them disappear. `mcountinhibit` (0x320) is absent on purpose: it is optional,
   and its not-implemented behaviour ("all counters run") is exactly this design.
 
-### exception_unit.v (D3, D17, D18)
+### rv32i_exception_unit.v (D3, D17, D18)
 
 Watches the instruction in S2 and raises at most one cause:
 fetch fault (1) → illegal (2) → EBREAK (3) → ECALL (11) → misaligned jump
@@ -254,7 +254,7 @@ target (0) → misaligned load/store (4/6) → load/store bus fault (5/7).
 - Bus errors are checked after the response and become access faults, not
   illegal instruction (D18).
 
-### lsu.v — S2's data AXI master (REQ5, REQ11, REQ12; D12)
+### rv32i_lsu.v — S2's data AXI master (REQ5, REQ11, REQ12; D12)
 
 Gets a command only for a legal, aligned, not-squashed memory op. Address
 and store data are latched in the first cycle: forwarded operands are only
@@ -270,7 +270,7 @@ guaranteed valid then, and AXI wants a stable payload anyway (D12).
   (misaligned halves already trapped, so addr[0]=0 holds), then
   sign/zero-extension by funct3.
 
-### hazard_unit.v (REQ6; D13, D14, D23)
+### rv32i_hazard_unit.v (REQ6; D13, D14, D23)
 
 ```verilog
 s2_advance   = ~lsu_busy & ~wfi_wait;
@@ -284,7 +284,7 @@ Also computes the forwarding hits (S3.rd vs S2.rs1/rs2, x0 excluded).
 Load-use costs zero cycles (D13): a load's data is already in S3 when its
 consumer sits in S2, so a single S3→S2 bypass covers it.
 
-### writeback_mux.v — S3
+### rv32i_writeback_mux.v — S3
 
 Selects rd's value: ALU result, load data, PC+4 (JAL/JALR link) or CSR
 read value. The write enable is gated by the DX/WB valid bit.
@@ -496,19 +496,19 @@ The core keeps no global state: memories external, identity from
 `RESET_PC`/`HART_ID`, each instance a normal AXI master an interconnect can
 arbitrate. RV32I has no LR/SC, but every memory op here is in-order and blocking
 (one outstanding, no store buffer), so each hart is sequentially consistent and
-flag handshakes through shared memory work. `debug/hdl/tb_dual_core.v` runs two
+flag handshakes through shared memory work. `debug/hdl/rv32i_tb_dual_core.v` runs two
 cores against one shared memory behind a 2:1 arbiter and checks both results.
 
 ## 8. Verification
 
 Two benches, on purpose:
 
-- `debug/hdl/tb_cpu_axi.v` — the **system** bench. Builds a small SoC around the
+- `debug/hdl/rv32i_tb_cpu_axi.v` — the **system** bench. Builds a small SoC around the
   CPU: instruction memory, two address decoders (PIC at 0x3000_0000, mtimer at
   0x3001_0000, data memory as default), the real `pic.v` and `mtimer.v`, protocol
   monitors on all four AXI ports, a directed self-checking program. It runs the
   PIC in its default configuration and proves the CPU↔PIC contract end to end.
-- `debug/hdl/tb_pic.v` — the **feature** bench for the PIC alone, so the
+- `debug/hdl/pic_tb_feature.v` — the **feature** bench for the PIC alone, so the
   advanced-scheduling features are visible as their own named checks instead of
   being buried in a full-system run: priority bands (inter/intra/tie),
   preemptive nesting and `NEST_MAX` overflow, spurious detection and

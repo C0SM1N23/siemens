@@ -78,7 +78,7 @@ count — so the counter is right, not merely alive.
 |---|---|---|
 | SVA actually bound, not just present | PASS | same mutant built without `--assert`: 0 assertions; with `--assert`: 1. Path proves binding inside the DUT: `tb_soc_top.dut.bridge_inst.full_port_sva_i.r_no_last_before_final` |
 | `CHECK_SUBSET` on for the DMA port, off for the bridge's slave side | PASS | `soc_bind_sva.sv:180` `CHECK_SUBSET(0)`, `:291` `CHECK_SUBSET(1)` |
-| `tb_full2lite` really drives a WRAP burst | PASS | `tb_full2lite.v:263` and `:267` drive `BURST_WRAP` |
+| `tb_full2lite` really drives a WRAP burst | PASS | `soc_tb_full2lite.v:263` and `:267` drive `BURST_WRAP` |
 
 ---
 
@@ -109,7 +109,7 @@ not looking:
 | 7 | `A: INT_ENABLE=0 -> irq stays low -> expected 0x0, got 0x1` |
 | 8 | at `WINDOW_CYCLES=2048`: `window_done pulses = 0`, `WINDOW DEAD` |
 
-Mutant 3 is closed: `soc/debug/hdl/tb_addr_map.v` is now in the repository and
+Mutant 3 is closed: `soc/debug/hdl/soc_tb_addr_map.v` is now in the repository and
 in both regressions. Mutants 2, 7 and 8 are still open, and 7 and 8 are in
 blocks this integration does not modify; they are items 28, 4 and 14 of
 [TO_MODIFY.md](TO_MODIFY.md).
@@ -146,7 +146,7 @@ The other surviving mutants are verification gaps, not defects.
 Everything here passed, and none of it was tested. Items 2, 10 and 12 were
 closed by the second pass and are struck through; the rest still stand.
 
-1. **BRESP stickiness** (`soc/hdl/axi_full2lite.v:278`). No delivered test
+1. **BRESP stickiness** (`soc/hdl/soc_axi_full2lite.v:278`). No delivered test
    produces an error on a beat inside a burst; `tb_full2lite` only exercises
    the refusals the bridge generates itself (WRAP, narrow). A partially failed
    DMA transfer would report OKAY and software would believe it. The
@@ -155,7 +155,7 @@ closed by the second pass and are struck through; the rest still stand.
 2. ~~**Address window masks** (`soc/hdl/soc_addr_map.vh`). Nothing checks window
    sizes. A widened mask aliases silently. The only unmapped access in the
    suite is `0x5000_0000`, which stays unmapped however the existing windows
-   are widened.~~ Closed: `soc/debug/hdl/tb_addr_map.v`, run 1 of the SoC
+   are widened.~~ Closed: `soc/debug/hdl/soc_tb_addr_map.v`, run 1 of the SoC
    regression. Three of the six windows turned out to be oversized.
 3. **DMA interrupt masking** (`dma/hdl/mc_dma_top.v:144`). Both SoC programs
    and the DMA's own bench write `INT_ENABLE = 0xF` before any check. The
