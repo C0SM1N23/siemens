@@ -3,7 +3,7 @@
 #
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
 #   make modelsim   full 15-run ModelSim CPU regression (needs vsim; local)
-#   make soc        SoC regression: 10 runs over four bus timings (needs vsim)
+#   make soc        SoC regression: 24 runs over four bus timings (needs vsim)
 #   make soc-sva    SoC lint + SVA assertion run on Verilator
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
@@ -23,6 +23,13 @@ asm:
 	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_soc.s    program_soc.hex
 	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_stress.s program_stress.hex
 	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_dma_len.s program_dma_len.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_dma_irq.s program_dma_irq.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_dma_ch.s program_dma_ch.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_dma_err.s program_dma_err.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_timer.s program_timer.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_pic_src.s program_pic_src.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_pic_nest.s program_pic_nest.hex
+	cd $(SOCSIM) && $(PY) ../../../cpu/debug/sim/asm.py program_pic_esc.s program_pic_esc.hex
 
 # SVA + functional-coverage run on Verilator (free, CI-runnable). The script
 # exits non-zero if the TB checks or the coverage gate fail.
@@ -45,14 +52,16 @@ test: verilator
 modelsim: asm
 	cd $(SIM) && vsim -c -do "do regress.do; quit -f"
 
-# SoC regression, 10 runs from one compile:
-#   1    address map: every window is the size of its block, so nothing aliases
-#   2    AXI4-Full to AXI4-Lite burst bridge, block level
-#   3-6  full system under four bus timings: CPU programs the DMA, sleeps on
-#        WFI, DMA fills the dual-port SRAM, completion returns through the PIC
-#   7-10 the same system under the same four timings with the CPU working the
-#        bus throughout: arbiter under contention, both SRAM ports at once,
-#        real collisions, DECERR
+# SoC regression, 24 runs from one compile:
+#   1     address map: every window is the size of its block, so nothing aliases
+#   2     AXI4-Full to AXI4-Lite burst bridge, block level
+#   3-6   full system under four bus timings: CPU programs the DMA, sleeps on
+#         WFI, DMA fills the dual-port SRAM, completion returns through the PIC
+#   7-10  the same system under the same four timings with the CPU working the
+#         bus throughout: arbiter under contention, both SRAM ports at once,
+#         real collisions, DECERR
+#   11-14 DMA transfer lengths that are not whole 32-byte bursts, same four
+#         timings: 64, 40, 20, 8 and 4 bytes
 soc: asm
 	cd $(SOCSIM) && vsim -c -do "do regress.do; quit -f"
 
