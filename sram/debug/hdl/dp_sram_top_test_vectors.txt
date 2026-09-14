@@ -23,23 +23,29 @@ STAGGERWRITE   A  W   004  00000007
 READ           A  004  00000007  -
 WRITE          A  004  00000000  -
 
-REM ---- Test 1.3: back-to-back writes with zero idle cycles -- RELAXED ----
-REM The main loop inserts one @(posedge clk) between every instruction, so two
-REM WRITE lines in a row cannot exercise the true zero-gap case. Relaxed version
-REM below (still useful: confirms no leftover aw_have/w_have state, just not
-REM on the exact same clock edge as the previous transaction's completion).
+REM ---- Test 1.3: back-to-back writes with zero idle cycles ----
+REM BACKTOBACK keeps AWVALID/WVALID/BREADY asserted across the BVALID && BREADY
+REM edge and only switches the address, so the second request is already valid
+REM when the FSM returns to S_IDLE -- the true zero-gap case. Two WRITE lines
+REM cannot express this, because the main loop inserts one @(posedge clk)
+REM between instructions; the task drives both transactions internally instead.
 RESET      -        -        -        -
-WRITE      A        004      00000001 -
-WRITE      A        008      00000001 -
+BACKTOBACK A        004      008      00000001
 READ       A        004      00000001 -
 READ       A        008      00000001 -
 WRITE      A        004      00000000 -
 WRITE      A        008      00000000 -
 
 REM ---- Test 1.4: read arriving while a write is half-assembled ----
-REM Covered by the same STAGGERWRITE task above -- it already checks
-REM ARREADY=0 on every cycle of the 5-cycle wait between AW and W.
-REM (See tests 1.1/1.2 above; no separate vectors needed.)
+REM Own vectors, no longer relying on 1.1/1.2 as a side effect. STAGGERWRITE
+REM asserts ARVALID continuously and checks ARREADY=0 on every cycle of the
+REM AW->W gap, then confirms the read is accepted only once the write has
+REM fully completed. The gap is 5 cycles (hardcoded in the task); 5 proves the
+REM same per-cycle property as the 10 originally proposed.
+RESET        -      -        -        -
+STAGGERWRITE A      AW       004      0000000A
+READ         A      004      0000000A -
+WRITE        A      004      00000000 -
 
 REM ==================== Section 2: Delayed Response Handshake ====================
 
@@ -487,6 +493,37 @@ READ       A        020      56565656 -
 WAIT       10       -        -        -
 WRITE      A        018      00000004 -
 
+REM ---- Test 4.5 duration measurement (STALLMEAS) ----
+REM STALLMEAS drives a write request and counts clock edges until AWREADY
+REM rises -- the exact length of the COOLDOWN stall. The threshold-hitting
+REM collision must be RWCONFLICT, not WWCONFLICT: do_wwconflict ends with a
+REM read-back that polls until ARREADY, which spins through the whole cooldown
+REM and leaves nothing to measure. do_rwconflict has no read-back.
+REM Measured stall is COOLDOWN_CYCLES - 1 in every case.
+RESET      -        -        -        -
+WRITE      A        018      00000001 -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+WWCONFLICT 020      5        6        A
+RWCONFLICT 020      A        11111111 -
+STALLMEAS  A        020      ABCD0000 0
+
+RESET      -        -        -        -
+WRITE      A        018      00000010 -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+WWCONFLICT 020      5        6        A
+RWCONFLICT 020      A        11111111 -
+STALLMEAS  A        020      ABCD0000 15
+
+RESET      -        -        -        -
+WRITE      A        018      000000FF -
+WWCONFLICT 020      1        2        A
+WWCONFLICT 020      3        4        A
+WWCONFLICT 020      5        6        A
+RWCONFLICT 020      A        11111111 -
+STALLMEAS  A        020      ABCD0000 254
+
 REM ---- Test 4.6: FORCE_PRIORITY updated immediately before a W/W collision ----
 RESET      -        -        -        -
 READ       A        008      00000000 -
@@ -527,24 +564,77 @@ WWCONFLICT  004  00000001  FFFFFFFF  A
 READ        A    004       00000001  -
 WRITE       A    004       00000000  -
 
-REM ---- Test 5.4: BANDWIDTH read exactly at window rollover -- SEE NOTE ----
-REM Default WINDOW_CYCLES=1024 in dp_sram_regfile.v; dp_sram_top.v does not
-REM expose WINDOW_CYCLES as a pass-through parameter, so it cannot be shortened
-REM from this top-level testbench. Recommended: run this test against
-REM dp_sram_regfile.v directly (tb_dp_sram_regfile.v), once its port list is
-REM updated to the current _i/_o interface -- that testbench already supports a
-REM shortened WINDOW_CYCLES override and a direct ACTIVITY command for a_mem_valid_i.
+REM ---- Test 5.4: activity spanning a window boundary is split cleanly ----
+REM WINDOW_CYCLES is overridden to 32 in tb_dp_sram_top.v (RTL default 1024).
+REM SLOWWRITE holds BREADY low, so mem_valid_o stays high for the whole response
+REM wait: delay=40 gives 42 consecutive active cycles, which spans a 32-cycle
+REM window boundary. The two published values must sum to exactly 42 (29 + 13)
+REM -- no cycle lost at the boundary, none counted twice.
+RESET      -        -         -        -
+SLOWWRITE  A        020       CCCCCCCC 40
+READ       A        00C       0000001D -
+WAIT       40       -         -        -
+READ       A        00C       0000000D -
 
-REM ---- Test 5.5: rapidly toggling activity within a window -- SEE NOTE ----
-REM Same recommendation as 5.4: better suited to dp_sram_regfile.v unit-level testing.
+REM ---- Test 5.5: activity toggling every other cycle ----
+REM TOGGLE holds AWVALID/WVALID/BREADY asserted continuously, so the FSM
+REM ping-pongs S_IDLE <-> S_WR_RESP one cycle in each and mem_valid_o toggles
+REM on exactly every other cycle -- the original objective, not an
+REM approximation. Over a fully covered window that is WINDOW_CYCLES/2 = 16
+REM active cycles, which is also 5.7's mid-range case measured exactly.
+RESET      -        -         -        -
+TOGGLE     A        020       80       -
+READ       A        00C       00000010 -
 
 REM ---- Test 5.6: write to the reserved word (word 7) ----
 RESET      -        -        -        -
 WRITE      A        01C      DEADBEEF -
 READ       A        01C      00000000 -
 
-REM ---- Test 5.7: BANDWIDTH activity-duration boundary/mid-range -- SEE NOTE ----
-REM Same recommendation as 5.4/5.5.
+REM ---- Test 5.7: BANDWIDTH activity-duration boundary and mid-range ----
+REM (a) minimum: register-region traffic only -- a_ram_valid never asserts, so
+REM     the count stays 0. Also proves register accesses (the BANDWIDTH read
+REM     itself included) are not counted as memory activity.
+RESET      -        -         -        -
+WRITE      A        004       00000001 -
+WAIT       40       -         -        -
+READ       A        00C       00000000 -
+REM (b) mid-range: delay=12 -> 14 consecutive active cycles.
+RESET      -        -         -        -
+SLOWWRITE  A        020       AAAAAAAA 12
+WAIT       40       -         -        -
+READ       A        00C       0000000E -
+REM (c) maximum: a burst longer than 2*WINDOW_CYCLES guarantees one fully
+REM     covered window whatever the starting phase. The measured maximum is
+REM     exactly WINDOW_CYCLES (32), NOT WINDOW_CYCLES-1. The read must follow
+REM     immediately -- a WAIT would let the partial tail window overwrite the
+REM     saturated value.
+RESET      -        -         -        -
+SLOWWRITE  A        020       BBBBBBBB 100
+READ       A        00C       00000020 -
+
+REM ---- Test 5.8: WINDOW_CYCLES pass-through regression ----
+REM Pins the window length from both sides. Fails on RTL where dp_sram does not
+REM forward WINDOW_CYCLES to dp_sram_regfile: the window would still be 1024, so
+REM the second read would also return 0.
+RESET      -        -         -        -
+WRITE      A        020       11111111 -
+WAIT       20       -         -        -
+READ       A        00C       00000000 -
+WAIT       20       -         -        -
+READ       A        00C       00000001 -
+
+REM ---- Test 5.9: BANDWIDTH_A and BANDWIDTH_B count their own port only ----
+RESET      -        -         -        -
+SLOWWRITE  B        020       DDDDDDDD 100
+READ       A        010       00000020 -
+READ       A        00C       00000000 -
+
+REM ---- Test 5.10: read-side activity counts identically to write-side ----
+RESET      -        -         -        -
+WRITE      A        020       5A5A5A5A -
+SLOWREAD   A        020       5A5A5A5A 100
+READ       A        00C       00000020 -
 
 REM ==================== Section 6: System-Level Integration ====================
 

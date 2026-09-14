@@ -43,7 +43,9 @@ module tb_dp_sram_top;
 
     wire irq;
 
-    dp_sram_top dut (
+    // WINDOW_CYCLES shortened from the RTL default of 1024 so the BANDWIDTH
+    // measurement window is reachable from the vector file (tests 5.4, 5.5, 5.7).
+    dp_sram #(.WINDOW_CYCLES(32)) dp_sram_inst (
         .clk_i(clk), 
         .rst_n_i(rst_n),
         .a_awaddr_i(a_awaddr), 
@@ -698,6 +700,133 @@ module tb_dp_sram_top;
     endtask
 
 
+    // -------------------------------------------------------------------
+    // do_backtoback_write: doua scrieri fara niciun ciclu liber intre ele.
+    // AWVALID/WVALID/BREADY raman sus tot timpul; adresa comuta pe exact
+    // muchia pe care se incheie prima tranzactie (BVALID && BREADY), deci a
+    // doua cerere e deja valida cand FSM-ul revine in S_IDLE. Asta e cazul
+    // zero-gap pe care fisierul de vectori nu il poate exprima, fiindca bucla
+    // principala insereaza un @(posedge clk) intre instructiuni.
+    // -------------------------------------------------------------------
+    task do_backtoback_write;
+        input [8*16-1:0] port;
+        input [9:0]      addr1;
+        input [9:0]      addr2;
+        input [31:0]     data;
+        reg   [1:0] resp1;
+        reg   [1:0] resp2;
+        begin
+            if (port == "A") begin
+                a_awvalid = 1'b1; a_awaddr = addr1;
+                a_wvalid  = 1'b1; a_wdata  = data; a_wstrb = 4'hF;
+                a_bready  = 1'b1;
+            end else begin
+                b_awvalid = 1'b1; b_awaddr = addr1;
+                b_wvalid  = 1'b1; b_wdata  = data; b_wstrb = 4'hF;
+                b_bready  = 1'b1;
+            end
+
+            @(posedge clk);
+            if (port == "A") while (!a_awready) @(posedge clk);
+            else              while (!b_awready) @(posedge clk);
+
+            // S_WR_RESP: BVALID e sus. Valid-urile NU coboara -- doar comutam
+            // adresa, deci cererea 2 e prezenta cand FSM-ul trece in S_IDLE.
+            @(posedge clk);
+            if (port == "A") begin resp1 = a_bresp; a_awaddr = addr2; end
+            else              begin resp1 = b_bresp; b_awaddr = addr2; end
+
+            if (port == "A") while (!a_awready) @(posedge clk);
+            else              while (!b_awready) @(posedge clk);
+
+            if (port == "A") begin a_awvalid <= 1'b0; a_wvalid <= 1'b0; end
+            else              begin b_awvalid <= 1'b0; b_wvalid <= 1'b0; end
+
+            @(posedge clk);
+            if (port == "A") begin resp2 = a_bresp; a_bready <= 1'b0; end
+            else              begin resp2 = b_bresp; b_bready <= 1'b0; end
+
+            report_check({30'd0, resp1}, {30'd0, 2'b00}, "BACKTOBACK: OKAY pe prima scriere");
+            report_check({30'd0, resp2}, {30'd0, 2'b00}, "BACKTOBACK: OKAY pe a doua scriere");
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_toggle_activity: tine AWVALID/WVALID/BREADY sus <cycles> cicluri.
+    // FSM-ul face ping-pong S_IDLE <-> S_WR_RESP, cate un ciclu in fiecare,
+    // deci mem_valid_o comuta exact la fiecare al doilea ciclu -- pattern-ul
+    // de activitate 1-0-1-0 cerut de testul 5.5, pe care fisierul de vectori
+    // nu il poate genera comanda cu comanda.
+    // -------------------------------------------------------------------
+    task do_toggle_activity;
+        input [8*16-1:0] port;
+        input [9:0]      addr;
+        input [31:0]     cycles;
+        integer i;
+        begin
+            if (port == "A") begin
+                a_awvalid = 1'b1; a_awaddr = addr;
+                a_wvalid  = 1'b1; a_wdata  = 32'hA5A50000; a_wstrb = 4'hF;
+                a_bready  = 1'b1;
+            end else begin
+                b_awvalid = 1'b1; b_awaddr = addr;
+                b_wvalid  = 1'b1; b_wdata  = 32'hA5A50000; b_wstrb = 4'hF;
+                b_bready  = 1'b1;
+            end
+
+            for (i = 0; i < cycles; i = i + 1) @(posedge clk);
+
+            if (port == "A") begin a_awvalid <= 1'b0; a_wvalid <= 1'b0; a_bready <= 1'b0; end
+            else              begin b_awvalid <= 1'b0; b_wvalid <= 1'b0; b_bready <= 1'b0; end
+            @(posedge clk);
+        end
+    endtask
+
+
+    // -------------------------------------------------------------------
+    // do_measure_stall: masoara durata stall-ului in cicluri. Porneste o
+    // cerere de scriere si numara muchiile de ceas pana cand AWREADY urca --
+    // adica exact cat tine blocajul impus de COOLDOWN. Apoi duce scrierea la
+    // capat normal. Fara asta, do_write doar face polling si nu poate afirma
+    // "ambele porturi blocate exact N cicluri" (testul 4.5).
+    // -------------------------------------------------------------------
+    task do_measure_stall;
+        input [8*16-1:0] port;
+        input [9:0]      addr;
+        input [31:0]     data;
+        input [31:0]     expected;
+        reg   [31:0] n;
+        reg   [1:0]  resp;
+        begin
+            if (port == "A") begin
+                a_awvalid = 1'b1; a_awaddr = addr;
+                a_wvalid  = 1'b1; a_wdata  = data; a_wstrb = 4'hF;
+                a_bready  = 1'b1;
+            end else begin
+                b_awvalid = 1'b1; b_awaddr = addr;
+                b_wvalid  = 1'b1; b_wdata  = data; b_wstrb = 4'hF;
+                b_bready  = 1'b1;
+            end
+
+            n = 32'd0;
+            @(posedge clk);
+            if (port == "A") while (!a_awready) begin n = n + 32'd1; @(posedge clk); end
+            else              while (!b_awready) begin n = n + 32'd1; @(posedge clk); end
+
+            if (port == "A") begin a_awvalid <= 1'b0; a_wvalid <= 1'b0; end
+            else              begin b_awvalid <= 1'b0; b_wvalid <= 1'b0; end
+
+            @(posedge clk);
+            if (port == "A") begin resp = a_bresp; a_bready <= 1'b0; end
+            else              begin resp = b_bresp; b_bready <= 1'b0; end
+
+            report_check(n, expected, "STALLMEAS: durata stall in cicluri");
+            report_check({30'd0, resp}, {30'd0, 2'b00}, "STALLMEAS: OKAY dupa stall");
+        end
+    endtask
+
+
     integer fd;
     integer fgets_ret;
     integer scan_count;
@@ -806,6 +935,15 @@ module tb_dp_sram_top;
                     end
                     else if (cmd == "CHECKIRQ") begin
                         do_checkirq(str_to_dec(arg1));
+                    end
+                    else if (cmd == "BACKTOBACK") begin
+                        do_backtoback_write(arg1, str_to_addr(arg2), str_to_addr(arg3), str_to_hex(arg4));
+                    end
+                    else if (cmd == "TOGGLE") begin
+                        do_toggle_activity(arg1, str_to_addr(arg2), str_to_dec(arg3));
+                    end
+                    else if (cmd == "STALLMEAS") begin
+                        do_measure_stall(arg1, str_to_addr(arg2), str_to_hex(arg3), str_to_dec(arg4));
                     end
                     else begin
                         $display("  EROARE linia %0d: comanda necunoscuta '%s'", line_num, cmd);
