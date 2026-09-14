@@ -70,14 +70,23 @@ module mc_dma_channel (
     always @(posedge clk_i or negedge rst_ni) begin
         if (~rst_ni) 
             token_bucket <= 16'h0000;
-        else if (window_timer == 8'd99) begin
-            if (token_bucket + refill_rate > max_tokens)
-                token_bucket <= max_tokens;
-            else
-                token_bucket <= token_bucket + refill_rate;
-        end 
-        else if (req_valid_o && arb_gnt_i)
-            token_bucket <= token_bucket - 16'd8; // Spent tokens
+        else begin
+            // Case 1: Refill and Consume 
+            if ((window_timer == 8'd99) && (req_valid_o && arb_gnt_i)) 
+                if (token_bucket + refill_rate - 16'd8 > max_tokens)
+                    token_bucket <= max_tokens - 16'd8;
+                else
+                    token_bucket <= token_bucket + refill_rate - 16'd8;
+            // Case 2: Only Refill
+            else if (window_timer == 8'd99)
+                if (token_bucket + refill_rate > max_tokens)
+                    token_bucket <= max_tokens;
+                else
+                    token_bucket <= token_bucket + refill_rate;
+            // Case 3: Only Consume
+            else if (req_valid_o && arb_gnt_i)
+                token_bucket <= token_bucket - 16'd8;
+        end
     end
 
     // 2. Descriptor Fetching and Execution Logic
