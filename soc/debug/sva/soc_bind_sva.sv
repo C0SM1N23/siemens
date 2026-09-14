@@ -103,35 +103,35 @@ bind soc_axi_lite_ram axi_lite_sva #(
 );
 
 // the DMA's AXI4-Lite register slave
-bind mc_dma_top axi_lite_sva #(
+bind mc_dma axi_lite_sva #(
     .NAME("dma_regs"),
     .HAS_WRITE(1),
     .CHECK_ALIGN(0)
 ) dma_regs_sva_i (
-    .clk_i     (clk),
-    .rst_n_i   (rst_n),
-    .awaddr_i  (s_axi_awaddr),
-    .awvalid_i (s_axi_awvalid),
-    .awready_i (s_axi_awready),
-    .wdata_i   (s_axi_wdata),
-    .wstrb_i   (s_axi_wstrb),
-    .wvalid_i  (s_axi_wvalid),
-    .wready_i  (s_axi_wready),
-    .bresp_i   (s_axi_bresp),
-    .bvalid_i  (s_axi_bvalid),
-    .bready_i  (s_axi_bready),
-    .araddr_i  (s_axi_araddr),
-    .arvalid_i (s_axi_arvalid),
-    .arready_i (s_axi_arready),
-    .rdata_i   (s_axi_rdata),
-    .rresp_i   (s_axi_rresp),
-    .rvalid_i  (s_axi_rvalid),
-    .rready_i  (s_axi_rready)
+    .clk_i     (clk_i),
+    .rst_n_i   (rst_ni),
+    .awaddr_i  (s_axi_awaddr_i),
+    .awvalid_i (s_axi_awvalid_i),
+    .awready_i (s_axi_awready_o),
+    .wdata_i   (s_axi_wdata_i),
+    .wstrb_i   (s_axi_wstrb_i),
+    .wvalid_i  (s_axi_wvalid_i),
+    .wready_i  (s_axi_wready_o),
+    .bresp_i   (s_axi_bresp_o),
+    .bvalid_i  (s_axi_bvalid_o),
+    .bready_i  (s_axi_bready_i),
+    .araddr_i  (s_axi_araddr_i),
+    .arvalid_i (s_axi_arvalid_i),
+    .arready_i (s_axi_arready_o),
+    .rdata_i   (s_axi_rdata_o),
+    .rresp_i   (s_axi_rresp_o),
+    .rvalid_i  (s_axi_rvalid_o),
+    .rready_i  (s_axi_rready_i)
 );
 
 // the dual-port SRAM, one checker per port. Its addresses are 10 bits wide -
 // the window size - so they are zero-extended to the checker's 32.
-bind dp_sram_top axi_lite_sva #(
+bind dp_sram axi_lite_sva #(
     .NAME("sram_a"),
     .HAS_WRITE(1),
     .CHECK_ALIGN(0)
@@ -157,7 +157,7 @@ bind dp_sram_top axi_lite_sva #(
     .rready_i  (a_rready_i)
 );
 
-bind dp_sram_top axi_lite_sva #(
+bind dp_sram axi_lite_sva #(
     .NAME("sram_b"),
     .HAS_WRITE(1),
     .CHECK_ALIGN(0)
@@ -303,35 +303,35 @@ bind soc_axi_full2lite soc_axi_full2lite_sva #(
 // bind only exists where mc_dma_top does, so it never sees the bridge's own
 // bench. The protocol assertions duplicate the ones above on the same wires -
 // harmless, and it keeps one checker instead of two.
-bind mc_dma_top soc_axi_full_sva #(
+bind mc_dma soc_axi_full_sva #(
     .NAME("dma_master"),
     .CHECK_SUBSET(1)
 ) dma_master_sva_i (
-    .clk_i     (clk),
-    .rst_n_i   (rst_n),
-    .awaddr_i  (m_axi_awaddr),
-    .awlen_i   (m_axi_awlen),
-    .awsize_i  (m_axi_awsize),
-    .awburst_i (m_axi_awburst),
-    .awvalid_i (m_axi_awvalid),
-    .awready_i (m_axi_awready),
-    .wdata_i   (m_axi_wdata),
-    .wstrb_i   (m_axi_wstrb),
-    .wlast_i   (m_axi_wlast),
-    .wvalid_i  (m_axi_wvalid),
-    .wready_i  (m_axi_wready),
-    .bresp_i   (m_axi_bresp),
-    .bvalid_i  (m_axi_bvalid),
-    .bready_i  (m_axi_bready),
-    .araddr_i  (m_axi_araddr),
-    .arlen_i   (m_axi_arlen),
-    .arsize_i  (m_axi_arsize),
-    .arburst_i (m_axi_arburst),
-    .arvalid_i (m_axi_arvalid),
-    .arready_i (m_axi_arready),
-    .rdata_i   (m_axi_rdata),
-    .rresp_i   (m_axi_rresp),
-    .rlast_i   (m_axi_rlast),
-    .rvalid_i  (m_axi_rvalid),
-    .rready_i  (m_axi_rready)
+    .clk_i     (clk_i),
+    .rst_n_i   (rst_ni),
+    .awaddr_i  (m_axi_awaddr_o),
+    .awlen_i   (m_axi_awlen_o),
+    .awsize_i  (m_axi_awsize_o),
+    .awburst_i (m_axi_awburst_o),
+    .awvalid_i (m_axi_awvalid_o),
+    .awready_i (m_axi_awready_i),
+    .wdata_i   (m_axi_wdata_o),
+    .wstrb_i   (m_axi_wstrb_o),
+    .wlast_i   (m_axi_wlast_o),
+    .wvalid_i  (m_axi_wvalid_o),
+    .wready_i  (m_axi_wready_i),
+    .bresp_i   (m_axi_bresp_i),
+    .bvalid_i  (m_axi_bvalid_i),
+    .bready_i  (m_axi_bready_o),
+    .araddr_i  (m_axi_araddr_o),
+    .arlen_i   (m_axi_arlen_o),
+    .arsize_i  (m_axi_arsize_o),
+    .arburst_i (m_axi_arburst_o),
+    .arvalid_i (m_axi_arvalid_o),
+    .arready_i (m_axi_arready_i),
+    .rdata_i   (m_axi_rdata_i),
+    .rresp_i   (m_axi_rresp_i),
+    .rlast_i   (m_axi_rlast_i),
+    .rvalid_i  (m_axi_rvalid_i),
+    .rready_i  (m_axi_rready_o)
 );

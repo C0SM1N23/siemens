@@ -152,9 +152,9 @@ initial begin
         // only 248 of them are reachable; that is a property of the memory
         // block, recorded separately, and the indices here follow the block as
         // it is rather than as it will be.
-        check(32'hBAD00000, dut.sram_inst.u_dpram.mem[244],
+        check(32'hBAD00000, dut.sram_inst.mem_array_inst.mem[244],
               "and the memory array itself holds it");
-        check(32'hBAD00003, dut.sram_inst.u_dpram.mem[247],
+        check(32'hBAD00003, dut.sram_inst.mem_array_inst.mem[247],
               "up to the last word the window covers");
     end
 

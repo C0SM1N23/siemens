@@ -38,15 +38,15 @@
 ../../../cpu/hdl/rv32i_writeback_mux.v
 
 // --- L0: DMA leaves ---------------------------------------------------------
-../../../dma/hdl/axi4_lite_slave.v
-../../../dma/hdl/axi4_full_master.v
-../../../dma/hdl/dma_channel.v
-../../../dma/hdl/priority_arbiter.v
+../../../dma/hdl/mc_dma_axi4_lite_slave.v
+../../../dma/hdl/mc_dma_axi4_full_master.v
+../../../dma/hdl/mc_dma_channel.v
+../../../dma/hdl/mc_dma_priority_arbiter.v
 
 // --- L0: DP-SRAM leaves -----------------------------------------------------
-../../../sram/hdl/axi4lite_slave_fsm.v
-../../../sram/hdl/collision_det.v
-../../../sram/hdl/mem_array.v
+../../../sram/hdl/dp_sram_axi4lite_slave_fsm.v
+../../../sram/hdl/dp_sram_collision_det.v
+../../../sram/hdl/dp_sram_mem_array.v
 ../../../sram/hdl/dp_sram_regfile.v
 
 // --- L0: interconnect -------------------------------------------------------
@@ -59,11 +59,11 @@
 ../../../cpu/hdl/rv32i_alu_top.v        // -> alu
 ../../../cpu/hdl/mtimer.v         // -> axi_lite_slave
 ../../../cpu/hdl/pic.v            // -> axi_lite_slave
-../../../sram/hdl/dp_sram_top.v   // -> slave_fsm, collision_det, mem_array, dp_sram_regfile
+../../../sram/hdl/dp_sram.v   // -> slave_fsm, collision_det, mem_array, dp_sram_regfile
 
 // --- L2: block tops ---------------------------------------------------------
 ../../../cpu/hdl/rv32i_cpu_top.v
-../../../dma/hdl/mc_dma_top.v
+../../../dma/hdl/mc_dma.v
 
 // --- L3: the SoC ------------------------------------------------------------
 ../../hdl/soc_top.v

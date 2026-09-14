@@ -111,7 +111,7 @@ initial begin
         // -- read the SRAM array directly, so a symmetric addressing error
         //    on the CPU's own read path could not have masked a bad transfer
         for (i = 0; i < 16; i = i + 1)
-            check(32'hC0DE0000 + i, dut.sram_inst.u_dpram.mem[i],
+            check(32'hC0DE0000 + i, dut.sram_inst.mem_array_inst.mem[i],
                   "the SRAM array itself holds the transferred word");
 
         // -- the DMA's own view -------------------------------------------

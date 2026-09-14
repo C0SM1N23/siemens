@@ -14,7 +14,7 @@ vlib work
 vmap work work
 
 # 1. RTL, in dependency-level order
-vlog -f soc_rtl.f
+vlog -sv -f soc_rtl.f
 
 # 2. testbenches
 vlog +incdir+../../../cpu/debug/hdl ../../../cpu/debug/hdl/ck_rst_tb.v

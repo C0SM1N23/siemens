@@ -9,7 +9,7 @@
 //                                             +--> machine timer
 //                                             +--> DMA registers
 //
-//   mc_dma_top --(AXI4-Full)--> axi_full2lite --> dec_x --+--> [arb] --> DMEM
+//   mc_dma --(AXI4-Full)--> axi_full2lite --> dec_x --+--> [arb] --> DMEM
 //                                                         +--> DP-SRAM port B
 //
 //   interrupts: DMA irq[3:0] -> PIC 0..3, SRAM irq -> PIC 4,
@@ -548,7 +548,7 @@ soc_axi_lite_ram #(
 wire sram_irq;
 assign sram_irq_o = sram_irq;
 
-dp_sram_top #(
+dp_sram #(
     .ADDR_W       (10),
     .REG_WORD_MAX (7)
 ) sram_inst (
@@ -600,54 +600,54 @@ dp_sram_top #(
 wire [3:0] dma_irq;
 assign dma_irq_o = dma_irq;
 
-mc_dma_top dma_inst (
-    .clk           (clk_i),
-    .rst_n         (rst_n_i),
-    .irq           (dma_irq),
+mc_dma dma_inst (
+    .clk_i           (clk_i),
+    .rst_ni         (rst_n_i),
+    .irq_o           (dma_irq),
 
-    .s_axi_awaddr  (d_awaddr [SD_DMA*32 +: 32]),
-    .s_axi_awvalid (d_awvalid[SD_DMA]),
-    .s_axi_awready (d_awready[SD_DMA]),
-    .s_axi_wdata   (d_wdata  [SD_DMA*32 +: 32]),
-    .s_axi_wstrb   (d_wstrb  [SD_DMA*4  +: 4]),
-    .s_axi_wvalid  (d_wvalid [SD_DMA]),
-    .s_axi_wready  (d_wready [SD_DMA]),
-    .s_axi_bresp   (d_bresp  [SD_DMA*2  +: 2]),
-    .s_axi_bvalid  (d_bvalid [SD_DMA]),
-    .s_axi_bready  (d_bready [SD_DMA]),
-    .s_axi_araddr  (d_araddr [SD_DMA*32 +: 32]),
-    .s_axi_arvalid (d_arvalid[SD_DMA]),
-    .s_axi_arready (d_arready[SD_DMA]),
-    .s_axi_rdata   (d_rdata  [SD_DMA*32 +: 32]),
-    .s_axi_rresp   (d_rresp  [SD_DMA*2  +: 2]),
-    .s_axi_rvalid  (d_rvalid [SD_DMA]),
-    .s_axi_rready  (d_rready [SD_DMA]),
+    .s_axi_awaddr_i  (d_awaddr [SD_DMA*32 +: 32]),
+    .s_axi_awvalid_i (d_awvalid[SD_DMA]),
+    .s_axi_awready_o (d_awready[SD_DMA]),
+    .s_axi_wdata_i   (d_wdata  [SD_DMA*32 +: 32]),
+    .s_axi_wstrb_i   (d_wstrb  [SD_DMA*4  +: 4]),
+    .s_axi_wvalid_i  (d_wvalid [SD_DMA]),
+    .s_axi_wready_o  (d_wready [SD_DMA]),
+    .s_axi_bresp_o   (d_bresp  [SD_DMA*2  +: 2]),
+    .s_axi_bvalid_o  (d_bvalid [SD_DMA]),
+    .s_axi_bready_i  (d_bready [SD_DMA]),
+    .s_axi_araddr_i  (d_araddr [SD_DMA*32 +: 32]),
+    .s_axi_arvalid_i (d_arvalid[SD_DMA]),
+    .s_axi_arready_o (d_arready[SD_DMA]),
+    .s_axi_rdata_o   (d_rdata  [SD_DMA*32 +: 32]),
+    .s_axi_rresp_o   (d_rresp  [SD_DMA*2  +: 2]),
+    .s_axi_rvalid_o  (d_rvalid [SD_DMA]),
+    .s_axi_rready_i  (d_rready [SD_DMA]),
 
-    .m_axi_awaddr  (dmam_awaddr),
-    .m_axi_awlen   (dmam_awlen),
-    .m_axi_awsize  (dmam_awsize),
-    .m_axi_awburst (dmam_awburst),
-    .m_axi_awvalid (dmam_awvalid),
-    .m_axi_awready (dmam_awready),
-    .m_axi_wdata   (dmam_wdata),
-    .m_axi_wstrb   (dmam_wstrb),
-    .m_axi_wlast   (dmam_wlast),
-    .m_axi_wvalid  (dmam_wvalid),
-    .m_axi_wready  (dmam_wready),
-    .m_axi_bresp   (dmam_bresp),
-    .m_axi_bvalid  (dmam_bvalid),
-    .m_axi_bready  (dmam_bready),
-    .m_axi_araddr  (dmam_araddr),
-    .m_axi_arlen   (dmam_arlen),
-    .m_axi_arsize  (dmam_arsize),
-    .m_axi_arburst (dmam_arburst),
-    .m_axi_arvalid (dmam_arvalid),
-    .m_axi_arready (dmam_arready),
-    .m_axi_rdata   (dmam_rdata),
-    .m_axi_rresp   (dmam_rresp),
-    .m_axi_rlast   (dmam_rlast),
-    .m_axi_rvalid  (dmam_rvalid),
-    .m_axi_rready  (dmam_rready)
+    .m_axi_awaddr_o  (dmam_awaddr),
+    .m_axi_awlen_o   (dmam_awlen),
+    .m_axi_awsize_o  (dmam_awsize),
+    .m_axi_awburst_o (dmam_awburst),
+    .m_axi_awvalid_o (dmam_awvalid),
+    .m_axi_awready_i (dmam_awready),
+    .m_axi_wdata_o   (dmam_wdata),
+    .m_axi_wstrb_o   (dmam_wstrb),
+    .m_axi_wlast_o   (dmam_wlast),
+    .m_axi_wvalid_o  (dmam_wvalid),
+    .m_axi_wready_i  (dmam_wready),
+    .m_axi_bresp_i   (dmam_bresp),
+    .m_axi_bvalid_i  (dmam_bvalid),
+    .m_axi_bready_o  (dmam_bready),
+    .m_axi_araddr_o  (dmam_araddr),
+    .m_axi_arlen_o   (dmam_arlen),
+    .m_axi_arsize_o  (dmam_arsize),
+    .m_axi_arburst_o (dmam_arburst),
+    .m_axi_arvalid_o (dmam_arvalid),
+    .m_axi_arready_i (dmam_arready),
+    .m_axi_rdata_i   (dmam_rdata),
+    .m_axi_rresp_i   (dmam_rresp),
+    .m_axi_rlast_i   (dmam_rlast),
+    .m_axi_rvalid_i  (dmam_rvalid),
+    .m_axi_rready_o  (dmam_rready)
 );
 
 // ---------------------------------------------------------------------------

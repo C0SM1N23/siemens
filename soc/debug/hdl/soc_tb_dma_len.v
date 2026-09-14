@@ -106,14 +106,14 @@ initial begin
             // inside the requested length: must be the source data
             for (i = 0; i < words; i = i + 1) begin
                 w = s*SLOT_WORDS + i;
-                if (dut.sram_inst.u_dpram.mem[w] !== (SRC_BASE + i))
+                if (dut.sram_inst.mem_array_inst.mem[w] !== (SRC_BASE + i))
                     short_ct = short_ct + 1;
             end
 
             // after it: must still be the guard, all the way to the slot end
             for (i = words; i < SLOT_WORDS; i = i + 1) begin
                 w = s*SLOT_WORDS + i;
-                if (dut.sram_inst.u_dpram.mem[w] !== GUARD) begin
+                if (dut.sram_inst.mem_array_inst.mem[w] !== GUARD) begin
                     over = over + 1;
                     if (first_over < 0) first_over = i;
                 end

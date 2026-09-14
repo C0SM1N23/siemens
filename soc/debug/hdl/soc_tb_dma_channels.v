@@ -130,9 +130,9 @@ initial begin
         // CPU's own read path could otherwise hide a wrongly placed transfer
         $display("\n-- read straight out of the memory array --");
         for (i = 0; i < 4; i = i + 1) begin
-            check(32'hC0DE0000 | (i << 12), dut.sram_inst.u_dpram.mem[i*8],
+            check(32'hC0DE0000 | (i << 12), dut.sram_inst.mem_array_inst.mem[i*8],
                   "first word of this channel's quarter");
-            check(32'hC0DE0007 | (i << 12), dut.sram_inst.u_dpram.mem[i*8 + 7],
+            check(32'hC0DE0007 | (i << 12), dut.sram_inst.mem_array_inst.mem[i*8 + 7],
                   "last word of this channel's quarter");
         end
 

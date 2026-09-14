@@ -118,7 +118,7 @@ always @(posedge clk) begin
             if (dut.sram_inst.a_mem_addr == dut.sram_inst.b_mem_addr)
                 sram_addr_eq <= sram_addr_eq + 1;
         end
-        if (dut.sram_inst.u_arbiter.real_conflict)
+        if (dut.sram_inst.collision_det_inst.real_conflict)
             sram_conflicts <= sram_conflicts + 1;
 
         if (dut.dbus_rvalid && dut.dbus_rresp == 2'b11)
@@ -153,10 +153,10 @@ initial begin
         check(32'd0, dut.dmem_inst.mem[SB_MISMATCH],
               "the transfer is bit-perfect despite the contention");
         for (i = 0; i < 128; i = i + 1)
-            if (dut.sram_inst.u_dpram.mem[i] !== 32'h5A5A0000 + i) begin
+            if (dut.sram_inst.mem_array_inst.mem[i] !== 32'h5A5A0000 + i) begin
                 errors = errors + 1;
                 $display("FAIL: SRAM word %0d = 0x%08h, expected 0x%08h",
-                         i, dut.sram_inst.u_dpram.mem[i], 32'h5A5A0000 + i);
+                         i, dut.sram_inst.mem_array_inst.mem[i], 32'h5A5A0000 + i);
             end
         $display("PASS: all 128 words verified directly in the SRAM array");
 
