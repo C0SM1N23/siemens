@@ -1,6 +1,6 @@
 # docs
 
-Everything that is a document rather than a design. The RTL and its testbenches
+Shared project material and the faculty internship report. The RTL and its testbenches
 stay in [cpu/](../cpu/), [dma/](../dma/), [sram/](../sram/) and [soc/](../soc/).
 
 The Design and Verification Specifications live with the blocks they describe,
@@ -9,10 +9,10 @@ in [cpu/docs/](../cpu/docs/), not here.
 | Path | What it is |
 |---|---|
 | [practica/](practica/) | Internship report for the faculty — LaTeX source and the built PDF, plus the completed logbook. |
-| [tehnic/](tehnic/) | Engineering documentation: the register/design-decision write-ups and the older Markdown notes. |
-| [brief/](brief/) | The Siemens material the work started from. Marked Restricted — not committed. |
-| [diagrame/](diagrame/) | drawio sources for the block and FSM drawings, and the presentation notes. |
-| [note/](note/) | Working notes and the changelog. |
+| [../cpu/docs/tehnic/](../cpu/docs/tehnic/) | Engineering documentation: the register/design-decision write-ups and the older Markdown notes. |
+| [brief/](brief/) | Shared/DMA/SRAM Siemens material. CPU/PIC briefs are in [cpu/docs/brief](../cpu/docs/brief/). Restricted material is not committed. |
+| [../cpu/docs/diagrame/](../cpu/docs/diagrame/) | drawio sources for the block and FSM drawings, and the presentation notes. |
+| [../cpu/docs/note/](../cpu/docs/note/) | Working notes and the changelog. |
 
 ## practica/
 
@@ -35,12 +35,12 @@ interns, the RV32I CPU, the interrupt controller and the machine timer, the SoC
 integration, and the verification — with the regression numbers read from the
 log of a real run rather than quoted from memory.
 
-It describes the project as it stands, not how it got there: no "the first
-version did X" narrative anywhere.
+The faculty report is retained as submitted. Current CPU/SoC technical results
+are maintained in the block specifications and verification documents.
 
 ## A note on what is committed
 
 `.gitignore` keeps PDFs, Office documents and archives out of the repository,
-because `brief/` holds Siemens material marked Restricted. The faculty report is
-the exception and is committed explicitly — it is the student's own work, and
-losing it with a `git clean` would be expensive.
+because `brief/` holds Siemens material marked Restricted. The faculty report
+and four authored CPU/PIC specifications are explicit exceptions, committed
+with their sources.

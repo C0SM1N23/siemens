@@ -5,8 +5,8 @@
 \documentclass[11pt]{article}
 
 \newcommand{\doctitle}{Design Specification --- RV32I Processor Core}
-\newcommand{\docrev}{1.0}
-\newcommand{\docdate}{3 September 2026}
+\newcommand{\docrev}{1.1}
+\newcommand{\docdate}{15 September 2026}
 
 \newcommand{\docsubject}{RV32I processor core (three-stage pipeline)}
 \input{preamble_spec}
@@ -96,6 +96,22 @@ WPRI & Write Preserve, Read Ignore. A reserved register field that reads as
        zero and ignores writes.  \\
 \bottomrule
 \end{longtable}
+
+\subsection{Requirements and implementation decisions}
+
+The original Siemens briefs are kept in \texttt{cpu/docs/brief/}:
+\emph{RV32I 3-Stage Pipeline CPU} and
+\emph{Programmable Interrupt Controller with Advanced Scheduling}.
+They define the project scope. Instruction and CSR semantics are checked
+against the cited RISC-V manuals, and bus handshakes against the AXI specification.
+These authored specifications describe the implementation; they are not
+independent evidence that the implementation is correct.
+
+Details absent from the briefs, including the register map, bus error policy
+and the sixteen-source claim/EOI interface, are project decisions. The CPU
+brief's eight-source interface and the PIC brief's sixteen-source interface
+still require a common interface agreement; the implemented contract is stated
+explicitly in the design specifications.
 
 \subsection{Relationship with other documents}
 
@@ -660,12 +676,13 @@ a bus error, because the CSR space is internal to the core.
 \textbf{Address and name} & \textbf{Access / reset} & \textbf{Function} \\
 \midrule
 \endhead
-\texttt{0x300}\newline \reg{mstatus} & read/write, 0 & Global interrupt enable and its saved copy. \\
+\texttt{0x300}\newline \reg{mstatus} & read/write, \texttt{0x1800} & Global interrupt enable and its saved copy reset to zero; MPP reads machine mode. \\
 \texttt{0x301}\newline \reg{misa} & WARL, \texttt{0x4000\_0100} & Reports a 32-bit core implementing the integer base set. Writes are accepted and ignored. \\
 \texttt{0x304}\newline \reg{mie} & read/write, 0 & Per-source interrupt enables, in bits \texttt{[31:16]}. Bits \texttt{[15:0]} read zero and are not writable. \\
 \texttt{0x305}\newline \reg{mtvec} & read/write, 0 & Trap vector base and mode. \\
 \texttt{0x320}\newline --- & absent & Counter inhibit is deliberately not implemented; an access raises an illegal instruction exception. \\
-\texttt{0x323--0x33F}\newline \reg{mhpmevent3..31} & read-only zero & Event selectors, hardwired to zero. \\
+\texttt{0x323--0x327}\newline \reg{mhpmevent3..7} & fixed WARL & Event identifiers 1 through 5; writes are ignored. \\
+\texttt{0x328--0x33F}\newline \reg{mhpmevent8..31} & fixed zero & Unused event selectors; writes are ignored. \\
 \texttt{0x340}\newline \reg{mscratch} & read/write, 0 & Scratch word for the trap handler. \\
 \texttt{0x341}\newline \reg{mepc} & read/write, 0 & Trap return address. The two least significant bits always read zero. \\
 \texttt{0x342}\newline \reg{mcause} & read/write, 0 & Cause of the most recent trap. \\
@@ -675,7 +692,7 @@ a bus error, because the CSR space is internal to the core.
 \texttt{0xB02}\newline \reg{minstret} & read/write, 0 & Retired instruction counter, low half. \\
 \texttt{0xB03--0xB07}\newline \reg{mhpmcounter3..7} & read/write, 0 & Performance counters, low halves. See Table~\ref{tab:hpm}. \\
 \texttt{0xB08--0xB1F}\newline \reg{mhpmcounter8..31} & read-only zero & Not provided; read zero and swallow writes. \\
-\texttt{0xB80--0xB87}\newline upper halves & read/write, 0 & Upper halves of the counters above. \\
+\texttt{0xB80}, \texttt{0xB82--0xB87}\newline upper halves & read/write, 0 & Upper halves of the counters above. Address \texttt{0xB81} is unimplemented. \\
 \texttt{0xB88--0xB9F}\newline upper halves & read-only zero & Upper halves of the counters that are not provided. \\
 \texttt{0xF11--0xF13}\newline \reg{mvendorid}, \reg{marchid},\ \reg{mimpid} & read-only, 0 & Identification registers, all zero. \\
 \texttt{0xF14}\newline \reg{mhartid} & read-only & Hart identifier; takes the value of the corresponding parameter. \\
@@ -742,12 +759,12 @@ enters at BASE.
 \subsubsection{Performance counters}
 
 Every counter is architecturally 64 bits and is read through a pair of 32-bit
-CSR addresses. Software may write either half. A write replaces the addressed
-half while the other half still takes that cycle's increment, so a carry is not
-lost. Within the written half the CSR operation decides what happens to the
-event of that cycle: a plain write replaces the value outright and the event is
-discarded, whereas a set or clear operation applies to the already incremented
-value and therefore keeps it.
+CSR addresses. An explicit write takes priority over the implicit increment
+for that cycle. CSRRW replaces the addressed half; CSRRS and CSRRC apply their
+mask to its value before the clock edge. The other half remains unchanged,
+including when an increment would otherwise carry into it. A zero-source
+CSRRS or CSRRC is a pure read, so counting continues. Counting resumes on the
+next cycle after a write.
 
 \begin{table}[H]
 \centering
@@ -759,7 +776,7 @@ value and therefore keeps it.
 \textbf{Counter} & \textbf{Event} \\
 \midrule
 \reg{mcycle}          & Every clock cycle. \\
-\reg{minstret}        & Every instruction that commits to writeback. \\
+\reg{minstret}        & Each non-trapping instruction completing S2, in program order. An explicit write to this counter suppresses that cycle's increment. \\
 \reg{mhpmcounter3}    & Mispredicted control transfers. \\
 \reg{mhpmcounter4}    & Cycles in which S2 had no instruction to execute. \\
 \reg{mhpmcounter5}    & Cycles in which a data transaction was in flight. \\
@@ -769,9 +786,17 @@ value and therefore keeps it.
 \end{tabular}
 \end{table}
 
-The event assignment is fixed in hardware. The event selector registers
-therefore exist only as hardwired zero, and there is no counter inhibit
-register; all counters run at all times.
+The event assignment is fixed in hardware. \reg{mhpmevent3..7} read the
+implementation-defined identifiers 1 through 5, in the order shown above.
+They accept writes but retain their fixed values. Identifier zero denotes no
+event and is returned by the unused selectors \reg{mhpmevent8..31}.
+There is no counter inhibit register; enabled event counting is continuous
+except when an explicit counter write takes priority.
+
+An instruction reading \reg{minstret} observes the count before its own
+completion. Counting at the S2 completion boundary places preceding
+instructions before the CSR access and following instructions after it,
+independently of the S3 register-file write.
 
 \subsubsection{Programming sequences}
 
@@ -1505,10 +1530,23 @@ The stack is sixteen levels deep, which is also the number of external
 interrupt sources the interface can express. Beyond sixteen open levels the
 depth counter saturates and the oldest recorded level is shifted out of the
 stack, so the end-of-interrupt sequence is no longer guaranteed to be correct.
-An interrupt controller must therefore not nest deeper than sixteen levels; the
-core does not enforce the limit itself.
+Software must keep the combined number of open interrupt and synchronous
+exception levels at or below sixteen. Limiting interrupt nesting alone is
+insufficient when an exception occurs inside a handler. The core does not
+prevent overflow.
 
 % ===========================================================================
+\subsection{RTL organisation}
+
+The RTL is grouped by function: interfaces and constants, combinational
+decisions, state updates, and outputs. Each \texttt{always} process assigns
+one state signal or one array; loop indices are local iteration variables.
+Priority conditions are explicit, and registers have one procedural owner.
+Existing parameters retain their function. Architectural widths fixed by RV32I
+or the sixteen-source PIC contract remain fixed rather than exposing unsupported
+configurations. RTL files contain no \texttt{`timescale}; time units belong to
+the testbenches or simulator command line.
+
 \section{List of bugs and workarounds}
 \label{sec:bugs}
 

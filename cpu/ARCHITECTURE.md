@@ -217,7 +217,8 @@ the ISA requires.
 | mhpmcounter3..7 | 0xB03..07 | event counters, low half (D25) |
 | mhpmcounter3h..7h | 0xB83..87 | upper halves |
 | mhpmcounter8..31 (+h) | 0xB08..1F, 0xB88..9F | hardwired zero (WARL) |
-| mhpmevent3..31 | 0x323..33F | hardwired zero (WARL) — events are fixed |
+| mhpmevent3..7 | 0x323..327 | fixed WARL event IDs 1..5; writes ignored |
+| mhpmevent8..31 | 0x328..33F | fixed zero; writes ignored |
 | mhartid | 0xF14 | read-only, `HART_ID` parameter (D5) |
 
 - Reads are combinational, software writes commit at the end of S2.
@@ -233,15 +234,14 @@ the ISA requires.
   5 = dbus stall cycles, 6 = trap entries, 7 = WFI sleep cycles. These
   pair with the DP-SRAM bandwidth registers and the DMA throttling knobs,
   so software can measure contention instead of guessing.
-- Counters follow Priv. spec 3.1.11: each is architecturally 64-bit, read on
-  RV32 through a base / base+0x80 pair, and writable from M-mode. A write
-  replaces the addressed half while the other half still takes the increment,
-  so the event landing in the same cycle as the write is not lost. The counters
-  the design does not provide (`mhpmcounter8..31`, their upper halves, and
-  `mhpmevent3..31`) are hardwired zero — they read 0 and ignore writes, rather
-  than trapping, because the spec permits tying off counters but not making
-  them disappear. `mcountinhibit` (0x320) is absent on purpose: it is optional,
-  and its not-implemented behaviour ("all counters run") is exactly this design.
+- Each counter is 64 bits, accessed through two 32-bit CSRs. Explicit writes
+  override that cycle's increment, operate on the old addressed half and preserve
+  the other half. Zero-source CSRRS/CSRRC reads do not suppress counting.
+- `minstret` counts non-trapping S2 completion in program order, before subsequent
+  CSR accesses. Reading it excludes the reading instruction itself.
+- `mhpmevent3..7` report fixed IDs 1..5 for the five events above. Unused counters
+  8..31 and selectors 8..31 read zero and ignore writes. Optional `mcountinhibit`
+  (0x320) is absent; all implemented event counters run unless explicitly written.
 
 ### rv32i_exception_unit.v (D3, D17, D18)
 

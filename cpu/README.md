@@ -3,10 +3,9 @@
 The CPU block of the SoC (CPU + DMA + DP-SRAM), in Verilog. A 3-stage RV32I
 pipeline with two AXI4-Lite master ports, a branch predictor with a
 return-address stack, precise traps, WFI, and an M-mode CSR file with
-performance counters. The repo also carries two blocks no brief assigned but
-the system needs: the interrupt controller ([pic.v](hdl/pic.v)) every
-peripheral irq line points at, and the machine timer ([mtimer.v](hdl/mtimer.v))
-for scheduling and timing out a hung DMA transfer.
+performance counters. The block includes the programmable interrupt controller
+from the PIC brief ([pic.v](hdl/pic.v)) and a machine timer
+([mtimer.v](hdl/mtimer.v)) for scheduling and timeout handling.
 
 Block diagrams and per-module detail: [ARCHITECTURE.md](ARCHITECTURE.md). Test
 plan and results: [debug/VERIFICATION.md](debug/VERIFICATION.md).
@@ -30,15 +29,15 @@ transaction each, so a fetch and a load/store overlap.
 
 The brief separates two kinds of item, so does this repo:
 
-- **Spec requirements** (`REQ#`) — behavior the brief fixed. Implemented to
-  spec; no choice to make, only to match.
+- **Spec requirements** (`REQ#`) — the original scope, interpreted using the
+  RISC-V and AXI rules where the brief does not define detailed behaviour.
 - **Design decisions** (`D#`) — points the brief left "for the intern to
   define". Each a deliberate choice with a rationale.
 
-Both tagged in the code (grep `REQ` or `D<n>`); each file header explains its
-own in full. These tables are the index.
+The tables below index the original requirements and project decisions.
+Current interface details and limitations are in [docs/](docs/).
 
-### Spec requirements (implemented to spec)
+### Requirement mapping
 
 | Tag | Requirement | File(s) |
 |-----|-------------|---------|
@@ -209,7 +208,7 @@ debug/sim/
   tb_block.f           filelist for the block-level benches
   compile.do           the single canonical vlog compile both .do scripts use
   rv32i_soc_map.vh           TB address map (PIC / mtimer / dmem bases) in one place
-  sim.do               quick single run     regress.do  full 14-run regression
+  sim.do               quick single run     regress.do  full 21-run regression
   wave.do              AXI-grouped waveform set for the ModelSim GUI
   run_verilator.sh     SVA + functional coverage run (Verilator, free)
   run_verilator.ps1    same, one command from Windows (via WSL)
@@ -219,68 +218,44 @@ debug/sim/
 
 ## Simulation
 
-```
-cd debug/sim
-vsim -c -do "do regress.do; quit -f"      # full regression (14 runs: 4 single-core
-                                          # configs + dual-core + tb_pic + the eight
-                                          # block-level benches)
-vsim -c -do "do sim.do; quit -f"          # quick single run; drop -c for GUI
+From `cpu/debug/sim`:
 
-.\run_verilator.ps1                       # SVA + functional coverage —
-                                          # ModelSim ASE has neither, so the
-                                          # debug/sva layer runs on Verilator
-
-py verif_gui.py                           # same flows behind a small GUI
+```text
+python isa_reference.py
+python pic_reference.py
+python asm.py program_axi.s program_axi.hex
+python asm.py program_dual.s program_dual.hex
+vsim -c -do "do regress.do; quit -f"
 ```
 
-Both flows are **lint- and warning-clean**: the ModelSim compile reports
-`Errors: 0, Warnings: 0` for RTL, TB and SVA, and Verilator's default warning
-set is empty (every file carries its own `` `timescale ``, so the result does not
-depend on filelist order, and every width is explicit).
+Verilator, from the repository root in Bash/WSL:
 
-The SVA layer found a real bug on its first run: the fetch unit drove
-`ARVALID` during reset (the issue logic is combinational, requested `RESET_PC`
-while `rst_n_i` was still low), which the AXI spec forbids. The procedural
-monitor missed it — it only arms after reset. One-line fix in
-[rv32i_fetch_unit.v](hdl/rv32i_fetch_unit.v); details in
-[debug/VERIFICATION.md](debug/VERIFICATION.md).
+```text
+bash cpu/debug/sim/run_verilator.sh
+```
 
-Test plan and results: [debug/VERIFICATION.md](debug/VERIFICATION.md). Short
-version: every mcause exercised with exact trap counting (every PIC source
-except the deliberately-masked one), CSR negative tests, PIC priority /
-in-service suppression / double masking / SLVERR negatives, an interrupt held
-through an AXI stall, BTB aliasing, RAS call/return nesting, WFI wake both ways
-with the instruction bus checked silent, the mtimer end to end, CPI = 1.00 on a
-latency-1 memory, protocol monitors on all four AXI ports, seeded random
-backpressure, the dual-core handshake. The standalone `pic_tb_feature.v` then drives the
-PIC's advanced features directly — priority bands, preemptive nesting, spurious
-detection, deadline escalation, keyed software triggers, AXI error responses.
-Eight block-level benches then cover what a system run cannot isolate: every
-register's reset value and X-freedom (`tb_pic_reset`, `tb_mtimer_regs`,
-`tb_csr_ro`), read-only and reserved-bit enforcement on every read-only object
-in each map (`tb_pic_ro`, `tb_csr_ro`), every `SRCx_STATUS` field on its own
-(`tb_pic_status`), one isolated directed test per trap cause with its
-mcause / mepc / mtval / handler address checked individually (`tb_traps`), the
-branch predictor's reset state and its RAS overflow / underflow / replace-top
-boundaries (`tb_bp`), and the ALU's decode space and operand boundaries
-(`tb_alu`). Total 2520 self-checks, 14/14 runs passing.
-Functional coverage: 88/92 bins hit; the four misses are the two intentional ch5
-negatives, plus two AR-backpressure bins that only the ModelSim configs
-stimulate — coverage is instrumented in the Verilator flow only, so those two
-are unmeasured rather than unreachable.
+Windows launcher: `cpu/debug/sim/run_verilator.ps1`. GUI:
+`python cpu/debug/sim/verif_gui.py`.
 
-## Open points (system level)
+The functional regression has 15 distinct benches and 21 ModelSim timing
+configurations. Every bench also executes on Verilator with applicable bound
+SVA; nominal CPU user coverage reaches all required bins. ModelSim compilation
+reports zero errors/warnings. CPU RTL lint is clean under the recorded options.
+RTL files have no `timescale`; verification supplies simulation time units.
 
-- Global memory map undecided — the reset vector is the `RESET_PC` parameter
-  (default 0x0); PIC / mtimer bases are TB decoder parameters (0x3000_0000 /
-  0x3001_0000 for now).
-- The PIC implements the *Advanced Scheduling* brief ([pic/](pic/)); the
-  quantitative choices it delegates to the intern (4 bands, `NEST_MAX` default 8,
-  16-bit deadlines, jump-to-band escalation, the `0xA5A5` software key, exact
-  register offsets) are documented in [pic.v](hdl/pic.v)/[ARCHITECTURE.md](ARCHITECTURE.md)
-  and open to confirm with the team/mentor. The mtimer has no spec of its own
-  (D26–D27), same status.
-  Source-to-channel mapping: DMA 0..3, DP-SRAM 4, mtimer 7; 5–6 free.
-- Reset type differs between blocks (CPU/DMA async, DP-SRAM sync).
-- With more than one core, "which PIC channel targets which core" is undefined
-  — the current PIC serves one CPU; each core would want its own mtimer compare.
+Independent ISA and PIC reference models, counter boundary checks and mutation
+tests supplement the original directed tests. Test inventory, commands and
+limits: [debug/VERIFICATION.md](debug/VERIFICATION.md). Changes and bugs:
+[../TO_MODIFY.md](../TO_MODIFY.md).
+
+## Integration contract
+
+The SoC memory and interrupt maps are defined in
+[../soc/README.md](../soc/README.md). The sixteen-source claim/EOI interface is
+an explicit project decision that resolves differing CPU/PIC brief widths;
+formal agreement remains in [../TO_MODIFY.md](../TO_MODIFY.md).
+
+The current PIC targets one CPU. The dual-core bench verifies two CPU instances
+sharing data memory; it does not implement multicore interrupt routing.
+The core's trap-kind stack supports sixteen combined open interrupt/exception
+levels. Software must stay within that limit.

@@ -31,5 +31,22 @@ in with `\input`. There are no external figures: every diagram is TikZ in the
 document source, so a drawing is corrected in the same file as the text it
 belongs to.
 
-The built PDFs are not committed — `.gitignore` keeps PDFs out of the
-repository. Rebuild them from the sources here.
+The four authored PDFs are committed alongside their sources. Rebuild them
+after editing the specifications. The original Siemens briefs remain excluded.
+
+## Requirements and supporting material
+
+- `brief/`: original Siemens CPU PDF and PIC DOCX; source requirements,
+  kept locally because they are marked Restricted.
+- `tehnic/`: earlier register notes and engineering write-ups.
+- `diagrame/`: earlier drawio drawings and presentation drafts.
+- `note/`: working notes and historical change records.
+
+The four specifications above are the current technical documents, revision
+1.1, 15 September 2026. Older notes and diagrams are retained for context and may
+show earlier interfaces. SoC architecture and verification are under
+[../../soc/](../../soc/).
+
+Built page counts: CPU design 27, CPU verification 16, PIC design 24, PIC
+verification 18. The audit corrected behaviour and evidence without removing
+the detailed interface, register and verification-plan sections.

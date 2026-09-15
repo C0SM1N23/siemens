@@ -5,8 +5,8 @@
 \documentclass[11pt]{article}
 
 \newcommand{\doctitle}{Design Specification --- Programmable Interrupt Controller}
-\newcommand{\docrev}{1.0}
-\newcommand{\docdate}{5 September 2026}
+\newcommand{\docrev}{1.1}
+\newcommand{\docdate}{15 September 2026}
 \newcommand{\docsubject}{Programmable interrupt controller, sixteen sources,
 hardware nesting}
 
@@ -106,6 +106,22 @@ WARL & Write any value, read legal value. A write of an out-of-range value is
   accepted on the bus and stored as a legal value. \\
 \bottomrule
 \end{longtable}
+
+\subsection{Requirements and implementation decisions}
+
+The original Siemens briefs are kept in \texttt{cpu/docs/brief/}:
+\emph{RV32I 3-Stage Pipeline CPU} and
+\emph{Programmable Interrupt Controller with Advanced Scheduling}.
+They define the project scope. Instruction and CSR semantics are checked
+against the cited RISC-V manuals, and bus handshakes against the AXI specification.
+These authored specifications describe the implementation; they are not
+independent evidence that the implementation is correct.
+
+Details absent from the briefs, including the register map, bus error policy
+and the sixteen-source claim/EOI interface, are project decisions. The CPU
+brief's eight-source interface and the PIC brief's sixteen-source interface
+still require a common interface agreement; the implemented contract is stated
+explicitly in the design specifications.
 
 \subsection{Relationship with other documents}
 
@@ -1346,6 +1362,17 @@ signal is high, so an unreset flag would present an undefined response code from
 time zero until the first transaction completed.
 
 % ===========================================================================
+\subsection{RTL organisation}
+
+The RTL is grouped by function: interfaces and constants, combinational
+decisions, state updates, and outputs. Each \texttt{always} process assigns
+one state signal or one array; loop indices are local iteration variables.
+Priority conditions are explicit, and registers have one procedural owner.
+Existing parameters retain their function. Architectural widths fixed by RV32I
+or the sixteen-source PIC contract remain fixed rather than exposing unsupported
+configurations. RTL files contain no \texttt{`timescale}; time units belong to
+the testbenches or simulator command line.
+
 \section{List of bugs and workarounds}
 \label{sec:bugs}
 

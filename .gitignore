@@ -10,11 +10,18 @@ debug/sim/CUM_RULEZ.md
 *.zip
 poze random/
 docs/diagrame/
+cpu/docs/diagrame/
 
 # Siemens-internal spec material (marked Restricted) — never push
 *.pdf
 *.docx
 /pic/
+
+# Authored CPU/PIC specifications are delivered with their compiled PDFs.
+!cpu/docs/Design_Specification_RV32I_CPU.pdf
+!cpu/docs/Verification_Specification_RV32I_CPU.pdf
+!cpu/docs/Design_Specification_PIC.pdf
+!cpu/docs/Verification_Specification_PIC.pdf
 
 # ...except the faculty internship report, which is the student's own work
 !docs/practica/Raport_practica_Bunea_Cosmin-Andrei.pdf
@@ -57,3 +64,4 @@ cov_annotated/
 *.swp
 Thumbs.db
 __pycache__/
+cpu/debug/sim/mutation_results.json

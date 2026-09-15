@@ -5,8 +5,8 @@
 \documentclass[11pt]{article}
 
 \newcommand{\doctitle}{Verification Specification --- RV32I Processor Core}
-\newcommand{\docrev}{1.0}
-\newcommand{\docdate}{4 September 2026}
+\newcommand{\docrev}{1.1}
+\newcommand{\docdate}{15 September 2026}
 
 \newcommand{\docsubject}{RV32I processor core (three-stage pipeline)}
 \input{preamble_spec}
@@ -99,6 +99,22 @@ WFI & Wait For Interrupt.  \\
 \bottomrule
 \end{longtable}
 
+\subsection{Requirements and implementation decisions}
+
+The original Siemens briefs are kept in \texttt{cpu/docs/brief/}:
+\emph{RV32I 3-Stage Pipeline CPU} and
+\emph{Programmable Interrupt Controller with Advanced Scheduling}.
+They define the project scope. Instruction and CSR semantics are checked
+against the cited RISC-V manuals, and bus handshakes against the AXI specification.
+These authored specifications describe the implementation; they are not
+independent evidence that the implementation is correct.
+
+Details absent from the briefs, including the register map, bus error policy
+and the sixteen-source claim/EOI interface, are project decisions. The CPU
+brief's eight-source interface and the PIC brief's sixteen-source interface
+still require a common interface agreement; the implemented contract is stated
+explicitly in the design specifications.
+
 \subsection{Relationship with other documents}
 
 \begin{table}[H]
@@ -146,8 +162,8 @@ AMBA AXI and ACE Protocol Specification, ARM IHI 0022E &
 
 \subsection{Overview}
 
-Four mechanisms are used together, because each of them sees something the
-others cannot.
+Directed tests, independent reference models, protocol monitors, assertions
+and functional coverage check complementary aspects of the design.
 
 \begin{table}[H]
 \centering
@@ -160,8 +176,8 @@ others cannot.
 \midrule
 Directed self-checking tests &
   Establish that a specific scenario produces a specific result. Each test
-  carries its own expected values and prints a verdict, so a run is judged by
-  counting verdicts rather than by inspecting waveforms. They see only the
+  carries its own expected values and prints a verdict, and the runner requires explicit
+  completion with zero mismatches. They see only the
   scenarios someone thought to write. \\
 \addlinespace
 Protocol monitors &
@@ -183,7 +199,7 @@ Functional coverage &
 
 \subsection{Implementation strategy}
 
-Verification is applied at two levels, and the split is deliberate.
+Verification is applied at system and block level.
 
 \textbf{System level.} The core executes a real program, assembled from source
 into an instruction image, against behavioural memory models. The program is
@@ -209,7 +225,7 @@ ports. This level exists for properties a running program cannot isolate:
 \item parameter settings that no core-level run instantiates.
 \end{itemize}
 
-\textbf{Bus timing variation.} Every system-level run is repeated under four
+\textbf{Bus timing variation.} The single-core system test is repeated under four
 memory timing configurations: nominal, high fixed latency, and two seeds of
 randomised ready-signal backpressure. A design that only works when every slave
 answers immediately has not been verified. The mechanisms that hold state
@@ -239,7 +255,7 @@ happens to implement it. Each item names the behaviour, how it is stimulated,
 how the expected result is determined, and where the check is applied. The items
 are listed in the annex.
 
-Items are grouped into five areas:
+Items are grouped into six areas:
 
 \begin{table}[H]
 \centering
@@ -268,32 +284,41 @@ System properties & Operation of more than one instance, and sustained
 
 \subsection{Reference model}
 
-\textbf{No reference model is used.} The environment contains no independent
-implementation of the instruction set and performs no instruction-by-instruction
-comparison against one.
+\texttt{isa\_reference.py} encodes instructions and interprets their architectural
+effects independently of both the RTL and \texttt{asm.py}. It produces an
+instruction image, an expected PC/destination/value trace and a final data-memory
+image. \texttt{rv32i\_tb\_isa} compares each completed instruction against the
+trace and then compares all 256 data words. Expected results do not depend on
+the decoder outputs or the RTL ALU function.
 
-Expected behaviour is instead determined in one of three ways, depending on the
-check:
+The deterministic program executes 1\,287 instructions and reaches 50 named
+generator categories. It includes arithmetic boundaries, all shift amounts,
+signed and unsigned comparisons, each branch condition taken and not taken,
+backward branches, JAL/JALR, LUI/AUIPC, FENCE, all load/store widths and byte
+lanes, and CSR register/immediate forms. Loads after each partial store check
+untouched lanes before another store can overwrite the evidence. The model
+also checks \reg{minstret} ordering around CSR reads and writes. Four ModelSim
+configurations vary latency and ready-signal backpressure.
 
-\begin{itemize}[itemsep=3pt,topsep=3pt]
-\item \textbf{Precomputed constants.} For directed tests, the expected value of
-      each check is derived by hand from the architecture specification and
-      embedded in the test. This is the majority of the checks.
-\item \textbf{Self-consistency within the program.} At system level many results
-      are chained, so that each value depends on the previous one. A broken
-      forwarding path or a lost result therefore propagates into a later value
-      rather than cancelling out.
-\item \textbf{Protocol rules.} For the bus interfaces the expected behaviour is
-      the protocol itself, evaluated continuously rather than compared against a
-      recorded trace.
-\end{itemize}
+\texttt{rv32i\_tb\_counters} drives the CSR interface directly. It checks all
+seven implemented 64-bit counters, both writable halves, increment carry,
+write priority, CSRRS/CSRRC masks, pure reads and the five fixed event identifiers.
+The expected arithmetic follows Zicsr and the RV32 counter-half access rules.
 
-The consequence is that instruction-level correctness is
-established only for the operand values and instruction sequences the directed
-tests actually use. The environment cannot detect an arithmetic error at an
-operand value no test applies. This is the main structural limitation of the
-current environment, and the reason the arithmetic path additionally receives a
-dedicated boundary-value test at block level.
+Existing directed tests retain precomputed architectural constants and
+protocol checks. Their results complement the trace; they do not replace it.
+The reference program is finite and does not model every trap interleaving or
+all possible operands. No formal proof or external ISA compliance certification
+is claimed.
+
+\paragraph{Testing the checks.} The mutation script copies sources into a temporary
+workspace, runs passing baselines, injects one defect
+at a time and requires a behavioural failure in the selected test. A compile
+error does not count as detection. The audit detected all 13 injected defects
+across CPU, PIC and SoC. CPU mutations cover subtraction, arithmetic shift,
+load sign extension, byte/halfword strobes and counter write/carry priority.
+A surviving byte-strobe mutation exposed a missing untouched-lane check;
+the trace was strengthened and both partial-store mutations then failed.
 
 % ===========================================================================
 \section{Verification environment}
@@ -368,8 +393,10 @@ mismatch.}
 
 At block level the structure is simpler: the block is instantiated on its own,
 a directed driver applies stimulus to its ports, and the same self-checking
-comparison mechanism records the verdicts. There are no monitors or coverage
-counters at that level; the checks are direct.
+comparison mechanism records the verdicts. Register-port tests also use the
+shared bus monitor. The Verilator flow binds applicable assertions into both
+block-level and system-level tests; user functional coverage is collected in
+the nominal CPU system test.
 
 \subsection{Control and drivers}
 
@@ -505,12 +532,11 @@ Core invariants &
 \end{tabular}
 \end{table}
 
-The assertion layer is compiled and evaluated by the secondary simulator only;
-the regression on the primary simulator runs the same tests without it. An
-assertion therefore contributes evidence for the system-level run of the
-secondary flow and not for the block-level runs, which is why the protocol
-monitors duplicate part of the same rule set in ordinary logic: the monitor
-checks apply everywhere.
+ModelSim runs all functional tests and ordinary protocol monitors. Verilator
+runs all fifteen distinct CPU/PIC testbenches with the applicable bound
+assertions; it also evaluates functional coverage in the nominal system test.
+An assertion contributes evidence only in instances and scenarios actually
+executed by that flow.
 
 One property in this group was wrong until the trap-active output was exercised
 under nesting. It required every return to drop the output, which holds only
@@ -521,14 +547,18 @@ into the two cases so that both directions are checked.
 
 \subsubsection{Self-checking comparison}
 
-All directed checks use one comparison mechanism. It compares expected against
-observed using a match that treats an undefined value as a mismatch, so a signal
-that never resolved cannot pass a check by accident. Each comparison prints a
-labelled verdict and increments an error counter on mismatch. A run ends with a
-single banner reporting either that all checks passed or how many failed.
+The shared comparison treats undefined values as mismatches. Failures are
+always printed; successful individual checks are printed only with
+\texttt{+verbose}. Each test calls \texttt{finish\_test}, which requires zero
+errors and sets \texttt{test\_done} before completing. Watchdogs fail rather
+than ending silently.
 
-This is why the regression is validated by counting banners and verdict lines
-rather than by trusting a process exit code.
+The ModelSim runner checks completion, zero errors and each requested
+parameter value after elaboration. It returns a nonzero exit code on failure.
+The GUI additionally requires the exact set of completion banners and the
+regression completion marker. The Verilator runner rejects nonzero process
+status, failure messages and missing completion or required coverage markers.
+Banner counts alone are insufficient evidence.
 
 \subsubsection{Functional coverage}
 \label{sec:fcov}
@@ -550,9 +580,10 @@ randomised-backpressure configurations produce.
 The coverage report is produced by the secondary simulator flow. On the run
 measured for this revision, 88 of 92 bins were reached. The four that were not
 are all optional and all of them are bins the nominal configuration cannot
-produce: the interrupt source that is deliberately left masked for the whole run
-and never claimed, and the two backpressure bins that only the randomised
-timing configurations reach. No required bin was missed, so the coverage gate
+produce: two bins for source 5 (trap and claim), deliberately masked throughout
+the run, and the instruction/data AR backpressure bins. Backpressure is checked
+in the ModelSim timing sweeps; this nominal coverage total does not measure
+those additional runs. No required bin was missed, so the coverage gate
 passed.
 
 \subsection{Simulation environment setup}
@@ -607,7 +638,8 @@ Regression &
 \addlinespace
 Assertion and coverage run &
   Builds the same tests on the secondary simulator with the assertion layer and
-  the coverage model included, runs the system-level test, and applies the pass
+  applicable assertions included, runs all fifteen benches and the nominal
+  system coverage model, and applies the pass
   criteria of Section~2.2, including the coverage gate. \\
 \bottomrule
 \end{tabular}
@@ -824,9 +856,9 @@ VP-40 & Counter increment &
   count is deterministic; non-zero where it depends on bus timing. &
   Passing & System test, values read by the program \\
 VP-41 & Counter write behaviour &
-  A write to one half of a counter takes effect while the other half still
-  takes that cycle's increment, and counting resumes afterwards. &
-  Passing & System test, before and after comparison \\
+  An explicit write uses the old addressed half, preserves the other half and
+  suppresses the implicit increment. Pure reads still count. &
+  Passing & Counter block test and independent instruction trace \\
 
 \midrule
 \multicolumn{5}{@{}l}{\textbf{System properties}}\\
@@ -840,9 +872,18 @@ VP-43 & Sustained throughput &
   that answers immediately. Measured as 33 cycles for a window of 33
   instructions. &
   Passing & System test, cycle window measured by the program itself \\
+VP-44 & Independent instruction trace &
+  Completed PC, destination, result and final memory match an independent ISA
+  model under four bus timing configurations. Partial stores preserve other lanes. &
+  Passing & ISA reference bench \\
+VP-45 & Checker sensitivity &
+  Passing baselines are followed by isolated behavioural mutations. Arithmetic,
+  load/store and counter faults must be rejected by the selected tests. &
+  Passing & Mutation script and detecting benches \\
 \bottomrule
 \end{longtable}
 
+\clearpage
 \subsection{Measured results}
 
 The values below were measured on a regression run of the design revision this
@@ -861,22 +902,26 @@ System test, nominal timing            & 1 & 97 & pass \\
 System test, high fixed latency        & 1 & 95 & pass \\
 System test, randomised backpressure   & 2 & 190 & pass \\
 Dual-instance test                     & 1 & 5 & pass \\
-CSR access, fields and reset           & 1 & 288 & pass \\
+CSR access, fields and reset           & 1 & 293 & pass \\
 Trap causes, one case each             & 1 & 120 & pass \\
 Branch predictor                       & 1 & 68 & pass \\
 Arithmetic path                        & 1 & 57 & pass \\
 \midrule
-\textbf{Total}                         & \textbf{9} & \textbf{920} & \textbf{0 failures} \\
+Counter writes and carry               & 1 & 159 & pass \\
+\textbf{Total, directed checks}        & \textbf{10} & \textbf{1\,084} & \textbf{0 failures} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Run in full, the regression comprises 15 runs and 2\,561 checks with no
-failures. The whole design compiles into a single library with no errors and no
-warnings.
+Four additional ISA trace runs each compare 1\,287 completed instructions
+and 256 data words. They are reported separately from the labelled directed
+checks in the table.
 
-The secondary flow was run on the same revision, with every assertion live. It
-reported 97 passing checks, no assertion failure, and the coverage result in
-Section~\ref{sec:fcov}.
+The complete ModelSim CPU/PIC regression comprises 21 runs and 8\,473 labelled
+checks, plus those four traces and memory comparisons, with no failures.
+Compilation reports zero errors and zero warnings. The Verilator flow executes
+all fifteen distinct benches, with no assertion failure; the nominal system
+coverage result is 88/92 bins, with every required bin reached. These finite
+results establish the scenarios exercised, not exhaustive correctness.
 
 \end{document}

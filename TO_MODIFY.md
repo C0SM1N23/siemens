@@ -1,160 +1,56 @@
 # To modify
 
-Open problems found while integrating the three blocks into one SoC. Anything
-already fixed has been dropped from this list.
+Open items measured against `origin/DMA b3d0422` and `origin/SDRAM 28cd380`
+on 15 September 2026. DMA/SRAM RTL was not corrected during this audit.
 
----
+## DMA
 
-## DMA — `dma/`
+| Item | Evidence | Required owner action |
+|---|---|---|
+| Length below one word underflows the burst length | `mc_dma_channel.v`: `(desc_len[7:2] - 1)` produces ARLEN=255 for 0, 1, 2 and 3 bytes: a 256-beat, 1024-byte request. Confirmed by the port-driven probe on ModelSim and Verilator. | Reject unsupported lengths before issuing a request, or implement partial transfers with correct strobes. |
+| Non-word length is truncated | Probe: 5 bytes requests 4; 22 bytes requests 20. Low length bits are discarded. | Define the supported alignment contract and reject or implement the final partial word. |
+| Token refill can overflow before saturation | With refill=40000 and maximum=65535, two refill periods produce 40000 then 14464. The 16-bit sum wraps before the maximum comparison. The latest upstream fix does not cover this setting. | Widen the addition before comparison, then saturate to the configured maximum; add overflow-boundary tests. |
+| Own block bench uses the old module interface | `dma/debug/hdl/tb_mc_dma.v:117` instantiates `mc_dma_top`; current RTL defines `mc_dma`. Isolated ModelSim elaboration fails with `vsim-3033`. The retained `tb_mc_dma_top.v` also uses the old interface and checks IRQ without first enabling `INT_ENABLE`. | Update the owner's benches to current names/ports and interrupt contract, then run every scenario with a strict verdict. |
+| Empty ModelSim entry point | `dma/debug/sim/sim.do` is zero bytes. | Provide a compile/run script for the current DMA bench. |
 
-**1. A descriptor shorter than 4 bytes overruns the destination and hangs the channel.**
+## Dual-port SRAM
 
-`dma/hdl/dma_channel.v:249`:
+| Item | Evidence | Required owner action |
+|---|---|---|
+| Undefined register word 7 returns success | The top routes register words 0–7, while the bank defines 0–6. Probe reads word 7 as zero with error=0. The bank's error outputs do not report unmapped offsets. | Define the reserved-offset policy; if invalid, report a slave error for reads and writes on both ports. |
+| Default address space exposes 248 data words | Default 10-bit byte address includes 32 bytes of registers; data offsets 0x020–0x3FC address array entries 0–247. The array has 256 entries. Fixed `[9:2]` slices also prevent solving this by changing `ADDR_W` alone. | Reconcile the 256-word requirement with the register window and parameterized address decode; test the top data address on both ports. |
 
-```verilog
-req_len = (desc_len >= 32) ? 8'd7 : (desc_len[7:2] - 1);
+The earlier fixed-width bandwidth-window finding is closed upstream:
+`WINDOW_CYCLES=2048` now completes with `BANDWIDTH_A=2048` in the probe.
+It is not an open defect.
+
+## Reproduce and lint
+
+From `soc/debug/sim`, run the read-only diagnostic:
+
+```text
+vsim -c -do "do probe_upstream.do"
 ```
 
-`desc_len[7:2]` is 6 bits wide, so for any length below 4 the subtraction wraps
-to `6'b111111` before it is zero-extended into the 8-bit `req_len`, and the
-channel asks for a 64-beat burst. Measured at SoC level with a 2-byte transfer:
+Verilator reproduction, from the same directory in Bash/WSL:
 
-```
-channel 0 FSM state = 5  (2=ACTIVE 4=DONE 5=ERROR)
-AWLEN the channel asked for = 63 (64 beats)
-SRAM words no longer holding the guard = 248 (asked for 1)
+```text
+verilator --binary --timing --timescale 1ns/1ps -Wno-fatal --unroll-count 64 -j 4 --top-module soc_probe_upstream --Mdir obj_dir/probe -f soc_rtl.f ../hdl/soc_probe_upstream.v
+./obj_dir/probe/Vsoc_probe_upstream
 ```
 
-The whole SRAM data region is overwritten, the channel ends in `STATE_ERROR`,
-and software polling for `STATE_DONE` never exits. Widening the expression to 8
-bits is not the fix — it turns 64 beats into 256. The sub-word case has to be
-handled, or rejected with `STATE_ERROR` before any burst is issued.
+Both diagnostic runs print the same observations. This probe is excluded from
+the passing functional regression. Current lint has 17 upstream diagnostics,
+identified exactly in `soc/debug/sim/known_lint.json`; these are not 17 proven
+functional bugs. The set includes register-address sizing, the descriptor-length
+expression, bandwidth comparison sizing and a vector used as a condition.
+After an owner fix, rerun the diagnostic and remove resolved lint entries.
 
-Verilator flags this as `WIDTHEXPAND`; it is listed in `KNOWN_LINT` in
-`soc/debug/sim/run_verilator.sh` so the SoC lint gate still runs, and the entry
-has to be removed once this is fixed.
+## CPU / PIC interface agreement
 
-**2. A length that is not a multiple of 4 is silently truncated.**
-
-Same line. `desc_len[7:2]` is an integer division, so 22 bytes becomes 5 beats
-= 20 bytes. The last 2 bytes are never written and nothing reports it. Needs
-`WSTRB` on the final beat.
-
-**3. `tb_mc_dma_top` fails on the DMA branch.**
-
-`dma/debug/hdl/tb_mc_dma_top.v:357` checks `irq[0] !== 1'b1`, but the bench never
-writes `INT_ENABLE`, which resets to 0. Since `irq` became
-`INT_STATUS & INT_ENABLE`, `irq[0]` can no longer rise. Add
-`axil_write(ADDR_INT_ENABLE, 32'h0000_000F)` before the check.
-
-**4. `dma/debug/sim/sim.do` is empty.**
-
-It used to compile a different project (`sistem_parcare.v`); it is now a 0-byte
-file, so the block has no working ModelSim script.
-
-**5. Channels 1..3 and round-robin arbitration are covered only in the block bench.**
-
----
-
-## DP-SRAM — `sram/`
-
-**6. `WIN_W` is a literal while `WINDOW_CYCLES` is a parameter.**
-
-`sram/hdl/dp_sram_regfile.v:59` fixes `WIN_W = 10`; line 99 compares
-`window_cnt == WINDOW_CYCLES-1`. They agree only at the default 1024. At 2048 the
-counter is too narrow to ever equal `WINDOW_CYCLES-1`, so the window never closes.
-Measured over 9000 cycles with two instances differing only in the parameter:
-
-```
-WINDOW_CYCLES=1024 : window_done pulses = 8
-WINDOW_CYCLES=2048 : window_done pulses = 0
-```
-
-Derive it: `localparam WIN_W = $clog2(WINDOW_CYCLES);`
-
-This is not the off-by-one already noted in the block (`BANDWIDTH_A/B` peaking at
-`WINDOW_CYCLES-1`), which is documented and accepted. It is a separate problem
-and it only bites upwards: shortening the window for a test works, because a
-smaller limit still fits in 10 bits. Raising it past 1024 stops the window
-closing at all.
-
-Verilator flags the width mismatch; it is listed in `KNOWN_LINT` in
-`soc/debug/sim/run_verilator.sh` so the SoC lint gate still runs, and the entry
-has to be removed once this is fixed.
-
-**7. Register word 7 is a silent hole.**
-
-`REG_WORD_MAX = 7` routes words 0..7 to the bank, but
-`sram/hdl/dp_sram_regfile.v:50-56` defines only 0..6. Measured on port A:
-
-```
-word 6 (COOLDOWN_CYCLES, defined): rresp=00 rdata=0x00000004
-word 7 (not defined)             : rresp=00 rdata=0x00000000
-word 7 write of 0xDEADBEEF       : bresp=00, then reads back 0x00000000
-```
-
-Software cannot tell a register that does not exist from one that does.
-
-**8. An undefined register address cannot return an error.**
-
-The bank now has error outputs, but `sram/hdl/dp_sram_regfile.v:246-247` ties
-`a_reg_error_o` to 0 and drives `b_reg_error_o` from `write_conflict` alone, so
-they report a port-B write losing an arbitration and nothing else. An access to a
-register that does not exist still answers OKAY.
-
-**9. The last eight words of the array cannot be addressed.**
-
-`sram/hdl/mem_array.v:33` declares `mem[0:255]`, but `sram/hdl/dp_sram_top.v:117`
-subtracts `MEM_BASE_OFFSET` from a 10-bit address before indexing, so words 8..255
-of the address space map onto `mem[0..247]`. Measured: a write to the top address
-the port can carry, 0x3FC, lands on `mem[247]`, so `mem[248..255]` have no address
-at all. The block offers 248 data words where the specification asks for 256, and
-widening the SoC window does not help — the port is 10 bits wide.
-
-Widen `ADDR_W` to 11, or declare the array `[0:247]` so its size states what is
-reachable.
-
-**10. `rv32i_regfile.v` is dead code that breaks a shared library.**
-
-`dp_sram_top` instantiates `dp_sram_regfile`, and the block's own `compile.do`
-does not build `rv32i_regfile.v`, but the file is still on the branch and still defines
-a module called `regfile` — the same name as the CPU's register file. Compiled
-into one library the second definition overwrites the first:
-
-```
-** Warning: sram_regfile_orig.v(11): (vlog-2275) Existing module 'regfile'
-   will be overwritten.
-```
-
-It is not carried into the SoC for that reason; deleting it on the branch would
-say so once instead of leaving each integrator to work it out.
-
----
-
-## CPU, PIC and integration — `cpu/`, `soc/`
-
-**11. The CPU brief and the PIC brief specify different interrupt interfaces.**
-
-The CPU brief asks for `cpu_irq[7:0]`, a one-hot `cpu_irq_ack[7:0]` and a 3-bit
-`cpu_irq_id`; the PIC brief asks for 16 sources. Sixteen identifiers do not fit
-in three bits, so the RTL follows the PIC brief and adds an end-of-interrupt
-pulse that neither brief mentions, plus `cpu_mask_i` and `pending_o`. The PIC
-brief also says the acknowledge clears the active state, while the RTL uses it
-to push and the end-of-interrupt to pop, which is what nesting requires.
-
-Needs a decision from the mentor before the interface can be signed off.
-
-**12. No synthesis run.** No `.qsf` / `.xdc` / `.sdc` in the repository.
-
-**13. Spurious interrupt detection is not reachable at system level.**
-
-A claim is spurious when the source withdraws in the one cycle between the offer
-being sampled and the claim landing. No master in this SoC can time a write to
-that cycle: software cannot, and the peripheral source lines are driven by real
-blocks rather than by the bench. Reaching it would need either an external
-interrupt pin on `soc_top` or a bench-controlled source line.
-
-The controller's own bench covers the behaviour itself, including the negative
-case of a source still asserted at the claim and the balanced accounting a
-spurious claim still produces. What is missing is only the confirmation that a
-real core's claim timing can produce the race at all.
+The CPU brief specifies eight IRQ inputs, a three-bit ID and an eight-bit
+acknowledge; the PIC brief specifies sixteen sources. The implemented common
+interface uses sixteen pending/mask bits, a four-bit vector, scalar claim and
+EOI. Claim pushes an active level; EOI pops it. The mentor/team must confirm this
+contract against the original briefs. This is an interface decision, not a
+functional failure of the tested implementation.

@@ -5,8 +5,8 @@
 \documentclass[11pt]{article}
 
 \newcommand{\doctitle}{Verification Specification --- Programmable Interrupt Controller}
-\newcommand{\docrev}{1.0}
-\newcommand{\docdate}{6 September 2026}
+\newcommand{\docrev}{1.1}
+\newcommand{\docdate}{15 September 2026}
 \newcommand{\docsubject}{Programmable interrupt controller, sixteen sources,
 hardware nesting}
 
@@ -47,7 +47,7 @@ check is applied.
 \subsection{Validity of the document}
 
 The document is valid for the interrupt controller as currently implemented and
-for the verification environment as it currently exists: five directed
+for the verification environment as it currently exists: six block-level
 block-level tests, two system-level environments, one passive bus protocol
 monitor and one assertion layer.
 
@@ -85,6 +85,22 @@ System level & A test in which the controller is integrated with a real
   processor and real memories and driven by a program. \\
 \bottomrule
 \end{longtable}
+
+\subsection{Requirements and implementation decisions}
+
+The original Siemens briefs are kept in \texttt{cpu/docs/brief/}:
+\emph{RV32I 3-Stage Pipeline CPU} and
+\emph{Programmable Interrupt Controller with Advanced Scheduling}.
+They define the project scope. Instruction and CSR semantics are checked
+against the cited RISC-V manuals, and bus handshakes against the AXI specification.
+These authored specifications describe the implementation; they are not
+independent evidence that the implementation is correct.
+
+Details absent from the briefs, including the register map, bus error policy
+and the sixteen-source claim/EOI interface, are project decisions. The CPU
+brief's eight-source interface and the PIC brief's sixteen-source interface
+still require a common interface agreement; the implemented contract is stated
+explicitly in the design specifications.
 
 \subsection{Relationship with other documents}
 
@@ -149,8 +165,8 @@ others cannot.
 \midrule
 Directed self-checking tests &
   Establish that a specific scenario produces a specific result. Each test
-  carries its own expected values and prints a verdict, so a run is judged by
-  counting verdicts rather than by inspecting waveforms. They see only the
+  carries its own expected values and prints a verdict, and the runner requires explicit
+  completion with zero mismatches. They see only the
   scenarios someone thought to write. \\
 \addlinespace
 Protocol monitor &
@@ -176,7 +192,7 @@ source deliberately left masked for the whole run.
 
 \subsection{Implementation strategy}
 
-Verification is applied at two levels, and the split is deliberate.
+Verification is applied at system and block level.
 
 \textbf{Block level.} The controller is instantiated on its own and driven
 directly on its source lines, its processor-facing pins and its register port.
@@ -187,7 +203,7 @@ and the claim, a rising edge that coincides exactly with a claim, a nesting
 limit lowered below the current depth --- and most of it is only observable by
 reading registers at a moment a running program could not choose.
 
-Five block-level tests are used, each with a distinct purpose rather than a
+Six block-level tests are used, each with a distinct purpose rather than a
 distinct feature list.
 
 \begin{table}[H]
@@ -199,6 +215,10 @@ distinct feature list.
 \toprule
 \textbf{Test} & \textbf{Purpose} \\
 \midrule
+Independent priority reference &
+  Compares offers and pending masks across 275 generated cases, including all
+  band urgency encodings and sixteen simultaneous contenders. \\
+\addlinespace
 Feature test &
   Walks each capability of the controller once along its natural path: a plain
   level interrupt, the three levels of the priority comparison, preemption and
@@ -253,12 +273,12 @@ randomised ready-signal backpressure. The interrupt path is sensitive to this
 because the processor defers a claim while a data transaction is in flight, so
 the interval between the offer and the claim changes with the memory timing.
 
-\textbf{Pass criteria.} A run passes only if every self-check matched, no
-protocol monitor recorded a violation, and no assertion fired in a run where
-the assertion layer is active. A test that reaches its end without printing its
-own pass banner counts as a failure, and each test prints a distinct banner, so
-the regression is judged by counting banners rather than by trusting an exit
-code.
+\textbf{Pass criteria.} Every comparison and protocol monitor must report zero
+errors. Applicable assertions must pass in Verilator. Each test completes
+through \texttt{finish\_test}; the ModelSim runner requires
+\texttt{test\_done=1}, zero errors and the requested parameter values. Timeouts,
+missing completion and simulator errors return nonzero status. The GUI also
+checks exact completion-banner counts and the final regression marker.
 
 \subsection{Verification plans}
 
@@ -301,11 +321,19 @@ Continuous invariants & The properties the assertion layer evaluates in every
 
 \subsection{Reference model}
 
-\textbf{No reference model is used.} The environment contains no independent
-implementation of the priority resolution and performs no cycle-by-cycle
-comparison against one.
+\texttt{pic\_reference.py} independently orders eligible sources by band urgency,
+intra-band priority and lowest source index, using a Python sort rather than
+the RTL priority-key expression. With seed 715 it generates 275 cases: all 256
+band-configuration encodings, sixteen forced winners, a full tie, an empty mask
+and an empty request set. Configurations include tied urgency values and
+sixteen simultaneous contenders.
 
-Expected behaviour is instead determined in one of three ways, depending on the
+\texttt{pic\_tb\_reference} programs each case through AXI4-Lite, then checks
+the offer, vector and pending mask against the generated expectations. The
+reference covers priority selection and masking; the directed tests below
+cover the sequential claim, nesting and deadline behaviour.
+
+Other expected results are determined in one of three ways, depending on the
 check.
 
 \begin{itemize}[itemsep=3pt,topsep=3pt]
@@ -324,11 +352,9 @@ check.
       recorded trace.
 \end{itemize}
 
-The consequence is that priority resolution is established only
-for the configurations the directed tests actually program. The environment
-cannot detect a resolver defect that appears at a combination of bands,
-intra-band priorities and slot numbers no test constructs; the largest number of
-sources contending in any current test is six.
+The tests cover all band-urgency encodings but not every combination of
+source configuration, request timing and nesting history. The reference is a
+priority-selection oracle, not a cycle-accurate model of the full controller.
 
 % ===========================================================================
 \section{Verification environment}
@@ -387,7 +413,7 @@ reachable through it: the source line driver produces levels, single-cycle
 pulses and edges deliberately aligned with a claim; the handshake driver
 produces the claim and end-of-interrupt pulses a processor would produce, but at
 times a processor could not be made to choose; the register access master issues
-full-word and byte-lane writes and reads, and is the same driver in all five
+full-word and byte-lane writes and reads, and is the same driver in all six
 block-level tests, so every test exercises the slave in the same way. On the
 right, the bus protocol monitor and the bound assertion layer watch
 continuously and report violations of their own accord, while the self-checking
@@ -484,7 +510,7 @@ except the scheduling test, which is the test that exists to exercise it.
 
 \subsubsection{Register access stimulus}
 
-One shared master task drives the register port in all five block-level tests.
+One shared master task drives the register port in all six block-level tests.
 It performs full-word writes, byte-lane writes with an explicit strobe pattern,
 and reads, and it checks the response code of every access against the value the
 test expects --- so an unexpected error response, or an unexpected success, is a
@@ -545,27 +571,22 @@ at the end of a scenario:
       unchanged.
 \end{itemize}
 
-The assertion layer is compiled and evaluated only by a secondary simulator,
-because the edition of the primary simulator used for the regression does not
-support the assertion language. That flow was run for the revision measured
-here: the controller's assertions were live in twelve runs and none of them
-fired.
+ModelSim executes all functional tests and the ordinary protocol monitors.
+Verilator executes the same six PIC block benches and the CPU/SoC benches with
+the applicable bound assertions. No assertion failure was reported.
 
-The block-level tests run on the primary simulator only, so an assertion covers
-the system-level runs and not those. This is why the protocol monitor duplicates
-part of the same rule set in ordinary logic: the monitor's checks apply
-everywhere.
-
-An assertion is evidence only where the situation it describes actually occurs.
-The property that an end of interrupt at depth zero cannot underflow the stack,
-for instance, holds in every run without ever being tested, because no run
-produces that pulse. The properties credited in the plan are the ones whose
-trigger condition occurs in normal operation.
+The feature test explicitly pulses EOI twice at depth zero and checks that
+nesting status, active vector and interrupt status remain zero. This reaches
+the empty-stack assertion's antecedent. Mutation testing removes the empty-stack
+guard and requires this test to fail. Two further PIC mutations remove CPU
+masking and reverse the source-index tie-break; the independent reference test
+detects both. A passing assertion with an unexercised antecedent is not credited
+as a tested scenario.
 
 \subsubsection{Self-checking comparison}
 
-Every check compares one observed value against one expected value and prints a
-verdict naming the property. A mismatch increments an error count, and a test
+Every check compares one observed value against one expected value. Mismatches
+are always printed; successful individual checks require 	exttt{+verbose}. A mismatch increments an error count, and a test
 ends by printing a pass banner if the count is zero and a failure banner
 otherwise. Tests do not stop at the first mismatch, so a single run reports
 every property it broke rather than only the first.
@@ -606,9 +627,10 @@ a compile error rather than a silently skipped run.
 
 There are two entry points. The regression compiles once and then executes every
 test in turn, each in its own elaboration, printing a banner per run. The
-secondary flow compiles the design, the system-level test and the assertion
-layer with a different front end and executes the single system-level run with
-assertions enabled.
+secondary flow compiles all fifteen CPU/PIC and sixteen SoC benches with a
+different front end and executes each with the applicable assertions enabled.
+The independent reference image is regenerated before running the PIC reference
+test.
 
 Parameterised runs pass their configuration as an elaboration-time override and
 then read the value back out of the elaborated design and print it, so the log
@@ -936,20 +958,20 @@ VP-59 & Register port under response backpressure &
 VP-60 & Offer is the registered resolution &
   The request line and source number presented are the registered result of one
   and the same resolution, in every cycle. &
-  Passing & Assertion, live in twelve runs \\
+  Passing & Assertion in applicable Verilator benches \\
 VP-61 & Offer eligibility holds continuously &
   Every offered source is pending, not in service, not masked by the processor,
   and under nesting strictly more urgent than the level in service. &
-  Passing & Assertion, live in twelve runs \\
+  Passing & Assertion in applicable Verilator benches \\
 VP-62 & Depth bounds and motion &
   The depth never exceeds the limit, the limit never exceeds the physical stack,
   the depth moves only on a claim or an end of interrupt, and no offer is made
   at the limit. &
-  Passing & Assertion, live in twelve runs \\
+  Passing & Assertion in applicable Verilator benches \\
 VP-63 & Claim and end of interrupt never coincide &
   The two pulses are never asserted in the same cycle in any run, which is the
   condition the depth accounting relies on. &
-  Passing & Assertion, live in twelve runs \\
+  Passing & Assertion in applicable Verilator benches \\
 
 \bottomrule
 \end{longtable}
@@ -968,7 +990,8 @@ document describes.
 \toprule
 \textbf{Run} & \textbf{Runs} & \textbf{Checks} & \textbf{Result} \\
 \midrule
-Feature test                              & 1 & 139 & pass \\
+Feature test                              & 1 & 145 & pass \\
+Priority reference                       & 1 & 5\,741 & pass \\
 Scheduling corner cases                   & 1 & 26  & pass \\
 Reset                                     & 1 & 350 & pass \\
 Access classes and reserved bits          & 1 & 478 & pass \\
@@ -981,7 +1004,7 @@ Register port under backpressure          & 1 & 14  & pass \\
 Machine timer delivery, controller checks & 1 & 4   & pass \\
 Interrupt masked at the peripheral        & 1 & 3   & pass \\
 \midrule
-\textbf{Total}                            & \textbf{15} & \textbf{1\,610} &
+\textbf{Total}                            & \textbf{16} & \textbf{7\,357} &
 \textbf{0 failures} \\
 \bottomrule
 \end{tabular}
@@ -993,13 +1016,14 @@ three. The last three rows likewise count only the controller's share of runs
 whose subject is something else. The remaining checks in all of them are
 reported in the specifications for the blocks they belong to.
 
-These runs are drawn from two regressions: the processor regression, of 15 runs
-and 2\,561 checks, and the system regression, of 24 runs and 428 checks. Neither
-reports a failure, and both designs compile into a single library with no errors
-and no warnings.
+These runs are drawn from the CPU/PIC regression (21 runs, 8\,473 labelled
+checks plus four independent ISA traces) and the SoC regression (25 runs,
+444 labelled checks). Both complete without failures, compilation errors or
+ModelSim warnings. Labelled check counts include bus response checks and are
+not a measure of state-space coverage.
 
-The secondary simulator flow was run on the same revision. Twelve of its runs,
-across the processor and the system, instantiate the controller with its
-assertions live, and none of them fired.
+The Verilator flow executes every distinct functional bench in both groups
+with the applicable assertions. The independent priority reference and all
+three PIC mutation cases were executed; none was left as an unrun test.
 
 \end{document}
