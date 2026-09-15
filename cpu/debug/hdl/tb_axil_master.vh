@@ -19,25 +19,31 @@
 // independent AW/W collection. Stimulus changes at #1 after a posedge, so the
 // driver never races the DUT's own clock edge.
 
+integer axil_cycle = 0;
+integer axil_read_cycle;
+always @(posedge clk) axil_cycle <= axil_cycle + 1;
+
 // Full write with explicit byte strobes. `exp` is the BRESP that must come back.
 task axil_write_strb(input [31:0] a, input [31:0] d, input [3:0] strb, input [1:0] exp);
     reg aw_ok, w_ok;
     begin
-        @(posedge clk) #1;
-        awaddr = a; awvalid = 1'b1; wdata = d; wstrb = strb; wvalid = 1'b1; bready = 1'b1;
-        aw_ok = 1'b0; w_ok = 1'b0;
+        @(negedge clk);
+        awaddr = a; awvalid = 1; wdata = d; wstrb = strb; wvalid = 1;
+        bready = 0; aw_ok = 0; w_ok = 0;
         while (!aw_ok || !w_ok) begin
             @(posedge clk);
-            if (awvalid && awready) aw_ok = 1'b1;
-            if (wvalid  && wready ) w_ok  = 1'b1;
-            #1;
-            if (aw_ok) awvalid = 1'b0;
-            if (w_ok ) wvalid  = 1'b0;
+            if (awvalid && awready) aw_ok = 1;
+            if (wvalid && wready) w_ok = 1;
+            @(negedge clk);
+            if (aw_ok) awvalid = 0;
+            if (w_ok) wvalid = 0;
         end
+        bready = 1;
+        @(posedge clk);
         while (!bvalid) @(posedge clk);
-        #1;
-        check({30'b0, exp}, {30'b0, bresp}, "  write bresp");
-        bready = 1'b0;
+        check({30'b0, exp}, {30'b0, bresp}, "write response");
+        @(negedge clk);
+        bready = 0;
     end
 endtask
 
@@ -50,22 +56,20 @@ endtask
 
 // Read; the data lands in `rd`. `exp` is the RRESP that must come back.
 task axil_read(input [31:0] a, input [1:0] exp);
-    reg ar_ok;
     begin
-        @(posedge clk) #1;
-        araddr = a; arvalid = 1'b1; rready = 1'b1;
-        ar_ok = 1'b0;
-        while (!ar_ok) begin
-            @(posedge clk);
-            if (arvalid && arready) ar_ok = 1'b1;
-            #1;
-            if (ar_ok) arvalid = 1'b0;
-        end
+        @(negedge clk);
+        araddr = a; arvalid = 1; rready = 0;
+        @(posedge clk);
+        while (!arready) @(posedge clk);
+        axil_read_cycle = axil_cycle;
+        @(negedge clk);
+        arvalid = 0; rready = 1;
+        @(posedge clk);
         while (!rvalid) @(posedge clk);
-        #1;
         rd = rdata;
-        check({30'b0, exp}, {30'b0, rresp}, "  read rresp");
-        rready = 1'b0;
+        check({30'b0, exp}, {30'b0, rresp}, "read response");
+        @(negedge clk);
+        rready = 0;
     end
 endtask
 

@@ -615,6 +615,7 @@ wfi2_spot:
     or   x30, x30, x16
     csrrw x0, 0x323, x28     # mhpmevent3    write -> ignored
     csrrs x16, 0x323, x0
+    xori x16, x16, 1         # fixed event 1: mispredicts
     or   x30, x30, x16
     csrrs x16, 0x33F, x0     # mhpmevent31
     or   x30, x30, x16

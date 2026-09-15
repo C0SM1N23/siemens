@@ -1,57 +1,32 @@
 #!/usr/bin/env bash
-# SVA + functional coverage run — Verilator (free, open source).
-#
-# Why this exists: ModelSim ASE cannot compile SystemVerilog assertions o
-# report functional coverage, so the SVA layer under debug/sva/ runs here.
-# The RTL, the testbench and the ModelSim .do flow are untouched — this is
-# a second pair of eyes on the same tb_cpu_axi run.
-#
-# Usage (from Windows): powershell debug/sim/run_verilator.ps1
-#        (from Linux):  bash debug/sim/run_verilator.sh
-#
-# Outputs:
-# - console: the usual PASS/FAIL lines, %Error on any assertion failure,
-#   and the [FCOV] functional coverage table at the end
-# - debug/sim/cov_annotated/: per-line hit counts for the cover properties
-
-set -e
+# RTL lint, CPU functional coverage, then every CPU/PIC bench with bound SVA.
+set -euo pipefail
 cd "$(dirname "$0")"
+source ./verilator_common.sh
+python3 asm.py program_axi.s program_axi.hex > build_asm.log
+python3 asm.py program_dual.s program_dual.hex >> build_asm.log
+python3 isa_reference.py
+python3 pic_reference.py
+python3 check_lint.py cpu
+SVA=(../sva/axi_lite_sva.sv ../sva/rv32i_cpu_core_sva.sv ../sva/pic_sva.sv ../sva/rv32i_bind_core_sva.sv)
 
-SVA="../sva"
-
-# RTL + tb collateral come from the shared filelists (same rtl.f / tb_cpu.f the
-# ModelSim flow uses); only the Verilator-only SVA layer is listed here.
-#
-# --coverage-user, not --coverage: the flow reads back the cover-property counts
-# and nothing else, and asking for line and toggle coverage as well makes
-# Verilator 5.050 abort with an internal error on the bound assertion modules.
-# Each of the three kinds compiles on its own; only the combination fails.
-#
-# --unroll-count 64 is pinned deliberately. Verilator rejects a non-blocking
-# assignment to an unpacked array inside a loop it cannot unroll (BLKLOOPINIT),
-# and the limit is a version-dependent default. Pinning it to 64 -- the value
-# the oldest Verilator the CI may install uses -- means a loop that would break
-# the CI build breaks the local build first, instead of passing here on a newer
-# Verilator with a larger budget and failing after the push.
-verilator --cc --exe --build --timing --assert --coverage-user -Wno-fatal \
-  --unroll-count 64 \
-  --top-module rv32i_tb_cpu_axi -o Vrv32i_tb_cpu_axi +incdir+. \
-  sim_main.cpp \
-  -f rtl.f -f tb_cpu.f \
-  "$SVA"/axi_lite_sva.sv "$SVA"/rv32i_cpu_core_sva.sv "$SVA"/pic_sva.sv \
-  "$SVA"/rv32i_cpu_func_cov.sv "$SVA"/rv32i_bind_core_sva.sv "$SVA"/rv32i_bind_sva.sv
-
-./obj_dir/Vrv32i_tb_cpu_axi | tee sim_run.log
-
-rm -rf cov_annotated
+# User coverage is separate from line/toggle coverage (Verilator 5.050 constraint).
+verilator --cc --exe --build --timing --timescale 1ns/1ps --assert --coverage-user -Wno-fatal \
+    --unroll-count 64 -j 4 --top-module rv32i_tb_cpu_axi \
+    --Mdir obj_dir/coverage -o Vrv32i_tb_cpu_axi +incdir+. \
+    sim_main.cpp -f rtl.f -f tb_cpu.f "${SVA[@]}" \
+    ../sva/rv32i_cpu_func_cov.sv ../sva/rv32i_bind_sva.sv > build_coverage.log 2>&1 \
+    || { tail -80 build_coverage.log; exit 1; }
+./obj_dir/coverage/Vrv32i_tb_cpu_axi 2>&1 | tee sim_run.log
+grep -q "ALL TESTS PASSED" sim_run.log
+grep -q "COVERAGE GATE PASSED" sim_run.log
+if grep -Eq '%Error|FAIL:|GATE FAILED' sim_run.log; then exit 1; fi
 verilator_coverage --annotate cov_annotated coverage.dat > /dev/null
-echo "cover-property annotation written to debug/sim/cov_annotated/"
 
-# pass criteria: the TB self-check passed, no assertion fired, and every
-# required functional-coverage bin was hit
-status=0
-grep -q "== ALL TESTS PASSED ==" sim_run.log || { echo "FAIL: TB checks";       status=1; }
-grep -q "COVERAGE GATE PASSED"   sim_run.log || { echo "FAIL: coverage gate";    status=1; }
-grep -q "GATE FAILED"            sim_run.log && { echo "FAIL: coverage gate";     status=1; }
-[ $status -eq 0 ] && echo "== run_verilator: PASS ==" || echo "== run_verilator: FAIL =="
-exit $status
+for top in rv32i_tb_dual_core pic_tb_feature pic_tb_reference pic_tb_sched \
+    pic_tb_reset pic_tb_ro pic_tb_status mtimer_tb_regs rv32i_tb_csr_ro \
+    rv32i_tb_counters rv32i_tb_traps rv32i_tb_bp rv32i_tb_alu rv32i_tb_isa; do
+    run_asserted "$top" -f rtl.f -f tb_cpu.f +incdir+. \
+        ../hdl/axi_lite_arb2.v "../hdl/$top.v" "${SVA[@]}"
+done
+echo "SVA REGRESSION PASS: CPU, 15 benches; functional coverage gate passed"

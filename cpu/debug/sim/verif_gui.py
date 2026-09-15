@@ -1,24 +1,8 @@
 #!/usr/bin/env python3
-# verif_gui.py — Tkinter front-end for the verification flows in debug/sim.
-#
-# One source of truth: every button maps to exactly the command you would type
-# by hand (sim.do / regress.do / run_verilator.sh / asm.py). The GUI only adds
-# streaming output, a verdict, and progress — it never invents its own flow.
-#
-# Design points:
-# - ModelSim's exit code lies (quit -f returns 0 on test failures), so verdicts
-#   are computed by PARSING: exact banner counts + zero "FAIL:" lines.
-# - Infra errors (vsim missing, vlog failed, stale lock) are a third state
-#   (orange), never confused with a red test failure.
-# - stdin=DEVNULL everywhere: nothing can hang waiting for input.
-# - Process TREE kill on Stop (taskkill /T /F) — vsim spawns children.
-# - Stale work/_lock is auto-removed before a run if no vsim process exists.
-# - Output is read on a worker thread, queued, and drained in batches on the
-#   Tk main thread; ANSI stripped; encoding errors replaced, never crash.
-# - The "ModelSim TB" button opens the real ModelSim GUI (compile + wave.do +
-#   run) so the waveforms are visible; its output is tailed from the
-#   transcript file so the verdict still lands in this window.
-# - Auto-assemble: if a .s is newer than its .hex, asm.py runs first.
+# Tkinter launcher for the ModelSim and Verilator scripts in this directory.
+# Worker threads stream output through a queue to the UI thread.
+# Verdicts require successful completion, exact run counts and zero failures.
+# Stop terminates the launched process tree; source files are preserved.
 
 import os
 import re
@@ -92,7 +76,7 @@ What it checks (90 checks, self-checking program):
     with the CPI measured: 33 cycles for 33 instructions)
   - load/store at every width: per-byte-lane WSTRB (SB/SH/SW) and extraction
     with sign/zero extension (LB/LBU/LH/LHU)
-  - EVERY synchronous trap cause (0..7, 11), counted EXACTLY:
+  - Supported synchronous trap causes (0..7, 11), counted EXACTLY:
     17 entries into the direct handler, 26 in total (hardware counter mhpm6)
   - an illegal instruction with no side effects (an illegal store never
     reaches memory), a misaligned access with no AXI transaction issued
@@ -116,38 +100,18 @@ The waveforms show AXI at both ends: IBUS (CPU to imem), DBUS at the CPU
 master, then what each slave sees (dmem / PIC / mtimer), plus the interrupt
 lines. A transfer is the cycle where VALID and READY are high together."""),
 
-    ("Regression 12-run", """\
-What it does: runs the whole regression IN THE CONSOLE (no GUI): the same
-90-check suite under four bus-timing configurations, the dual-core test, the
-PIC feature bench, and the six block-level benches. Progress appears as
-"phase X/12" in the status bar.
+    ("Regression 21-run", """\
+Runs the CPU regression in the console:
+  - system bench under four memory timing configurations;
+  - two cores sharing data memory;
+  - PIC features, scheduling, reset, access rules and status;
+  - PIC reference: 275 cases, all 256 band configurations;
+  - timer, CSR access and counter write/carry checks;
+  - synchronous traps, predictor and ALU;
+  - independent ISA trace under four memory timing configurations.
 
-The twelve runs:
-   1. default latencies (the CPI check, 33/33 cycles, is active only here)
-   2. high fixed AXI latencies (imem RL=2, dmem RL=3/WL=2) - long stalls
-   3. random READY backpressure, seed set A (imem 25%, dmem 35%)
-   4. random READY backpressure, seed set B (imem 40%, dmem 20%)
-   5. dual-core: two CPUs sharing one memory through an arbiter
-   6. PIC feature bench: bands, nesting, spurious, deadline, software triggers
-   7. PIC reset: every register read back against its documented reset value,
-      no flop leaving reset holding X, and an asynchronous reset taken from a
-      fully configured, nested state
-   8. PIC read-only: every read-only register and every reserved bit, checked
-      both for SLVERR and for the value being unchanged
-   9. PIC SRCx_STATUS: each of the six fields on its own, in both directions
-  10. machine-timer registers: reset values, round-trips, byte lanes,
-      unmapped offsets, and the interrupt arm/fire/clear sequence
-  11. CSR file: read-only versus WARL versus tied-off versus absent
-  12. one directed test per trap cause, each in isolation, with mcause, mepc,
-      mtval and the handler entry address checked individually
-
-Why it matters: the same tests under different timing exercise different paths
-(the holding register, the discard on a redirect, AW/W collected in either
-order), and the block-level benches cover what a system run cannot isolate.
-Each parameterised run prints the parameters READ BACK from the elaborated
-design, so an override that was silently ignored cannot pass for green.
-
-Verdict: 11 x "ALL TESTS PASSED" + 1 x "DUAL-CORE TEST PASSED" + zero FAIL."""),
+Parameter overrides are read back after elaboration.
+PASS requires exit code zero, 21 completed runs and zero failures."""),
 
     ("Dual-core", """\
 What it does: runs only the dual-core test (tb_dual_core), in the console.
@@ -164,74 +128,37 @@ make progress through an arbitrated slave without deadlock or corruption.
 
 Verdict: "DUAL-CORE TEST PASSED" plus a clean shared-bus monitor."""),
 
-    ("Verilator SVA + coverage", """\
-What it does: runs the same tb_cpu_axi through Verilator (under WSL), with two
-layers ModelSim ASE cannot compile:
+    ("Verilator SVA + coverage", """Runs all 15 CPU/PIC benches through Verilator in WSL with applicable bound
+SVA. The nominal CPU system test also records user functional coverage.
 
-1. SVA (SystemVerilog Assertions) - the contracts written as temporal
-   properties and attached over the RTL with a bind, so the RTL is not
-   modified:
-   - AXI protocol on all four ports: VALID and payload stable under a delayed
-     READY, a response only after the address, at most one outstanding
-     transaction, no EXOKAY, VALID forbidden during reset
-   - pipeline promises: the claim (ack) and eoi are pulses exactly one cycle
-     long, interrupts are taken only at instruction boundaries, a trapping
-     instruction never commits, x0 reads 0, WSTRB only in the legal SB/SH/SW
-     shapes
-   - the PIC contract: cpu_irq / cpu_irq_vec are the registered offer of the
-     most urgent source, preemption is strictly above the top of the nesting
-     stack, and the depth is bounded by NEST_MAX
-   The difference from a test: a test checks ONE scenario; an assertion checks
-   the invariant in EVERY scenario, on every cycle.
+Assertions check AXI handshakes, pipeline/trap state and PIC scheduling/nesting.
+They check only the instances and scenarios executed by the tests.
 
-2. Functional coverage - measures which situations actually occurred: 92 bins
-   (every trap cause, every irq channel, errors on every AXI channel,
-   forwarding, backpressure and so on). Target: 88/92 (95%); the four misses
-   are deliberate (the ch5 negatives, and the backpressure bins the regression
-   configurations cover instead). The regression is gated: below the threshold
-   is a FAIL.
+The nominal coverage gate requires every mandatory bin. The current result is
+88/92; the four optional misses are two masked-source bins and two backpressure
+bins exercised separately by the ModelSim timing sweep.
 
-Verdict: exit code 0 plus "COVERAGE GATE PASSED" (the exit code IS reliable
-here, the script uses set -e). If the simulation never started at all (a build
-interrupted with Stop, WSL down, the g++ compile killed), the verdict is
-ENVIRONMENT (orange) rather than FAIL - zero PASS:/FAIL: lines means nothing
-was tested.
+PASS requires exit code zero, no failure messages, the coverage gate and the
+final 15-bench completion marker. Build failures are reported separately.
+The first C++ build may take several minutes."""),
 
-Note: the first run after an Assemble that really changes the program rebuilds
-the whole Verilator model (a few minutes under WSL). asm.py no longer touches
-the *_sym.vh files when the content is unchanged, so a RUN ALL with no .s edits
-keeps the incremental build."""),
+    ("Assemble", """Regenerates the simulation images and symbol tables:
 
-    ("Assemble", """\
-What it does: assembles the test programs from source into the images the
-simulation loads:
+  program_axi.s  -> program_axi.hex and program_axi_sym.vh
+  program_dual.s -> program_dual.hex and program_dual_sym.vh
+  isa_reference.py -> independent instruction trace and memory expectations
+  pic_reference.py -> independent priority expectations
 
-  program_axi.s  -> program_axi.hex  + program_axi_sym.vh
-  program_dual.s -> program_dual.hex + program_dual_sym.vh
+Auto-assemble checks the assembly and reference-generator timestamps before
+running simulation. Run Assemble explicitly after changing image inputs."""),
 
-The *_sym.vh file holds the label addresses from the program, and the
-testbench uses them in its checks, so a code change that moves a label updates
-the checks by itself.
+    ("RUN ALL", """Runs these steps in order:
+  1. Assemble programs and reference images.
+  2. ModelSim: all 21 CPU/PIC configurations.
+  3. Verilator: all 15 benches, SVA and nominal CPU coverage.
 
-When to run it: ONLY after editing a .s file. The "auto-assemble" checkbox
-does it automatically when the .s is newer than the .hex, so normally you never
-press the button by hand."""),
-
-    ("RUN ALL", """\
-What it does: the whole chain, in order:
-
-  1. Assemble (regenerate the hex and the symbol files)
-  2. Regression 12-run (ModelSim: four configurations, dual-core, PIC feature
-     bench, and the six block-level benches)
-  3. Verilator SVA + coverage (WSL)
-
-This is the "everything at once" verification - the equivalent of make asm +
-make modelsim + make test, with a per-step verdict in the results table.
-
-If a step reports an ENVIRONMENT error (orange: vsim missing, vlog failed, a
-stale lock), the chain stops - there is no point continuing on a broken
-environment. A test FAIL (red) does not stop the chain: the other flows still
-run, so you get the whole picture."""),
+An environment error stops the chain. A test failure is recorded and the
+remaining flows still run."""),
 
     ("Clean / Stop / verdicts", """\
 Clean: deletes the build artifacts (work/, obj_dir/, cov_annotated/,
@@ -242,11 +169,10 @@ Stop: kills the ENTIRE process tree of the current run (vsim spawns children,
 so taskkill /T). After a stop, an orphaned work/_lock is removed automatically,
 so the next run - from here or from a terminal - does not block on it.
 
-How the verdict is decided (important: the ModelSim exit code LIES - quit -f
-returns 0 even when tests fail):
-  - PASS (green)         the expected banners counted exactly (11 x "ALL TESTS
+Verdicts require the process status and the completed-test markers:
+  - PASS (green)         the expected banners counted exactly (20 x "ALL TESTS
                          PASSED" plus the dual-core one, for the regression)
-                         and zero "FAIL:" lines
+                         plus exit code zero, the final marker and zero failures
   - FAIL (red)           there is a "FAIL:", or banners are missing, so a test
                          failed
   - ENVIRONMENT (orange) the environment is broken: vsim not found, a compile
@@ -308,7 +234,7 @@ def vsim_running() -> bool:
 
 
 # ---------------------------------------------------------------- verdicts
-# ModelSim: exit code is meaningless -> parse. PASS needs exact banner counts
+# ModelSim: require exit code zero and exact completion counts.
 # AND zero FAIL: AND no infra token. Infra tokens win (orange).
 
 def _classify(lines, need_all, need_dual, extra_ok=None):
@@ -319,38 +245,33 @@ def _classify(lines, need_all, need_dual, extra_ok=None):
     n_all = txt.count("ALL TESTS PASSED")
     n_dual = txt.count("DUAL-CORE TEST PASSED")
     n_fail = sum(1 for l in lines if "FAIL:" in l)
-    n_pass = sum(1 for l in lines if "PASS:" in l)
-    if n_fail == 0 and n_all >= need_all and n_dual >= need_dual \
+    if n_fail == 0 and n_all == need_all and n_dual == need_dual \
             and (extra_ok is None or extra_ok(txt)):
-        return "PASS", f"{n_pass} checks, {n_all + n_dual} banner(s)"
+        return "PASS", f"{n_all + n_dual} completed run(s)"
     return "FAIL", f"{n_fail} FAIL, banners {n_all}+{n_dual} " \
                    f"(required {need_all}+{need_dual})"
 
 
 def verdict_sim(lines, rc):
-    return _classify(lines, 1, 0)
+    return _classify(lines, 1, 0, extra_ok=lambda _: rc == 0)
 
 
-# The regression runs twelve benches from one compile. Eleven of them end in a
-# banner containing "ALL TESTS PASSED" (four system-bench configurations, the
-# PIC feature bench and the six block-level benches) and the dual-core bench
-# ends in its own. Counting them exactly is what catches a run that died early:
-# a crashed bench prints no banner but also no "FAIL:" line.
-REGRESS_ALL_BANNERS  = 11
+# Keep counts aligned with regress.do; an early exit must not report PASS.
+REGRESS_ALL_BANNERS  = 20
 REGRESS_DUAL_BANNERS = 1
-REGRESS_RUNS         = 12
+REGRESS_RUNS         = 21
 
 
 def verdict_regress(lines, rc):
     st, sm = _classify(lines, REGRESS_ALL_BANNERS, REGRESS_DUAL_BANNERS,
-                       extra_ok=lambda t: "regression done" in t)
+                       extra_ok=lambda t: rc == 0 and f"REGRESSION PASS: {REGRESS_RUNS} runs" in t)
     if st == "PASS":
         sm = "%d/%d runs, " % (REGRESS_RUNS, REGRESS_RUNS) + sm
     return st, sm
 
 
 def verdict_dual(lines, rc):
-    return _classify(lines, 0, 1)
+    return _classify(lines, 0, 1, extra_ok=lambda _: rc == 0)
 
 
 def verdict_verilator(lines, rc):
@@ -360,7 +281,9 @@ def verdict_verilator(lines, rc):
             return "INFRA", f"environment error: '{tok}'"
     m = re.search(r"\[FCOV\] ---- (\d+)/(\d+) bins hit \((\d+)%\)", txt)
     fcov = f", FCOV {m.group(1)}/{m.group(2)} ({m.group(3)}%)" if m else ""
-    if rc == 0 and "COVERAGE GATE PASSED" in txt and "ALL TESTS PASSED" in txt:
+    complete = "SVA REGRESSION PASS: CPU, 15 benches; functional coverage gate passed" in txt
+    failed = any(token in txt for token in ("%Error", "FAIL:", "GATE FAILED"))
+    if rc == 0 and complete and not failed and "COVERAGE GATE PASSED" in txt:
         return "PASS", "SVA clean" + fcov
     if rc != 0 and "%Error" in txt:
         return "FAIL", "assertion fired / test FAIL" + fcov
@@ -490,7 +413,7 @@ class App(tk.Tk):
         actions = [
             ("msgui",   "ModelSim TB + waveforms", ["msgui"],
              "Run.TButton"),
-            ("regress", "Regression 12-run",        ["regress"],
+            ("regress", "Regression 21-run",        ["regress"],
              "Run.TButton"),
             ("dual",    "Dual-core",               ["dual"],
              "Run.TButton"),
@@ -686,29 +609,29 @@ class App(tk.Tk):
             return dict(key=key, label="Assemble", mode="stream",
                         argv=[sys.executable, "asm.py", "program_axi.s",
                               "program_axi.hex"],
-                        argv2=[sys.executable, "asm.py", "program_dual.s",
-                               "program_dual.hex"],
+                        more_argv=[
+                            [sys.executable, "asm.py", "program_dual.s", "program_dual.hex"],
+                            [sys.executable, "isa_reference.py"],
+                            [sys.executable, "pic_reference.py"],
+                        ],
                         verdict=verdict_asm)
         if key == "msgui":
             g = self._gflags()
             # mirrors sim.do, with optional -G overrides on the inner vsim
-            do = ("do compile.do; "
-                  f"vsim -voptargs=+acc {g} work.rv32i_tb_cpu_axi; "
-                  "do wave.do; run -all; wave zoom full")
+            do = f"set sim_args {{{g}}}; do sim.do"
             return dict(key=key, label="ModelSim TB (GUI)", mode="gui_tail",
                         argv=[self.vsim, "-do", do], verdict=verdict_sim)
         if key == "regress":
-            return dict(key=key, label="Regression 12-run", mode="stream",
+            return dict(key=key, label="Regression 21-run", mode="stream",
                         argv=[self.vsim, "-c", "-do",
                               "do regress.do; quit -f"],
                         verdict=verdict_regress,
-                        progress=re.compile(r"=== run (\d+)/(\d+): (.*?) ==="))
+                        progress=re.compile(r"RUN (\d+): (.*)"))
         if key == "dual":
             return dict(key=key, label="Dual-core", mode="stream",
                         argv=[self.vsim, "-c", "-do",
-                              "do compile.do; "
-                              "vsim -onfinish stop work.rv32i_tb_dual_core; "
-                              "run -all; quit -f"],
+                              "do compile.do; do run_common.do; "
+                              "run_case rv32i_tb_dual_core dual; quit -f"],
                         verdict=verdict_dual)
         if key == "vlt":
             wd = win_to_wsl(SIM_DIR)
@@ -721,7 +644,9 @@ class App(tk.Tk):
 
     def _needs_asm(self):
         for s, h in (("program_axi.s", "program_axi.hex"),
-                     ("program_dual.s", "program_dual.hex")):
+                     ("program_dual.s", "program_dual.hex"),
+                     ("isa_reference.py", "program_isa.hex"),
+                     ("pic_reference.py", "pic_reference.hex")):
             sp, hp = SIM_DIR / s, SIM_DIR / h
             if sp.exists() and (not hp.exists()
                                 or sp.stat().st_mtime > hp.stat().st_mtime):
@@ -765,8 +690,9 @@ class App(tk.Tk):
             if pr:
                 m = pr.search(s)
                 if m:
-                    self.q.put(("phase", f"phase {m.group(1)}/{m.group(2)}: {m.group(3)}",
-                                int(m.group(1)) * 20))
+                    current = int(m.group(1))
+                    self.q.put(("phase", f"run {current}/{REGRESS_RUNS}: {m.group(2)}",
+                                100 * current / REGRESS_RUNS))
 
         try:
             proc = subprocess.Popen(job["argv"], **popen_kwargs())
@@ -783,10 +709,12 @@ class App(tk.Tk):
             emit(line)
         rc = proc.wait()
 
-        # asm has a second program to build
-        if job.get("argv2") and rc == 0:
+        # Generate the remaining program and reference images in order.
+        for argv in job.get("more_argv", []):
+            if rc != 0:
+                break
             try:
-                p2 = subprocess.Popen(job["argv2"], **popen_kwargs())
+                p2 = subprocess.Popen(argv, **popen_kwargs())
                 self.proc = p2
                 for line in p2.stdout:
                     emit(line)
@@ -823,10 +751,10 @@ class App(tk.Tk):
                         for l in chunk.splitlines():
                             emit(l)
                         if not verdict_sent and \
-                                "ALL TESTS PASSED" in chunk:
+                                "SIMULATION PASS: rv32i_tb_cpu_axi" in chunk:
                             verdict_sent = True
                             self.q.put(("done_keep", job, "PASS",
-                                        "banner seen - the GUI stays open"))
+                                        "completion verified - the GUI stays open"))
                         if not verdict_sent and any("FAIL:" in l
                                                     for l in chunk.splitlines()):
                             verdict_sent = True
@@ -841,7 +769,7 @@ class App(tk.Tk):
             st, sm = job["verdict"](lines, proc.returncode or 0)
             self.q.put(("done", job, st, sm))
         else:
-            st, sm = job["verdict"](lines, 0)
+            st, sm = job["verdict"](lines, proc.returncode or 0)
             self.q.put(("done", job, st, sm + " (fereastra inchisa)"))
 
     # ----------------------------------------------------------- queue

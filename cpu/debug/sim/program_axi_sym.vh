@@ -47,8 +47,8 @@
 `define ADDR_wfi_spot 32'h00000b2c
 `define ADDR_after_wfi 32'h00000b30
 `define ADDR_wfi2_spot 32'h00000b54
-`define ADDR_end 32'h00000c58
-`define ADDR_hang 32'h00000c5c
-`define ADDR_ras_f 32'h00000c60
-`define ADDR_ras_g 32'h00000c68
-`define ADDR_ras_h 32'h00000c70
+`define ADDR_end 32'h00000c5c
+`define ADDR_hang 32'h00000c60
+`define ADDR_ras_f 32'h00000c64
+`define ADDR_ras_g 32'h00000c6c
+`define ADDR_ras_h 32'h00000c74
