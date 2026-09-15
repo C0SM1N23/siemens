@@ -1,23 +1,4 @@
-// ---------------------------------------------------------------------------
-// SoC RTL source list and COMPILE ORDER.
-//
-// Paths are relative to soc/debug/sim, where the flow runs. The order follows
-// the same bottom-up rule the CPU block uses (the reasoning is written out in
-// debug/sim/rtl.f): a module appears only after everything it instantiates.
-// Verilog resolves instances at elaboration, so a wrong order usually still
-// works - but `include and `define visibility is order-dependent, a missing
-// module is then reported at the level that needed it instead of as one
-// unresolved instance at the top, and lint/synthesis front-ends do require
-// definition before use.
-//
-// LEVELS (a module may only instantiate modules from a strictly lower level)
-//   L0  leaves: instantiate nothing
-//   L1  instantiate L0 only
-//   L2  block tops
-//   L3  the SoC
-// ---------------------------------------------------------------------------
-
-// --- include paths ----------------------------------------------------------
+// Source list; paths are relative to this simulation directory.
 +incdir+../../../cpu/hdl        // rv32i_defines.vh, shared CPU encodings
 +incdir+../../hdl           // soc_addr_map.vh
 

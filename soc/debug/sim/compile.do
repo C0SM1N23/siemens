@@ -1,15 +1,4 @@
-# One canonical compile for the SoC, shared by sim.do and regress.do.
-#
-# COMPILE ORDER
-#   1. soc_rtl.f   the whole design, levelled bottom-up: CPU/DMA/SRAM leaves,
-#                  then the interconnect, then the block tops, then soc_top
-#   2. benches     ck_rst_tb is a leaf and must precede the benches that use it
-#
-# The +incdir+ resolves tb_check.vh, the shared self-check task the CPU block's
-# benches already use; the SoC benches use the same one rather than growing a
-# second copy of it. tb_addr_map also needs the RTL include path, because it
-# builds the decoder from the same soc_addr_map.vh the design uses.
-
+onerror {quit -code 1 -f}
 vlib work
 vmap work work
 
@@ -38,3 +27,5 @@ vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_timer.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_pic_sources.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_pic_nest.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_pic_escalate.v
+
+vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_arb.v

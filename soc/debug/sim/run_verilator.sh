@@ -1,166 +1,19 @@
 #!/usr/bin/env bash
-# SoC lint + SVA run on Verilator.
-#
-# ModelSim ASE cannot compile SystemVerilog assertions, so the SVA layer under
-# soc/debug/sva runs here, exactly as the CPU block does it. This is a second
-# pair of eyes on the same design the ModelSim regression runs: the RTL, the
-# testbenches and the .do flow are untouched.
-#
-# Usage:  bash soc/debug/sim/run_verilator.sh
-#         (from Windows, via WSL: wsl bash soc/debug/sim/run_verilator.sh)
-#
-# Two stages, both of which must pass:
-#   1. lint    -Wall over the whole SoC. The waivers below are listed one by
-#              one with a reason; nothing is waived wholesale.
-#   2. run     every bench, with --assert, so the bind layer is live. An
-#              assertion failure prints %Error and fails the script.
-#
-# The bind layer is both files: the CPU block's assertion binds (cpu_core_sva,
-# pic_sva and the AXI4-Lite checkers on cpu_top, the PIC and the timer) plus
-# the SoC's own. The CPU half was missing here until the two were split, so a
-# CPU or PIC invariant broken by the integration would not have been caught in
-# a SoC run at all.
-
-set -e
+# SoC RTL lint and all integration benches with CPU, PIC, AXI and fabric SVA.
+set -euo pipefail
 cd "$(dirname "$0")"
-
-SVA="../sva"
-CPUSVA="../../../cpu/debug/sva"
-
-# --- waivers, each with a reason ---------------------------------------------
-# UNUSEDSIGNAL   the fabric carries full 32-bit addresses to every slave; the
-#                SRAM decodes 10 of them and the peripherals fewer still, so
-#                unused upper bits are the design, not an oversight.
-# PINCONNECTEMPTY the instruction path's decoder and RAM have their write
-#                channels deliberately tied off - the ibus cannot write.
-# EOFNEWLINE     missing final newline in five files inherited from the DMA
-#                branch; a text-file convention, not a design property, and not
-#                worth a diff in someone else's block.
-# DECLFILENAME   soc_fabric_sva.sv holds three checkers, one per fabric block.
-WAIVE="-Wno-UNUSEDSIGNAL -Wno-PINCONNECTEMPTY -Wno-EOFNEWLINE -Wno-DECLFILENAME"
-
-# --- known unrepaired findings in blocks this integration does not own --------
-# One entry per warning that lint is expected to raise, each pinned to file and
-# line. These are NOT waived: lint still reports them, and the stage still fails
-# on anything the list does not account for, so a new warning cannot hide behind
-# them. The list is also checked for staleness - if an entry stops appearing,
-# the block was fixed upstream and the entry has to go.
-#
-# dma/hdl/dma_channel.v:249
-#   req_len = (desc_len >= 32) ? 8'd7 : (desc_len[7:2] - 1)
-#   desc_len[7:2] is 6 bits, so the subtraction wraps before it is zero-extended
-#   into the 8-bit req_len. A descriptor shorter than 4 bytes gives 6'b111111
-#   and the channel issues a 64-beat burst: 256 bytes written for a request of
-#   at most 3. Reported in TO_MODIFY.md; the DMA is not ours to change.
-#
-# sram/hdl/dp_sram_regfile.v:99
-#   wire window_done = (window_cnt == WINDOW_CYCLES-1)
-#   window_cnt is WIN_W wide and WIN_W is a literal 10 while WINDOW_CYCLES is a
-#   parameter. They agree only at the default 1024. At 2048 the counter cannot
-#   reach the end of its own window, window_done never fires and BANDWIDTH_A/B
-#   stop updating. Reported in TO_MODIFY.md; the DP-SRAM is not ours to change.
-KNOWN_LINT="dma/hdl/dma_channel.v:249 sram/hdl/dp_sram_regfile.v:99"
-
-echo "=== stage 1/2: lint ==="
-set +e
-lint_out=$(verilator --lint-only -Wall $WAIVE --top-module soc_top -f soc_rtl.f 2>&1)
-set -e
-echo "$lint_out"
-
-# every diagnostic line, minus the ones the known list accounts for
-unexpected=$(echo "$lint_out" | grep -E '^%(Warning|Error)-')
-for k in $KNOWN_LINT; do
-    unexpected=$(echo "$unexpected" | grep -vF "$k" || true)
+source ../../../cpu/debug/sim/verilator_common.sh
+python3 ../../../cpu/debug/sim/check_lint.py soc
+CPUSVA=../../../cpu/debug/sva
+SVA=("$CPUSVA/axi_lite_sva.sv" "$CPUSVA/rv32i_cpu_core_sva.sv"
+     "$CPUSVA/pic_sva.sv" "$CPUSVA/rv32i_bind_core_sva.sv"
+     ../sva/soc_axi_full_sva.sv ../sva/soc_fabric_sva.sv ../sva/soc_bind_sva.sv)
+for top in soc_tb_map_consistency soc_tb_addr_map soc_tb_arb soc_tb_full2lite \
+    soc_tb_full2lite_err soc_tb_perip_backpressure soc_tb_top soc_tb_stress \
+    soc_tb_dma_len soc_tb_dma_irq soc_tb_dma_channels soc_tb_dma_err soc_tb_timer \
+    soc_tb_pic_sources soc_tb_pic_nest soc_tb_pic_escalate; do
+    run_asserted "$top" -f soc_rtl.f +incdir+../../../cpu/debug/hdl \
+        +incdir+../../hdl +incdir+../../../cpu/debug/sim \
+        ../../../cpu/debug/hdl/ck_rst_tb.v "../hdl/$top.v" "${SVA[@]}"
 done
-if [ -n "$unexpected" ]; then
-    echo
-    echo "FAIL: lint raised something the known-findings list does not cover:"
-    echo "$unexpected"
-    exit 1
-fi
-
-# staleness: a known finding that no longer fires means the list is out of date
-for k in $KNOWN_LINT; do
-    echo "$lint_out" | grep -qF "$k" || {
-        echo "FAIL: '$k' no longer warns - it was fixed upstream, drop it from KNOWN_LINT"
-        exit 1
-    }
-done
-
-echo "lint clean apart from $(echo "$KNOWN_LINT" | wc -w) known finding(s) in blocks this integration does not own"
-
-# --- stage 2: build and run each bench with the assertion layer --------------
-# --timing is needed for the benches' delay controls; --assert turns the bound
-# SVA into real checks; --binary builds a self-contained executable.
-run_bench () {
-    local top="$1"
-    local extra="$2"
-    echo
-    echo "=== running $top with assertions ==="
-    verilator --binary --timing --assert -Wno-fatal $WAIVE \
-        --unroll-count 64 \
-        --top-module "$top" -o "V$top" \
-        -f soc_rtl.f \
-        +incdir+../../../cpu/debug/hdl $extra \
-        ../../../cpu/debug/hdl/ck_rst_tb.v \
-        "../hdl/$top.v" \
-        "$CPUSVA"/axi_lite_sva.sv \
-        "$CPUSVA"/rv32i_cpu_core_sva.sv \
-        "$CPUSVA"/pic_sva.sv \
-        "$CPUSVA"/rv32i_bind_core_sva.sv \
-        "$SVA"/soc_axi_full_sva.sv \
-        "$SVA"/soc_fabric_sva.sv \
-        "$SVA"/soc_bind_sva.sv \
-        > "build_$top.log" 2>&1 || { cat "build_$top.log"; return 1; }
-
-    "./obj_dir/V$top" | tee "run_$top.log"
-
-    grep -q "ALL TESTS PASSED" "run_$top.log" \
-        || { echo "FAIL: $top self-check"; return 1; }
-    grep -q "%Error" "run_$top.log" \
-        && { echo "FAIL: $top assertion fired"; return 1; }
-    return 0
-}
-
-# The map-consistency check includes both address maps, and the backpressure
-# bench builds the peripheral leg from the same window definitions the design
-# uses, so both need the RTL include path.
-MAPINC="+incdir+../../hdl +incdir+../../../cpu/debug/sim"
-HDLINC="+incdir+../../hdl"
-
-status=0
-
-# structural checks
-run_bench soc_tb_map_consistency "$MAPINC" || status=1
-run_bench soc_tb_addr_map                  || status=1
-
-# the burst bridge, clean and with an error inside a burst
-run_bench soc_tb_full2lite                 || status=1
-run_bench soc_tb_full2lite_err             || status=1
-
-# the slaves that have no timing knob of their own
-run_bench soc_tb_perip_backpressure "$HDLINC" || status=1
-
-# the system, and the system under load
-run_bench soc_tb_top                       || status=1
-run_bench soc_tb_stress                    || status=1
-run_bench soc_tb_dma_len                   || status=1
-
-# the DMA paths no system run reached
-run_bench soc_tb_dma_irq                   || status=1
-run_bench soc_tb_dma_channels              || status=1
-run_bench soc_tb_dma_err                   || status=1
-
-# the interrupt paths no system run reached
-run_bench soc_tb_timer                     || status=1
-run_bench soc_tb_pic_sources               || status=1
-run_bench soc_tb_pic_nest                  || status=1
-run_bench soc_tb_pic_escalate              || status=1
-
-echo
-if [ $status -eq 0 ]; then
-    echo "== run_verilator (soc): PASS =="
-else
-    echo "== run_verilator (soc): FAIL =="
-fi
-exit $status
+echo "SVA REGRESSION PASS: SoC, 16 benches"

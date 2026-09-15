@@ -1,0 +1,19 @@
+{
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 117 31": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 117 47": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 128 31": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 128 47": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 142 31": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 142 47": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 219 30": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 219 46": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 221 35": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 221 51": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 223 35": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 223 51": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 225 35": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_axi4_lite_slave.v 225 51": 1,
+  "WIDTHEXPAND dma/hdl/mc_dma_channel.v 242 71": 1,
+  "WIDTHEXPAND sram/hdl/dp_sram_regfile.v 105 36": 1,
+  "WIDTHTRUNC dma/hdl/mc_dma.v 102 14": 1
+}
