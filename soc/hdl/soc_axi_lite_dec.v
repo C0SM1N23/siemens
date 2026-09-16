@@ -1,6 +1,7 @@
 // AXI4-Lite decoder: one master, N disjoint address windows and a DECERR responder.
 // One outstanding transaction per direction. W waits until AW supplies its route.
-// B/R use the accepted address selection; the next AR may overlap a completing R.
+// B/R use the accepted address selection, held until that response is taken: the
+// next address is refused while one is owed, so a route is never overwritten.
 // BASE/MASK pack slave 0 in the least-significant word. Responses pass through.
 
 module soc_axi_lite_dec #(
@@ -82,6 +83,7 @@ module soc_axi_lite_dec #(
     reg wr_err_q, rd_err_q;
     reg wr_addr_valid_q;
     reg wr_data_valid_q;
+    reg rd_addr_valid_q;
 
     always @(posedge clk_i or negedge rst_n_i) begin
         if (!rst_n_i) wr_addr_valid_q <= 1'b0;
@@ -93,6 +95,17 @@ module soc_axi_lite_dec #(
         if (!rst_n_i) wr_data_valid_q <= 1'b0;
         else if (m_bvalid_o && m_bready_i) wr_data_valid_q <= 1'b0;
         else if (m_wvalid_i && m_wready_o) wr_data_valid_q <= 1'b1;
+    end
+
+    // The read counterpart: a read has been accepted and its R has not been
+    // taken yet. rd_sel_q/rd_err_q are the only routing the read path has, so
+    // accepting a second AR while this is set would re-point the mux at the new
+    // slave and change RDATA/RRESP under a master that is still holding RREADY
+    // low - a response delivered from the wrong slave, and an unstable R beat.
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (!rst_n_i) rd_addr_valid_q <= 1'b0;
+        else if (m_rvalid_o && m_rready_i) rd_addr_valid_q <= 1'b0;
+        else if (m_arvalid_i && m_arready_o) rd_addr_valid_q <= 1'b1;
     end
 
     always @(posedge clk_i or negedge rst_n_i) begin
@@ -119,13 +132,21 @@ module soc_axi_lite_dec #(
     wire [N-1:0] wr_sel = wr_addr_valid_q ? wr_sel_q : aw_hit;
     wire         wr_err = wr_addr_valid_q ? wr_err_q : aw_none;
 
+    // One address, one data beat and one read at a time. Every acceptance -
+    // the master's READY, the slave's VALID and the error responder's own
+    // bookkeeping - is qualified by the same three wires, so the decoder can
+    // never record half an acceptance the master port refused.
+    wire         aw_accept = ~wr_addr_valid_q;
+    wire         w_accept = ~wr_data_valid_q;
+    wire         ar_accept = ~rd_addr_valid_q;
+
     // DECERR responder for unmapped addresses
     reg err_awdone, err_wdone, err_bvalid;
     reg  err_rvalid;
 
-    wire err_awready = aw_none & ~err_awdone & ~err_bvalid;
-    wire err_wready = wr_err & ~err_wdone & ~err_bvalid;
-    wire err_arready = ar_none & ~err_rvalid;
+    wire err_awready = aw_none & ~err_awdone & ~err_bvalid & aw_accept;
+    wire err_wready = wr_err & ~err_wdone & ~err_bvalid & w_accept;
+    wire err_arready = ar_none & ~err_rvalid & ar_accept;
 
     wire err_aw_hs = m_awvalid_i & err_awready;
     wire err_w_hs = m_wvalid_i & err_wready;
@@ -183,13 +204,13 @@ module soc_axi_lite_dec #(
     end
 
     // master-side outputs
-    assign m_awready_o = !wr_addr_valid_q && (aw_none ? err_awready : |(aw_hit & s_awready_i));
-    assign m_wready_o  = !wr_data_valid_q && (wr_err ? err_wready : |(wr_sel & s_wready_i));
+    assign m_awready_o = aw_none ? err_awready : (aw_accept & |(aw_hit & s_awready_i));
+    assign m_wready_o  = wr_err ? err_wready : (w_accept & |(wr_sel & s_wready_i));
     assign m_bvalid_o  = wr_addr_valid_q && (wr_err_q ? err_bvalid : |(wr_sel_q & s_bvalid_i));
     assign m_bresp_o   = wr_err_q ? RESP_DECERR : bresp_mux;
 
-    assign m_arready_o = ar_none ? err_arready : |(ar_hit & s_arready_i);
-    assign m_rvalid_o  = rd_err_q ? err_rvalid : |(rd_sel_q & s_rvalid_i);
+    assign m_arready_o = ar_none ? err_arready : (ar_accept & |(ar_hit & s_arready_i));
+    assign m_rvalid_o  = rd_addr_valid_q && (rd_err_q ? err_rvalid : |(rd_sel_q & s_rvalid_i));
     assign m_rresp_o   = rd_err_q ? RESP_DECERR : rresp_mux;
     assign m_rdata_o   = rd_err_q ? 32'h0 : rdata_mux;
 
@@ -198,19 +219,19 @@ module soc_axi_lite_dec #(
         for (i = 0; i < N; i = i + 1) begin : g_fanout
             assign s_awaddr_o[i*32+:32] = m_awaddr_i;
             assign s_awprot_o[i*3+:3]   = m_awprot_i;
-            assign s_awvalid_o[i]       = m_awvalid_i & aw_hit[i] & ~wr_addr_valid_q;
+            assign s_awvalid_o[i]       = m_awvalid_i & aw_hit[i] & aw_accept;
 
             assign s_wdata_o[i*32+:32]  = m_wdata_i;
             assign s_wstrb_o[i*4+:4]    = m_wstrb_i;
-            assign s_wvalid_o[i]        = m_wvalid_i & wr_sel[i] & ~wr_data_valid_q;
+            assign s_wvalid_o[i]        = m_wvalid_i & wr_sel[i] & w_accept;
 
             assign s_bready_o[i]        = m_bready_i & wr_sel_q[i] & wr_addr_valid_q;
 
             assign s_araddr_o[i*32+:32] = m_araddr_i;
             assign s_arprot_o[i*3+:3]   = m_arprot_i;
-            assign s_arvalid_o[i]       = m_arvalid_i & ar_hit[i];
+            assign s_arvalid_o[i]       = m_arvalid_i & ar_hit[i] & ar_accept;
 
-            assign s_rready_o[i]        = m_rready_i & rd_sel_q[i];
+            assign s_rready_o[i]        = m_rready_i & rd_sel_q[i] & rd_addr_valid_q;
         end
     endgenerate
 

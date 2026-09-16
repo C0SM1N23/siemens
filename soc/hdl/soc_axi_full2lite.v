@@ -1,6 +1,7 @@
 // AXI4-Full to AXI4-Lite bridge: one Lite transaction per burst beat.
 // Independent read/write paths, one burst outstanding per direction.
-// Supports FIXED/INCR with 32-bit beats; other size/burst encodings return SLVERR.
+// The supported profile is FIXED/INCR, 32-bit beats, word-aligned start address.
+// Anything else is refused with SLVERR on every beat and never reaches the bus.
 // Reads pass RRESP per beat. Write aggregation is a project policy: DECERR > SLVERR > OKAY.
 
 module soc_axi_full2lite (
@@ -79,8 +80,13 @@ module soc_axi_full2lite (
 
     wire r_last = (r_beat == r_len);
 
+    // The supported profile, decided once at the AR handshake. A 32-bit beat
+    // that does not start on a word boundary has no meaning on the Lite side:
+    // the slaves take a word address and ignore ADDR[1:0], so an unaligned
+    // burst would silently read the containing words instead of the bytes the
+    // master asked for. It is refused rather than rounded.
     wire ar_supported = (s_arburst_i == BURST_INCR || s_arburst_i == BURST_FIXED)
-                    && (s_arsize_i == SIZE_32);
+                    && (s_arsize_i == SIZE_32) && (s_araddr_i[1:0] == 2'b00);
 
     assign s_arready_o = (r_state == R_IDLE);
 
@@ -158,7 +164,7 @@ module soc_axi_full2lite (
     wire w_last = (w_beat == w_len);
 
     wire aw_supported = (s_awburst_i == BURST_INCR || s_awburst_i == BURST_FIXED)
-                    && (s_awsize_i == SIZE_32);
+                    && (s_awsize_i == SIZE_32) && (s_awaddr_i[1:0] == 2'b00);
 
     assign s_awready_o = (w_state == W_IDLE);
 

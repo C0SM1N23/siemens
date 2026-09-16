@@ -1,5 +1,7 @@
 // AXI4-Lite arbiter: M masters, one slave, round-robin between transactions.
-// Each grant locks one direction until its response handshake.
+// Each grant locks one direction until its response handshake, and carries
+// exactly one address and one data beat: a grant is one transaction, not a
+// window during which the holder may start more.
 // A simultaneous read/write request receives a write grant first; the read waits.
 // Forward progress requires the selected slave and master to complete their handshakes.
 
@@ -81,6 +83,37 @@ module soc_axi_lite_arb #(
     // one transaction per grant: let go on the response beat
     wire release_gnt = (s_bvalid_i & s_bready_o[0]) | (s_rvalid_i & s_rready_o[0]);
 
+    // What this grant has already handed to the slave. A write's address and
+    // data may arrive in either order and in different cycles, so they are
+    // tracked apart; each is forwarded once. Without this, a master that raises
+    // its next AWVALID before taking the B of the current write would reach the
+    // slave a second time under the same grant, and a Lite slave that accepts
+    // one transaction at a time would be holding two - the second write's data
+    // paired with the first write's address.
+    reg  aw_taken_q, w_taken_q, ar_taken_q;
+
+    wire s_aw_hs = s_awvalid_o[0] & s_awready_i;
+    wire s_w_hs = s_wvalid_o[0] & s_wready_i;
+    wire s_ar_hs = s_arvalid_o[0] & s_arready_i;
+
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i) aw_taken_q <= 1'b0;
+        else if (release_gnt) aw_taken_q <= 1'b0;
+        else if (s_aw_hs) aw_taken_q <= 1'b1;
+    end
+
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i) w_taken_q <= 1'b0;
+        else if (release_gnt) w_taken_q <= 1'b0;
+        else if (s_w_hs) w_taken_q <= 1'b1;
+    end
+
+    always @(posedge clk_i or negedge rst_n_i) begin
+        if (~rst_n_i) ar_taken_q <= 1'b0;
+        else if (release_gnt) ar_taken_q <= 1'b0;
+        else if (s_ar_hs) ar_taken_q <= 1'b1;
+    end
+
     always @(posedge clk_i or negedge rst_n_i) begin
         if (~rst_n_i) gnt <= {M{1'b0}};
         else if (busy) gnt <= release_gnt ? {M{1'b0}} : gnt;
@@ -133,21 +166,21 @@ module soc_axi_lite_arb #(
         for (k = 0; k < M; k = k + 1) if (gnt[k]) s_arprot_o = m_arprot_i[k*3+:3];
     end
 
-    assign s_awvalid_o[0] = write_grant_q && |(gnt & m_awvalid_i);
-    assign s_wvalid_o[0]  = write_grant_q && |(gnt & m_wvalid_i);
+    assign s_awvalid_o[0] = write_grant_q && !aw_taken_q && |(gnt & m_awvalid_i);
+    assign s_wvalid_o[0]  = write_grant_q && !w_taken_q && |(gnt & m_wvalid_i);
     assign s_bready_o[0]  = write_grant_q && |(gnt & m_bready_i);
-    assign s_arvalid_o[0] = !write_grant_q && |(gnt & m_arvalid_i);
+    assign s_arvalid_o[0] = !write_grant_q && !ar_taken_q && |(gnt & m_arvalid_i);
     assign s_rready_o[0]  = !write_grant_q && |(gnt & m_rready_i);
 
     // slave's responses back to the granted master, everyone else sees zeros
     genvar g;
     generate
         for (g = 0; g < M; g = g + 1) begin : g_fanin
-            assign m_awready_o[g]      = gnt[g] & write_grant_q & s_awready_i;
-            assign m_wready_o[g]       = gnt[g] & write_grant_q & s_wready_i;
+            assign m_awready_o[g]      = gnt[g] & write_grant_q & ~aw_taken_q & s_awready_i;
+            assign m_wready_o[g]       = gnt[g] & write_grant_q & ~w_taken_q & s_wready_i;
             assign m_bvalid_o[g]       = gnt[g] & write_grant_q & s_bvalid_i;
             assign m_bresp_o[g*2+:2]   = s_bresp_i;
-            assign m_arready_o[g]      = gnt[g] & ~write_grant_q & s_arready_i;
+            assign m_arready_o[g]      = gnt[g] & ~write_grant_q & ~ar_taken_q & s_arready_i;
             assign m_rvalid_o[g]       = gnt[g] & ~write_grant_q & s_rvalid_i;
             assign m_rresp_o[g*2+:2]   = s_rresp_i;
             assign m_rdata_o[g*32+:32] = s_rdata_i;
