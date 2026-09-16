@@ -178,7 +178,6 @@ module mc_dma_channel (
                     else if (burst_done_i) begin
                         if (abort)
                             state <= STATE_SUSPENDED;
-                        // Modificat. Inainte trecea fara scriere, doar citire
                         else if (desc_len <= 32'd32 && desc_ctrl[0] && active_is_write)
                             state <= STATE_DONE;
                     end
@@ -227,7 +226,6 @@ module mc_dma_channel (
             req_valid_o <= 1'b0;
     end
 
-    // ==== FIX 1: Semnalele de date devin pur combinaționale ====
     always @(*) begin
         req_is_write_o = 1'b0;
         req_len_o      = 8'h00;
@@ -255,13 +253,13 @@ module mc_dma_channel (
             status_o <= {29'd0, state};
     end
 
-    reg [2:0] state_d; // delay state pentru a detecta tranzitia
+    reg [2:0] state_d; // Delayed state for edge detection
     always @(posedge clk_i or negedge rst_ni) begin
         if (~rst_ni) state_d <= STATE_IDLE;
         else state_d <= state;
     end
 
-    // Puls generat doar la intrarea in DONE sau ERROR
+    // Generate an interrupt when the channel is done or encounters an error
     always @(posedge clk_i or negedge rst_ni) begin
         if (~rst_ni)
             irq_o <= 1'b0;

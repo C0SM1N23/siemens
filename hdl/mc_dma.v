@@ -73,22 +73,18 @@ module mc_dma (
     wire [N_CHANNELS-1:0]       ch_req_is_wr;
     wire [N_CHANNELS-1:0]       ch_gnt;
     reg  [N_CHANNELS-1:0]       active_master_ch;
-    // 1. Between Register File and Channels (CH0 - CH3)
    
     wire [31:0] sched_policy;
 
-    wire [31:0] int_status_w, int_enable_w;
+    wire [31:0] int_status, int_enable;
  
-    // 3. Between Priority Arbiter and AXI4-Full Master
     wire        master_req_valid;
     wire [31:0] master_req_addr;
     wire [ 7:0] master_req_len;
     wire        master_req_is_write;
-    // FIX BUG 2: identitatea canalului caruia ii apartine cererea curenta
     wire [ 1:0] master_req_ch_id;
     wire        master_req_ready;
 
-    // 4. Scatter-Gather Loop (Master to Channels)
     wire [31:0] fetch_data_out;
     wire        fetch_data_valid;
 
@@ -114,7 +110,7 @@ module mc_dma (
     wire global_axi_error  = (m_axi_bvalid_i && m_axi_bready_o && m_axi_bresp_i[1]) || 
                              (m_axi_rvalid_i && m_axi_rready_o && m_axi_rresp_i[1]);
 
-    assign irq_o = int_status_w[3:0] & int_enable_w[3:0];
+    assign irq_o = int_status[3:0] & int_enable[3:0];
  
     // Module Instantiations 
 
@@ -147,11 +143,12 @@ module mc_dma (
         .ch_status_i     (ch_status),
 
         .sched_policy_o   (sched_policy),
-        .int_status_o     (int_status_w),
-        .int_enable_o     (int_enable_w),
+        .int_status_o     (int_status),
+        .int_enable_o     (int_enable),
         .hw_irq_i         (hw_irq)
     );
     
+    // 2. DMA Channels
     for (i = 0; i < N_CHANNELS; i = i + 1) begin : gen_dma_channels
         mc_dma_channel ch_inst (
             .clk_i            (clk_i),

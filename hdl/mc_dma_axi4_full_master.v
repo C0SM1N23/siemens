@@ -66,12 +66,9 @@ module mc_dma_axi4_full_master (
 
     reg [2:0] state;
     reg [7:0] burst_cnt;
-    // data_fifo per-canal (4 canale x 8 cuvinte), nu un singur buffer global.
-    // Un buffer global partajat intre canale corupe datele cand doua canale
-    // sunt intercalate de arbitru (ex: Round-Robin) - vezi active_ch_id mai jos.
     reg [31:0] data_fifo [0:3][0:7];
 
-    // Retine carui canal ii apartine tranzactia curenta
+    // Active channel ID tracking for data FIFO
     reg [1:0] active_ch_id;
     always @(posedge clk_i or negedge rst_ni) begin
         if (~rst_ni)
@@ -139,8 +136,6 @@ module mc_dma_axi4_full_master (
     end
 
     // 3. Arbiter Ready Signal
-    // Tells the arbiter we are free to take a new command
-    // ==== FIX 2: Semnal combinațional dependent doar de stare ====
     always @(*) begin
         if (state == STATE_IDLE)
             master_req_ready_o = 1'b1;
