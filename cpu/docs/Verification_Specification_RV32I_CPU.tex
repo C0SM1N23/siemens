@@ -5,8 +5,8 @@
 \documentclass[11pt]{article}
 
 \newcommand{\doctitle}{Verification Specification --- RV32I Processor Core}
-\newcommand{\docrev}{1.1}
-\newcommand{\docdate}{15 September 2026}
+\newcommand{\docrev}{1.2}
+\newcommand{\docdate}{16 September 2026}
 
 \newcommand{\docsubject}{RV32I processor core (three-stage pipeline)}
 \input{preamble_spec}
@@ -314,7 +314,7 @@ is claimed.
 \paragraph{Testing the checks.} The mutation script copies sources into a temporary
 workspace, runs passing baselines, injects one defect
 at a time and requires a behavioural failure in the selected test. A compile
-error does not count as detection. The audit detected all 13 injected defects
+error does not count as detection. All 16 injected defects were detected
 across CPU, PIC and SoC. CPU mutations cover subtraction, arithmetic shift,
 load sign extension, byte/halfword strobes and counter write/carry priority.
 A surviving byte-strobe mutation exposed a missing untouched-lane check;
@@ -906,8 +906,8 @@ CSR access, fields and reset           & 1 & 293 & pass \\
 Trap causes, one case each             & 1 & 120 & pass \\
 Branch predictor                       & 1 & 68 & pass \\
 Arithmetic path                        & 1 & 57 & pass \\
-\midrule
 Counter writes and carry               & 1 & 159 & pass \\
+\midrule
 \textbf{Total, directed checks}        & \textbf{10} & \textbf{1\,084} & \textbf{0 failures} \\
 \bottomrule
 \end{tabular}

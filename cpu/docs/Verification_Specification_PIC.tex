@@ -5,8 +5,8 @@
 \documentclass[11pt]{article}
 
 \newcommand{\doctitle}{Verification Specification --- Programmable Interrupt Controller}
-\newcommand{\docrev}{1.1}
-\newcommand{\docdate}{15 September 2026}
+\newcommand{\docrev}{1.2}
+\newcommand{\docdate}{16 September 2026}
 \newcommand{\docsubject}{Programmable interrupt controller, sixteen sources,
 hardware nesting}
 
@@ -586,10 +586,11 @@ as a tested scenario.
 \subsubsection{Self-checking comparison}
 
 Every check compares one observed value against one expected value. Mismatches
-are always printed; successful individual checks require 	exttt{+verbose}. A mismatch increments an error count, and a test
-ends by printing a pass banner if the count is zero and a failure banner
-otherwise. Tests do not stop at the first mismatch, so a single run reports
-every property it broke rather than only the first.
+are always printed; successful individual checks require \texttt{+verbose}. A
+mismatch increments an error count, and a test ends by printing a pass banner
+if the count is zero and a failure banner otherwise. Tests do not stop at the
+first mismatch, so a single run reports every property it broke rather than
+only the first.
 
 Two checking conventions are used in addition to the plain value comparison, and
 both exist because the plain comparison is too weak on its own:
@@ -1018,7 +1019,7 @@ reported in the specifications for the blocks they belong to.
 
 These runs are drawn from the CPU/PIC regression (21 runs, 8\,473 labelled
 checks plus four independent ISA traces) and the SoC regression (25 runs,
-444 labelled checks). Both complete without failures, compilation errors or
+533 labelled checks). Both complete without failures, compilation errors or
 ModelSim warnings. Labelled check counts include bus response checks and are
 not a measure of state-space coverage.
 

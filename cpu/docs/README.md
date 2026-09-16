@@ -43,10 +43,18 @@ after editing the specifications. The original Siemens briefs remain excluded.
 - `note/`: working notes and historical change records.
 
 The four specifications above are the current technical documents, revision
-1.1, 15 September 2026. Older notes and diagrams are retained for context and may
+1.2, 16 September 2026. Older notes and diagrams are retained for context and may
 show earlier interfaces. SoC architecture and verification are under
 [../../soc/](../../soc/).
 
 Built page counts: CPU design 27, CPU verification 16, PIC design 24, PIC
 verification 18. The audit corrected behaviour and evidence without removing
 the detailed interface, register and verification-plan sections.
+
+Revision 1.2 re-issues the set after the SoC fabric ordering work. The two
+design specifications were re-checked against the RTL and needed no change;
+they carry the new revision because the set is issued together. The two
+verification specifications changed: the mutation count is now 16, the SoC
+regression figure 533 labelled checks, and two rendering faults are fixed --- a
+mangled `\texttt` in the PIC document and a misplaced table rule in the CPU
+one.
