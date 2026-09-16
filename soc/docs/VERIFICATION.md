@@ -9,10 +9,10 @@ Measured on 15 September 2026 using the integrated sources listed in
 | Bench | ModelSim runs | Main checks |
 |---|---:|---|
 | `soc_tb_map_consistency` | 1 | CPU test map agrees with SoC constants |
-| `soc_tb_addr_map` | 1 | Window boundaries, unmapped access, W-before-AW, mapped DECERR |
-| `soc_tb_arb` | 1 | Two masters, simultaneous directions, held B response, read completion |
-| `soc_tb_full2lite` | 1 | INCR/FIXED bursts, strobes, rejected WRAP/narrow transfers, recovery |
-| `soc_tb_full2lite_err` | 1 | Per-beat read errors, mixed write responses, later clean bursts |
+| `soc_tb_addr_map` | 1 | Window boundaries, unmapped access, W-before-AW, mapped DECERR, read ordering against an unread response |
+| `soc_tb_arb` | 1 | Two masters, simultaneous directions, held B response, one transaction per grant against a permissive slave, AW/W in both orders, accepted against completed |
+| `soc_tb_full2lite` | 1 | INCR/FIXED bursts, strobes, rejected WRAP/narrow/unaligned transfers, recovery |
+| `soc_tb_full2lite_err` | 1 | Per-beat read errors, mixed write responses, later clean bursts, the same folds with late acceptance |
 | `soc_tb_perip_backpressure` | 1 | Split AW/W, stalled responses, peripheral state preservation |
 | `soc_tb_top` | 4 | CPU programs transfer, WFI, completion through PIC |
 | `soc_tb_stress` | 4 | CPU/DMA contention, both memory ports, collisions, decode errors |
@@ -24,12 +24,35 @@ Measured on 15 September 2026 using the integrated sources listed in
 | `soc_tb_pic_sources` | 1 | All sixteen software-triggered source IDs through the CPU |
 | `soc_tb_pic_nest` | 1 | Nested handler order and balanced claim/EOI counts |
 | `soc_tb_pic_escalate` | 1 | Deadline escalation changes handler and claim order |
-| **Total** | **25** | **444 labelled checks, zero failures** |
+| **Total** | **25** | **533 labelled checks, zero failures** |
 
 Verilator executes each of the 16 distinct benches at its default configuration
 with bound CPU/PIC, AXI and fabric SVA. ModelSim additionally runs the fixed
 latency and seeded backpressure variants. All listed runs passed. A positive
 check count includes transaction response checks; it is not functional coverage.
+
+## Comparison against an external implementation
+
+`soc_tb_pulp_compare` drives `soc_axi_lite_dec` and `axi_lite_demux` from
+[pulp-platform/axi](https://github.com/pulp-platform/axi), configured with
+`MaxTrans = 1`, from one shared stimulus generator (`soc_lite_seq_master`) and
+behind identical slave stubs. It compares the data, response and order of every
+completed transaction, and how many address handshakes each slave saw. Timing is
+not compared: each side runs its own handshakes at its own pace.
+
+The upstream sources are not vendored here. `run_pulp_compare.sh` fetches them
+into `soc/debug/sim/pulp_ref/`, which is git-ignored, or uses an existing
+checkout given in `PULP_AXI_DIR` / `PULP_CC_DIR`. Measured against upstream
+`axi` `da8793b` with `common_cells` `v2.0.0-beta.2`: ten transactions, all
+matching. The only file in this repository that touches upstream is
+`soc/debug/hdl/pulp_lite_demux_wrap.sv`, which converts between packed vectors
+and upstream's request/response structs and contains no upstream code.
+
+Two behaviours are outside the comparison because they are structural
+differences rather than disagreements: upstream takes the routing decision as an
+input and has no built-in DECERR responder, and its burst splitter rewrites any
+failing beat to SLVERR where this project keeps DECERR > SLVERR > OKAY. Both are
+recorded in [../README.md](../README.md).
 
 ## Expected results and checker validation
 
@@ -45,6 +68,17 @@ Mutation testing reinstates stale write routing, permits both grant directions
 and replaces response aggregation; each selected test rejects its mutation.
 Mapped DECERR traffic also validates the corrected assertion premise.
 
+The one-transaction-per-channel rules were checked the same way. Removing the
+decoder's read gate makes `soc_tb_addr_map` fail on the first ordering check,
+fires the bound `ar_needs_free_route` assertion, and makes the upstream
+comparison diverge: for the read whose response was left unread, upstream
+returns the addressed slave's word and the ungated decoder returns the other
+slave's, then strands the orphaned response and completes eight of the ten
+transactions. Removing the arbiter's per-grant address gate makes `soc_tb_arb`
+report a second AW inside one grant. The arbiter bench's second half runs behind
+a slave that keeps its READY signals asserted while it owes a response, because
+against the strict slave the slave's own back-pressure hides the obligation.
+
 All functional benches use bounded completion and shared failure handling.
 `run_common.do` verifies `test_done`, zero errors and parameter readback;
 `run_verilator.sh` rejects process failures and missing verdicts. RTL lint uses
@@ -58,6 +92,7 @@ From the repository root, with the named tools installed:
 make asm
 make soc
 make soc-sva
+make soc-pulp
 ```
 
 Direct ModelSim command, from `soc/debug/sim`:
@@ -72,14 +107,25 @@ Direct Verilator command, from the repository root in Bash/WSL:
 bash soc/debug/sim/run_verilator.sh
 ```
 
+Comparison against the external implementation, from `soc/debug/sim` in
+Bash/WSL. It needs network access on the first run, or an existing checkout:
+
+```text
+bash run_pulp_compare.sh
+PULP_AXI_DIR=/path/to/axi PULP_CC_DIR=/path/to/common_cells bash run_pulp_compare.sh
+```
+
 The separate `soc_probe_upstream` diagnostic ran on both simulators. Its
 observations and the sole list of DMA/SRAM findings are in
 [TO_MODIFY.md](../../TO_MODIFY.md); it is excluded from the passing regression.
 
 ## Limits
 
-Finite timing seeds do not exhaust AXI interleavings. The PIC's spurious-claim
-race is tested at block level; the integrated peripheral wiring does not expose
-a test-controlled source for that exact cycle. No synthesis, timing closure or
+The comparison against the external implementation covers the AXI4-Lite decoder
+only, on one fixed ten-transaction sequence; the arbiter and the burst bridge are
+not compared against upstream equivalents, and no randomised or formal
+equivalence is claimed. Finite timing seeds do not exhaust AXI interleavings.
+The PIC's spurious-claim race is tested at block level; the integrated
+peripheral wiring does not expose a test-controlled source for that exact cycle. No synthesis, timing closure or
 formal liveness proof is claimed. CPU coverage bins are measured only in the
 nominal CPU system test, not accumulated over the SoC matrix.

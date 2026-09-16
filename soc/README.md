@@ -49,15 +49,41 @@ by a mapped slave pass through, including DECERR.
 
 | Module | Function and contract |
 |---|---|
-| `soc_axi_lite_dec` | Decode one master onto parameterized windows. AW and W may arrive independently. W waits for an address route; each write channel is accepted once, and routing is held until the B handshake. |
-| `soc_axi_lite_arb` | Round-robin selection among masters. Select one direction per transaction; write wins if the chosen master offers both. Hold ownership until the selected response completes. |
-| `soc_axi_full2lite` | Split 32-bit INCR/FIXED bursts into Lite transfers; reconstruct RLAST and one write response. Reject unsupported WRAP/narrow requests. |
+| `soc_axi_lite_dec` | Decode one master onto parameterized windows. AW and W may arrive independently. W waits for an address route. One transaction per channel: the route is held until its response is taken, and the next address is refused meanwhile, on both the master and the slave side. |
+| `soc_axi_lite_arb` | Round-robin selection among masters. Select one direction per transaction; write wins if the chosen master offers both. One address and one data beat per grant; ownership is held until the selected response completes. |
+| `soc_axi_full2lite` | Split 32-bit INCR/FIXED bursts into Lite transfers; reconstruct RLAST and one write response. Accepted profile: FIXED/INCR, 32-bit beats, word-aligned start address. Anything else answers SLVERR on every beat without reaching the bus. |
 | `soc_axi_lite_ram` | Parameterized behavioural memory with byte strobes, response latency and seeded backpressure. |
 | `soc_top` | Connect CPU, fabric and current upstream DMA/SRAM interfaces. |
 
 The bridge's merged write-response policy is DECERR > SLVERR > OKAY, independent
 of response order. This is a project policy. Read responses retain each beat's
 status. CPU access errors become architectural traps.
+
+### One transaction per channel
+
+Every fabric block keeps exactly one route per channel, in a register, and that
+register is the whole of its routing state. Taking a second request before the
+first response has been handed over would overwrite it, and the pending response
+would then be answered from the new destination - delivered to a master that had
+not asked for it, and changing under an RVALID it had not yet accepted. So each
+block refuses the next request until the current response is taken. Refusing it
+costs nothing here: every slave in this SoC already withholds its own READY while
+it owes a response, so the cycle was never available to begin with.
+
+This is the same profile as `axi_lite_demux` configured with `MaxTrans = 1` in
+[pulp-platform/axi](https://github.com/pulp-platform/axi), which holds the route
+for an occupied destination and refuses an address while its counter is full.
+`soc/debug/sim/run_pulp_compare.sh` runs both against the same stimulus; see
+[docs/VERIFICATION.md](docs/VERIFICATION.md).
+
+Two behaviours differ from that reference deliberately:
+
+- This decoder decodes the address itself and answers DECERR for an unmapped one.
+  Upstream takes the routing decision as an input and places a separate error
+  slave behind a spare port.
+- Upstream's burst splitter rewrites any failing beat's response to SLVERR. This
+  bridge keeps DECERR > SLVERR > OKAY, so a decode error inside a burst is still
+  reported as a decode error.
 
 Existing parameters remain local to their functional modules. Each procedural
 state signal has one `always` owner. CPU/SoC RTL contains no `timescale`.
