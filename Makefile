@@ -5,6 +5,7 @@
 #   make modelsim   full 21-run ModelSim CPU regression (needs vsim; local)
 #   make soc        SoC regression: 25 runs over four bus timings (needs vsim)
 #   make soc-sva    SoC lint + SVA assertion run on Verilator
+#   make soc-pulp   compare the SoC decoder against pulp-platform/axi (network)
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
 
@@ -12,7 +13,7 @@ SIM    := cpu/debug/sim
 SOCSIM := soc/debug/sim
 PY     ?= python3
 
-.PHONY: all test verilator modelsim soc soc-sva asm clean
+.PHONY: all test verilator modelsim soc soc-sva soc-pulp asm clean
 
 all: test
 
@@ -53,6 +54,12 @@ soc: asm
 # fabric's protocol and routing properties are actually checked.
 soc-sva: asm
 	bash $(SOCSIM)/run_verilator.sh
+
+# Drive the SoC decoder and pulp-platform/axi's axi_lite_demux with one shared
+# stimulus and compare what came back. Fetches the upstream sources on the first
+# run; they are never vendored into this repository.
+soc-pulp:
+	cd $(SOCSIM) && bash run_pulp_compare.sh
 
 clean:
 	rm -rf $(SIM)/obj_dir $(SIM)/work $(SIM)/cov_annotated
