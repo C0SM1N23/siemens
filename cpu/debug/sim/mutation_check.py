@@ -21,8 +21,11 @@ MUTATIONS = [
     ("pic_tie", "cpu/hdl/pic.v", "15 - s", "s", "pic_tb_reference"),
     ("pic_empty_eoi", "cpu/hdl/pic.v", "cpu_irq_eoi_i && has_active", "cpu_irq_eoi_i", "pic_tb_feature"),
     ("decoder_stale_write", "soc/hdl/soc_axi_lite_dec.v", "wr_addr_valid_q ? wr_sel_q : aw_hit", "m_awvalid_i ? aw_hit : wr_sel_q", "soc_tb_addr_map"),
-    ("arbiter_directions", "soc/hdl/soc_axi_lite_arb.v", "!write_grant_q && |(gnt & m_arvalid_i)", "|(gnt & m_arvalid_i)", "soc_tb_arb"),
+    ("arbiter_directions", "soc/hdl/soc_axi_lite_arb.v", "!write_grant_q && !ar_taken_q && |(gnt & m_arvalid_i)", "!ar_taken_q && |(gnt & m_arvalid_i)", "soc_tb_arb"),
     ("burst_response", "soc/hdl/soc_axi_full2lite.v", "m_bresp_i > w_resp", "m_bresp_i != RESP_OKAY", "soc_tb_full2lite_err"),
+    ("decoder_read_route", "soc/hdl/soc_axi_lite_dec.v", "ar_accept = ~rd_addr_valid_q", "ar_accept = 1'b1", "soc_tb_addr_map"),
+    ("arbiter_second_address", "soc/hdl/soc_axi_lite_arb.v", "write_grant_q && !aw_taken_q && |(gnt & m_awvalid_i)", "write_grant_q && |(gnt & m_awvalid_i)", "soc_tb_arb"),
+    ("bridge_alignment", "soc/hdl/soc_axi_full2lite.v", " && (s_awaddr_i[1:0] == 2'b00)", "", "soc_tb_full2lite"),
 ]
 
 
