@@ -81,7 +81,7 @@ loop:
 back:
     addi x26, x26, 100       # x26 = 7 + 100 = 107
 
-    # ---- sync traps, mtvec in direct mode -------------------------------
+    # sync traps, mtvec in direct mode
     addi x28, x0, handler_sync
     csrrw x0, mtvec, x28
     csrrs x27, mtvec, x0     # x27 = mtvec readback
@@ -136,7 +136,7 @@ back:
     jalr x0, x28, 0          # fetch of 0x8000 faults -> cause 1 -> x29 |= 256
 ff_resume:
 
-    # ---- interrupts + vectored mtvec ------------------------------------
+    # interrupts + vectored mtvec
     # program the PIC over AXI: enable src2, src3, src5 (INT_ENABLE=0x2C) and
     # read back. src5 stays masked at the CPU (mie) to prove the two masks are
     # independent.
@@ -186,7 +186,7 @@ never:
     addi x24, x0, 99         # must not be reached
     jal  x0, never
 
-# ---- sync trap handler (direct mode) ------------------------------------
+# sync trap handler (direct mode)
 # counts every entry in [192], logs the cause bit in x29, then steps over the
 # offending instruction — except cause 1, where mepc+4 would land back in
 # unmapped space, so the resume address is taken from mscratch instead
@@ -250,7 +250,7 @@ hs_ret:
     csrrw x0, mepc, x30
     mret
 
-# ---- vectored base: sync exceptions land here ---------------------------
+# vectored base: sync exceptions land here
 .org 0x300
 vec_base:
     csrrs x30, mcause, x0
@@ -273,13 +273,13 @@ vec_base:
     jal  x0, irq_handler     # cause 22, ch6
     jal  x0, irq_handler     # cause 23, ch7 = mtimer
 
-# ---- irq handler: preserves x30 through mscratch, counts entries,
+# irq handler: preserves x30 through mscratch, counts entries,
 # snapshots the PIC's ACTIVE_VEC (proves the claim was registered).
 # The timer (cause 23) is level-sensitive off its own compare, so the
 # handler must clear the source before MRET: push mtimecmp_hi back to
 # all-ones (D26) — otherwise the line re-enters the moment MRET pops the
 # active source. x28 is only trashed on the timer path, where main
-# reloads it right after the WFI anyway. -----------------------------------
+# reloads it right after the WFI anyway.
 .org 0x380
 irq_handler:
     csrrw x30, mscratch, x30
@@ -300,7 +300,7 @@ ih_ret:
     csrrw x30, mscratch, x30
     mret                     # rerun the preempted instruction
 
-# ---- BTB aliasing: three loops, branches 0x200 apart = same index,
+# BTB aliasing: three loops, branches 0x200 apart = same index,
 # different tags; each eviction re-predicts not-taken and must stay correct
 .org 0x400
 phase_g:
@@ -391,7 +391,7 @@ jl_tgt:
     sw   x30, 140(x14)       # [140] = cycle delta
     jal  x0, phase_h
 
-# ---- PIC channel sweep: every channel taken once (ch5 excepted) ----------
+# PIC channel sweep: every channel taken once (ch5 excepted)
 # The TB raises src0/1/4/6 in order, one per trigger store to [248], and
 # drops each line on its claim. src5 is left PIC-enabled and is asserted for
 # the whole run while mie masks it forever, which is the case that has to work:
@@ -428,7 +428,7 @@ sw_c4:
 sw_c6:
     beq  x31, x0, sw_c6
 
-# ---- RAS (D24): returns from three different call sites, then a nested
+# RAS (D24): returns from three different call sites, then a nested
 # chain (h -> g twice). Correct results regardless of prediction; the RAS
 # turns the return-target mispredicts into hits. x1/x5 are the ABI links
 # the hint table keys on, so save/restore them around the test.
@@ -445,7 +445,7 @@ phase_ras:
     add  x1, x0, x16
     add  x5, x0, x18
 
-# ---- coverage fills: AUIPC, the four missing branches both ways,
+# coverage fills: AUIPC, the four missing branches both ways,
 # CSRRCI, and an add with both operands forwarded from S3
 phase_cov:
 auipc_spot:
@@ -498,7 +498,7 @@ cv_done:
     or   x30, x30, x28
     sw   x30, 280(x14)       # [280] = 0 (all three read-only zero)
 
-# ---- WFI + mtimer (D23/D26): arm the timer ~250 cycles out, sleep, and
+# WFI + mtimer (D23/D26): arm the timer ~250 cycles out, sleep, and
 # let the irq wake us. CMP_LO is written while CMP_HI still holds all-ones
 # so the compare can't fire between the two halves. mepc must be wfi+4
 # (Priv. 3.3.3) — MRET lands *after* the WFI, not on it.
@@ -560,7 +560,7 @@ wfi2_spot:
     csrrs x30, 0xB07, x0     # mhpmcounter7: WFI sleep cycles
     sw   x30, 268(x14)       # [268] > 0
 
-# ---- counter compliance: 64-bit halves + M-mode writes -------------------
+# counter compliance: 64-bit halves + M-mode writes
 # On RV32 every counter is architecturally 64-bit, read through a base /
 # base+0x80 pair, and writable from M-mode (Priv. spec 3.1.11). Counters the
 # design does not provide are tied off, not left unimplemented.
@@ -627,7 +627,7 @@ end:
 hang:
     jal  x0, hang            # a skipped-instruction test failed -> timeout
 
-# ---- RAS test subroutines ------------------------------------------------
+# RAS test subroutines
 ras_f:
     addi x30, x30, 1
     jalr x0, x1, 0           # plain return (pop)

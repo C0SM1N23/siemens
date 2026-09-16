@@ -47,7 +47,7 @@ _start:
     lui  x14, 2                  # x14 = 0x2000, DMEM base
     lui  x29, 0x30020            # x29 = DMA base
 
-    # ---- the scheduler and the bandwidth cap ------------------------------
+    # the scheduler and the bandwidth cap
     sw   x0, 0x48(x29)           # SCHED_POLICY = fixed priority
     lui  x6, 0x07D00
     addi x6, x6, 0xC8
@@ -55,9 +55,7 @@ _start:
     addi x6, x0, 0xF
     sw   x6, 0x44(x29)           # INT_ENABLE, so INT_STATUS is observable
 
-    # =====================================================================
     # 1. a clean transfer into the same memory, well inside the window
-    # =====================================================================
     addi x5, x14, 0x100
     lui  x6, 0xC0DE0
     addi x7, x0, 8
@@ -113,9 +111,7 @@ cmp_ok:
     addi x6, x0, 0xF
     sw   x6, 0x40(x29)           # write-1-to-clear INT_STATUS
 
-    # =====================================================================
     # 2. the same shape of transfer, aimed at the end of the window
-    # =====================================================================
     addi x5, x14, 0x100
     lui  x6, 0xBAD00             # a different pattern, so the landed beats
     addi x7, x0, 8               # cannot be confused with the clean transfer
@@ -149,7 +145,7 @@ wait_bad:
 bad_done:
     sw   x30, 0x208(x14)
 
-    # ---- the beats that were inside the window must have landed -----------
+    # the beats that were inside the window must have landed
     lui  x5, 0x10000
     addi x5, x5, 0x3F0
     lw   x30, 0(x5)

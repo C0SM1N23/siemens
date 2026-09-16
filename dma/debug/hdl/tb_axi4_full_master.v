@@ -2,18 +2,18 @@
 
 module tb_axi4_full_master;
 
-    // --- Semnale de Ceas și Reset ---
+    // Semnale de Ceas și Reset
     reg clk;
     reg rst_n;
 
-    // --- Interfața de Cereri (de la Priority Arbiter) ---
+    // Interfața de Cereri (de la Priority Arbiter)
     reg          master_req_valid;
     reg  [31:0]  master_req_addr;
     reg  [7:0]   master_req_len;
     reg          master_req_is_write;
     wire         master_req_ready;
 
-    // --- Interfața AXI4-Full (Master spre System) ---
+    // Interfața AXI4-Full (Master spre System)
     wire [31:0]  m_axi_awaddr;
     wire [7:0]   m_axi_awlen;
     wire [2:0]   m_axi_awsize;
@@ -46,11 +46,11 @@ module tb_axi4_full_master;
     
     wire         m_axi_rready;
 
-    // --- Interfața Scatter-Gather (spre Canale) ---
+    // Interfața Scatter-Gather (spre Canale)
     wire [31:0]  fetch_data_out;
     wire         fetch_data_valid;
 
-    // --- Instanțierea DUT (Device Under Test) ---
+    // Instanțierea DUT (Device Under Test)
     axi4_full_master dut (
         .clk(clk),
         .rst_n(rst_n),
@@ -63,7 +63,7 @@ module tb_axi4_full_master;
         .fetch_data_out(fetch_data_out), .fetch_data_valid(fetch_data_valid), .master_req_ch_id(master_req_ch_id)
     );
 
-    // --- Generare Ceas (100 MHz) ---
+    // Generare Ceas (100 MHz)
     always #5 clk = ~clk;
 
     
@@ -177,7 +177,7 @@ module tb_axi4_full_master;
         
         // TEST 1: Burst de CITIRE (Simulare Fetch Descriptor)
         
-        $display("\n--- INCEPERE TEST 1: AXI READ BURST (Len = 3) ---");
+        $display("\nINCEPERE TEST 1: AXI READ BURST (Len = 3)");
         // Folosim fork...join pentru ca lansarea comenzii și răspunsul 
         // slave-ului să se execute concurent, exact ca într-un sistem real.
         fork
@@ -190,7 +190,7 @@ module tb_axi4_full_master;
         
         // TEST 2: Burst de SCRIERE (Simulare Writeback Date)
         
-        $display("\n--- INCEPERE TEST 2: AXI WRITE BURST (Len = 3) ---");
+        $display("\nINCEPERE TEST 2: AXI WRITE BURST (Len = 3)");
         // Modulul tău ar trebui acum să scoată din data_fifo datele citite anterior!
         fork
             issue_master_req(32'h2000, 8'd3, 1'b1); // Master primește cerere de scriere
@@ -198,7 +198,7 @@ module tb_axi4_full_master;
         join
 
         #100;
-        $display("\n--- TOATE TESTELE AU TRECUT CU SUCCES ---");
+        $display("\nTOATE TESTELE AU TRECUT CU SUCCES");
         $finish;
     end
 

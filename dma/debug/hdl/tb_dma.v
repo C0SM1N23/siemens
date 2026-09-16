@@ -32,7 +32,7 @@ module tb_dma;
     reg         clk;
     reg         rst_n;
 
-    //=======Interfata AXI4-Lite=========
+    // Interfata AXI4-Lite
     //Citire
     reg  [31:0] s_axi_araddr;
     reg         s_axi_arvalid;
@@ -55,9 +55,8 @@ module tb_dma;
     wire        s_axi_wready;
     wire        s_axi_bvalid;
     wire [ 1:0] s_axi_bresp;
-    //===================================
 
-    //=======Interfata AXI4-Full=========
+    // Interfata AXI4-Full
     wire [31:0] m_axi_araddr;
     wire [ 7:0] m_axi_arlen;   
     wire        m_axi_arvalid; 
@@ -83,34 +82,30 @@ module tb_dma;
     reg  [ 1:0] m_axi_bresp;
     reg         m_axi_bvalid;
     wire        m_axi_bready;
-    //===================================
 
     // Memorie simulata (SRAM) - 16 KB
     // AXI e byte-adressable, dar memoria e word-adressable, de ex
     // Adresa AXI 8 -> 8/4=2 -> ram_memory[2]
     reg [31:0] ram_memory [0:4095];
 
-    //====Variabile citire din fisier====
+    // Variabile citire din fisier
     reg  [31:0] read_val;
     integer     fd;             // File descriptor
     integer     scan_result;    // Verifica daca s-a citit corect linia
     reg [8*8-1:0] cmd;      // String pentru comanda ("W", "R", "D") - max 8 caractere
     reg [31:0]  addr_arg;    // Argumentul 1 din fisier (Adresa sau Timp)
     reg [31:0]  data_arg;    // Argumentul 2 din fisier (Date)
-    //===================================
 
-    //====Variabile pentru citirea din RAM====
+    // Variabile pentru citirea din RAM
     reg [31:0] current_read_addr;
     reg [7:0]  burst_len;
     integer    beat;
-    //========================================
 
-    //====Variabile pentru scrierea in RAM====
+    // Variabile pentru scrierea in RAM
     reg [31:0] current_write_addr;
     reg [7:0]  write_burst_len;
     integer    w_beat;
     integer    i;
-    //=======================================
 
     initial begin
         clk = 1'b0;
@@ -168,7 +163,7 @@ module tb_dma;
         .m_axi_bready(m_axi_bready)
     );
 
-    //======TASK-uri pentru citire si scriere AXI4-Lite========
+    // TASK-uri pentru citire si scriere AXI4-Lite
     task axi_lite_write;
         input [31:0] addr;
         input [31:0] data;
@@ -227,9 +222,8 @@ module tb_dma;
             s_axi_rready <= 1'b0;
         end
     endtask
-    //======================================
 
-    //===Task pentru scrierea directa in RAM (backdoor)===
+    // Task pentru scrierea directa in RAM (backdoor)
     task backdoor_ram_write;
         input [31:0] byte_addr;
         input [31:0] data;
@@ -237,9 +231,8 @@ module tb_dma;
             ram_memory[byte_addr >> 2] = data;
         end
     endtask
-    //======================================
 
-    //=== TASK DE RESET PARAMETRIZABIL ===
+    // TASK DE RESET PARAMETRIZABIL
     task apply_reset;
         input integer reset_cycles;
         begin
@@ -251,9 +244,8 @@ module tb_dma;
             $display("[%0t] INFO: Reset Complet.", $time);
         end
     endtask
-    //====================================
 
-    //=== TASK PENTRU INITIALIZARE RAM ===
+    // TASK PENTRU INITIALIZARE RAM
     task init_ram;
         input [31:0] v0;
         input [31:0] v1;
@@ -303,9 +295,8 @@ module tb_dma;
             $display("[%0t] INFO: Datele sursa si Descriptorul au fost incarcate.", $time);
         end
     endtask
-    //====================================
 
-    //======Citire din fisier, citire si scriere registrii, etc========
+    // Citire din fisier, citire si scriere registrii, etc
     initial begin
         clk = 1'b0;
         rst_n = 1'b0;
@@ -478,10 +469,8 @@ module tb_dma;
                 $fclose(fd);
                 $display("S-a executat tot fisierul");
 
-                // --- VERIFICARE AUTOMATA (BACKDOOR READ) ---
-                $display("\n===========================================");
+                // VERIFICARE AUTOMATA (BACKDOOR READ)
                 $display("   VERIFICARE REZULTATE DMA (Dest: 0x2000) ");
-                $display("===========================================");
 
                 // Verificam vizual in consola ce s-a scris in primele 8 cuvinte
                 for (i = 0; i < 8; i = i + 1) begin
@@ -497,7 +486,6 @@ module tb_dma;
                 end else begin
                     $display("\n>>> TEST FAILED! Datele de la destinatie nu corespund. <<<");
                 end
-                $display("===========================================\n");
 
             /*
                 //Faza de scriere
@@ -515,5 +503,4 @@ module tb_dma;
             end
         join   
     end
-    //========================================================
 endmodule

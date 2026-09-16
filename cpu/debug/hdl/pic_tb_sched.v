@@ -26,17 +26,17 @@
 
 module pic_tb_sched;
 
-    // ---- register map (byte offsets) ----
+    // register map (byte offsets)
     localparam CFG0 = 32'h00, SWT0 = 32'h40, STA0 = 32'h80;
     localparam BAND_CONFIG = 32'hC0, ESCALATION = 32'hD4, INT_ENABLE = 32'hD8;
     localparam RESP_OKAY = 2'b00;
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT source / CPU pins ----
+    // DUT source / CPU pins
     reg [15:0] irq_src;
     reg [15:0] cpu_mask;
     reg cpu_irq_ack, cpu_irq_eoi;
@@ -44,7 +44,7 @@ module pic_tb_sched;
     wire [ 3:0] cpu_irq_vec;
     wire [15:0] pending;
 
-    // ---- AXI4-Lite master side ----
+    // AXI4-Lite master side
     reg [31:0] awaddr, wdata, araddr;
     reg [3:0] wstrb;
     reg awvalid, wvalid, bready, arvalid, rready;
@@ -88,9 +88,7 @@ pic dut (
         .s_axi_rready_i (rready)
     );
 
-    // ---------------------------------------------------------------------------
     // handshake helpers
-    // ---------------------------------------------------------------------------
 
     // wait until `ev` is the offered source, up to `lim` cycles
     task expect_offer(input [3:0] ev, input integer lim, input [511:0] msg);
@@ -163,13 +161,9 @@ pic dut (
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     initial begin
-        $display("=====================================================");
         $display("== PIC SCHEDULING CORNER CASES ==");
-        $display("=====================================================");
 
-        // -----------------------------------------------------------------------
         // 1 + 2: a CPU-masked source must not block the ones behind it
         //
         // src2 and src9 are both enabled and both asserted. Their keys differ only
@@ -179,7 +173,6 @@ pic dut (
         // forever; the offer has to be src9 instead. src2 still has to appear in
         // pending_o, because mip reports what is pending and software has to be
         // able to see it.
-        // -----------------------------------------------------------------------
         $display("\n-- 1: a masked source does not starve the sources behind it --");
         reset_dut;
         axil_write(CFG0 + 4 * 2, 32'h0000_0000, RESP_OKAY);  // src2: level, band 0
@@ -199,14 +192,12 @@ pic dut (
         #1 cpu_mask = 16'hFFFF;
         expect_offer(4'd2, 20, "unmasking offers it on the next resolution");
 
-        // -----------------------------------------------------------------------
         // 3: an edge that arrives in the claim cycle is not swallowed
         //
         // src3 is edge-triggered. One edge latches and is offered. The claim lands
         // in the same cycle as a second, distinct edge: the first is on its way to
         // the handler, the second still has to be serviced, so the latch must stay
         // set and the source must be offered again once the handler returns.
-        // -----------------------------------------------------------------------
         $display("\n-- 3: a rising edge in the claim cycle survives the claim --");
         reset_dut;
         axil_write(CFG0 + 4 * 3, 32'h0000_0001, RESP_OKAY);  // src3: edge-triggered
@@ -227,7 +218,6 @@ pic dut (
         pulse_eoi;  // handler returns
         expect_offer(4'd3, 20, "the edge that arrived with the claim is still pending");
 
-        // -----------------------------------------------------------------------
         // 4: bump follows the urgency order, not the band number
         //
         // BAND_CONFIG is reordered so band 0 is the LEAST urgent (0) and band 3 the
@@ -235,7 +225,6 @@ pic dut (
         // src2 has a deadline and escalates by bump. Bumping to band-1 would clamp
         // at band 0 and change nothing; bumping one step up the urgency order moves
         // src2 to band 3, which outranks band 0, and the offer flips to src2.
-        // -----------------------------------------------------------------------
         $display("\n-- 4: bump escalation under a reordered BAND_CONFIG --");
         reset_dut;
         // urgency: band0=0, band1=3, band2=2, band3=1
@@ -254,13 +243,11 @@ pic dut (
         axil_read(STA0 + 4 * 2, RESP_OKAY);
         check(32'd1, {31'b0, rd[2]}, "SRC2_STATUS.ESC records the escalation");
 
-        // -----------------------------------------------------------------------
         // 5: the software-trigger key must actually be written
         //
         // A byte write to lane 0 with the key value sitting on the unstrobed upper
         // lanes is not a keyed write: those lanes were never written. Only the
         // write that strobes the key lanes arms the channel.
-        // -----------------------------------------------------------------------
         $display("\n-- 5: the software-trigger key has to be strobed --");
         reset_dut;
         axil_write(CFG0 + 4 * 0, 32'h0000_0000, RESP_OKAY);
@@ -274,11 +261,8 @@ pic dut (
         axil_write(SWT0 + 4 * 0, 32'hA5A5_0001, RESP_OKAY);
         expect_offer(4'd0, 20, "a strobed key arms the channel");
 
-        // -----------------------------------------------------------------------
-        $display("\n=====================================================");
         if (errors == 0) $display("== PIC SCHEDULING TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC SCHEDULING TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================");
         finish_test;
     end
 

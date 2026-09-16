@@ -33,7 +33,7 @@
 _start:
     lui  x14, 2                  # x14 = 0x2000, DMEM base
 
-    # ---- fill 16 source words with a recognisable pattern ----------------
+    # fill 16 source words with a recognisable pattern
     addi x5, x14, 0x100          # x5 = source pointer
     lui  x6, 0xC0DE0             # x6 = 0xC0DE0000
     addi x7, x0, 16
@@ -44,7 +44,7 @@ fill_loop:
     addi x7, x7, -1
     bne  x7, x0, fill_loop
 
-    # ---- build the descriptor at 0x2000 ----------------------------------
+    # build the descriptor at 0x2000
     # src = DMEM 0x2100, dst = SRAM data region, 64 bytes, last segment.
     # 64 bytes is two of the DMA's 32-byte chunks, so the channel has to loop
     # rather than finish on its first pass.
@@ -58,7 +58,7 @@ fill_loop:
     addi x6, x0, 1
     sw   x6, 12(x14)             # desc[3] = ctrl, bit0 = last segment
 
-    # ---- arm the interrupt path: PIC source 0, mie bit 16, mstatus.MIE ---
+    # arm the interrupt path: PIC source 0, mie bit 16, mstatus.MIE
     lui  x28, 0x30000            # PIC
     addi x30, x0, 1
     sw   x30, 0xD8(x28)          # PIC INT_ENABLE = source 0 (DMA channel 0)
@@ -71,7 +71,7 @@ fill_loop:
     addi x28, x0, 8
     csrrs x0, mstatus, x28       # mstatus.MIE = 1
 
-    # ---- program the DMA -------------------------------------------------
+    # program the DMA
     lui  x29, 0x30020            # x29 = DMA base, kept live for the checks
     sw   x0, 0x48(x29)           # SCHED_POLICY = 0 (fixed priority)
     lui  x6, 0x07D00
@@ -83,14 +83,14 @@ fill_loop:
     addi x6, x0, 1
     sw   x6, 0x04(x29)           # CH0_CONTROL.enable = 1 -> the transfer starts
 
-    # ---- sleep until the DMA is done -------------------------------------
+    # sleep until the DMA is done
     # WFI, not a spin loop: the CPU is genuinely idle while the DMA works, and
     # this exercises the wake path as well as the interrupt path.
     wfi
 wait_irq:
     beq  x31, x0, wait_irq
 
-    # ---- verify what the DMA moved ---------------------------------------
+    # verify what the DMA moved
     lui  x5, 0x10000
     addi x5, x5, 0x20            # SRAM data pointer
     addi x6, x14, 0x100          # source pointer
@@ -127,9 +127,7 @@ cmp_ok:
 halt:
     beq  x0, x0, halt
 
-# ---------------------------------------------------------------------------
 # interrupt handler
-# ---------------------------------------------------------------------------
 # Clearing order matters. The channel's line is a level that stays asserted
 # while the channel sits in STATE_DONE, so the enable has to go first: it lets
 # the channel fall back to IDLE and drop hw_irq. Only then does writing 1 to

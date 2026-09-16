@@ -32,19 +32,19 @@
 
 module mtimer_tb_regs;
 
-    // ---- register map (byte offsets) ----
+    // register map (byte offsets)
     localparam MTIME_LO  = 32'h00, MTIME_HI = 32'h04, MTIMECMP_LO = 32'h08, MTIMECMP_HI = 32'h0C;
     localparam RESP_OKAY = 2'b00, RESP_SLVERR = 2'b10;
     localparam ALL_ONES  = 32'hFFFF_FFFF;
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
     wire irq;
 
-    // ---- AXI4-Lite master side ----
+    // AXI4-Lite master side
     reg [31:0] awaddr, wdata, araddr;
     reg [3:0] wstrb;
     reg awvalid, wvalid, bready, arvalid, rready;
@@ -115,18 +115,14 @@ mtimer dut (
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     initial begin
-        $display("\n===========================================================");
         $display("tb_mtimer_regs : register and reset verification, hdl/mtimer.v");
-        $display("===========================================================");
 
         axil_idle;
         rst_n = 1'b0;
 
-        // ===== 1. bus outputs while reset is asserted ==========================
+        // 1. bus outputs while reset is asserted
         $display("\n-- 1. slave port while rst_n is LOW --");
         if ($test$plusargs("verbose")) $display("   step 1: hold rst_n = 0 for 4 clock cycles");
         axil_step(4);
@@ -139,7 +135,7 @@ mtimer dut (
         check(32'd0, rdata, "  RDATA is 0 during reset");
         check(32'd0, {31'b0, irq}, "  irq low during reset");
 
-        // ===== 2. reset values =================================================
+        // 2. reset values
         $display("\n-- 2. reset values of all four registers --");
         if ($test$plusargs("verbose")) $display("   step 1: release rst_n between clock edges");
         @(posedge clk) #1 rst_n = 1'b1;
@@ -163,7 +159,7 @@ mtimer dut (
         axil_step(200);
         check(32'd0, {31'b0, irq}, "  irq still inactive after 200 cycles");
 
-        // ===== 3. mtime is free-running at exactly one count per clock =========
+        // 3. mtime is free-running at exactly one count per clock
         // Two deltas are measured over gaps that differ by a known number of
         // cycles. The difference between the deltas removes the fixed AXI overhead
         // from the measurement, so the check is exact rather than approximate.
@@ -184,7 +180,7 @@ mtimer dut (
         axil_read(MTIME_LO, RESP_OKAY);
         check(axil_read_cycle - first_read_cycle, rd - b0, "timer increment across idle gap");
 
-        // ===== 4. read/write round-trip, register by register ==================
+        // 4. read/write round-trip, register by register
         $display("\n-- 4. read/write round-trip on each register --");
         if ($test$plusargs("verbose"))
             $display("   step 1: MTIMECMP_LO and MTIMECMP_HI hold still, so they are exact");
@@ -211,7 +207,7 @@ mtimer dut (
         chk_range(rd, 32'h0001_0000, 32'd40, "MTIME_LO after a software write");
         axil_read_chk(MTIME_HI, 32'h0000_00AA, "  MTIME_HI untouched by the LO write");
 
-        // ===== 5. byte-strobe writes ==========================================
+        // 5. byte-strobe writes
         // WSTRB is honoured per lane, so a byte or halfword store from the CPU
         // updates only the lanes it addressed. The check writes all-ones with one
         // lane enabled at a time and requires exactly that lane to change.
@@ -234,7 +230,7 @@ mtimer dut (
         axil_write_strb(MTIMECMP_HI, 32'hAABB_CCDD, 4'b0101, RESP_OKAY);
         axil_read_chk(MTIMECMP_HI, 32'h00BB_00DD, "  MTIMECMP_HI lanes 0 and 2 only");
 
-        // ===== 6. unmapped offsets ============================================
+        // 6. unmapped offsets
         $display("\n-- 6. unmapped offsets 0x10 .. 0xFC, read and write --");
         for (i = 32'h10; i <= 32'hFC; i = i + 4) begin
             axil_read(i, RESP_SLVERR);
@@ -257,7 +253,7 @@ mtimer dut (
                 $display("PASS: the four mapped words still answer OKAY");
         end
 
-        // ===== 7. interrupt behaviour =========================================
+        // 7. interrupt behaviour
         // The mtimer has no interrupt status register: the compare IS the status,
         // and the handler clears the line by moving mtimecmp forward. That makes
         // the arming sequence a correctness issue, not a style issue - writing the
@@ -321,7 +317,7 @@ mtimer dut (
         axil_step(4);
         check(32'd0, {31'b0, irq}, "  disarmed again");
 
-        // ===== 8. asynchronous reset from a configured, armed state ============
+        // 8. asynchronous reset from a configured, armed state
         $display("\n-- 8. asynchronous reset from a configured, armed state --");
         if ($test$plusargs("verbose"))
             $display("   step 1: put every register at a non-reset value and arm the timer");
@@ -351,12 +347,10 @@ mtimer dut (
         axil_read_chk(MTIMECMP_HI, ALL_ONES, "  MTIMECMP_HI back to 0xFFFFFFFF");
         check(32'd0, {31'b0, irq}, "  irq inactive - the timer is disarmed again");
 
-        // ---- done ----
+        // done
         axil_step(4);
-        $display("\n========================================");
         if (errors == 0) $display("== MTIMER REGISTER TESTBENCH: ALL TESTS PASSED ==");
         else $display("== MTIMER REGISTER TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

@@ -23,9 +23,7 @@ module tb_dp_sram_regfile;
     // fezabil de testat intr-un timp de simulare rezonabil
     localparam WINDOW_CYCLES_TB = 16;
 
-    // -------------------------------------------------------------------
     // Semnale de conectare catre DUT
-    // -------------------------------------------------------------------
     reg         clk;
     reg         rst_n;
 
@@ -56,9 +54,7 @@ module tb_dp_sram_regfile;
     wire [7:0]  cooldown_cycles;
     wire        irq;
 
-    // -------------------------------------------------------------------
     // DUT
-    // -------------------------------------------------------------------
     dp_sram_regfile #(
         .REG_ADDR_W(3),
         .WINDOW_CYCLES(WINDOW_CYCLES_TB)
@@ -82,18 +78,14 @@ module tb_dp_sram_regfile;
     // Ceas de 10ns perioada
     always #5 clk = ~clk;
 
-    // -------------------------------------------------------------------
     // Contoare globale de rezultate si numarul liniei curente din fisier
     // (pentru mesaje de eroare utile)
-    // -------------------------------------------------------------------
     integer pass_count;
     integer fail_count;
     integer line_num;
 
-    // -------------------------------------------------------------------
     // reg_name_to_addr: traduce numele text al unui registru in indexul lui
     // numeric, asa cum e definit in regfile.v (ADDR_INT_STATUS etc.)
-    // -------------------------------------------------------------------
     function [2:0] reg_name_to_addr;
         input [8*16-1:0] name;
         begin
@@ -111,10 +103,8 @@ module tb_dp_sram_regfile;
         end
     endfunction
 
-    // -------------------------------------------------------------------
     // str_to_hex / str_to_dec: transforma un token text intr-o valoare
     // numerica de 32 biti, interpretat ca hex sau ca zecimal
-    // -------------------------------------------------------------------
     function [31:0] str_to_hex;
         input [8*16-1:0] s;
         reg   [31:0] v;
@@ -137,10 +127,8 @@ module tb_dp_sram_regfile;
         end
     endfunction
 
-    // -------------------------------------------------------------------
     // report_check: compara valoarea obtinuta cu cea asteptata, actualizeaza
     // contoarele globale si afiseaza un mesaj PASS/FAIL
-    // -------------------------------------------------------------------
     task report_check;
         input [31:0]      actual;
         input [31:0]      expected;
@@ -158,10 +146,8 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_reset: aplica reset activ 3 cicluri, apoi il elibereaza la scurt
     // timp dupa un front crescator de ceas
-    // -------------------------------------------------------------------
     task do_reset;
         begin
             rst_n = 1'b0;
@@ -172,10 +158,8 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_write: scrie <value> in registrul <reg_name> prin portul <port>
     // (A sau B), tinand valid+write sus exact un front de ceas
-    // -------------------------------------------------------------------
     task do_write;
         input [8*16-1:0] port;
         input [8*16-1:0] reg_name;
@@ -198,10 +182,8 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_read: citeste registrul <reg_name> prin portul <port> si compara
     // rezultatul cu <expected>
-    // -------------------------------------------------------------------
     task do_read;
         input [8*16-1:0] port;
         input [8*16-1:0] reg_name;
@@ -225,10 +207,8 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_conflict: scriere simultana din Port A si Port B pe acelasi
     // registru, cu valori diferite; verifica ca Port A castiga
-    // -------------------------------------------------------------------
     task do_conflict;
         input [8*16-1:0] reg_name;
         input [31:0]     val_a;
@@ -255,9 +235,7 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_event: impuls de 1 ciclu pe collision_event sau cooldown_event
-    // -------------------------------------------------------------------
     task do_event;
         input [8*16-1:0] kind;
         begin
@@ -271,9 +249,7 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_activity: tine a_mem_valid/b_mem_valid sus timp de <cycles> cicluri
-    // -------------------------------------------------------------------
     task do_activity;
         input [8*16-1:0] port;
         input [31:0]     cycles;
@@ -290,9 +266,7 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_wait: avanseaza <cycles> cicluri de ceas, fara alta actiune
-    // -------------------------------------------------------------------
     task do_wait;
         input [31:0] cycles;
         integer i;
@@ -301,10 +275,8 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // do_checkout: verifica o iesire directa a modulului (irq, force_priority,
     // collision_threshold, cooldown_cycles)
-    // -------------------------------------------------------------------
     task do_checkout;
         input [8*16-1:0] signal_name;
         input [31:0]     expected;
@@ -323,10 +295,8 @@ module tb_dp_sram_regfile;
         end
     endtask
 
-    // -------------------------------------------------------------------
     // Bucla principala: deschide fisierul de vectori, citeste linie cu
     // linie, interpreteaza comanda si o executa
-    // -------------------------------------------------------------------
     integer fd;
     integer fgets_ret;
     integer scan_count;
@@ -402,9 +372,7 @@ module tb_dp_sram_regfile;
 
         $fclose(fd);
 
-        $display("=================================================");
         $display("Rezultate: %0d PASS, %0d FAIL din %0d verificari", pass_count, fail_count, pass_count + fail_count);
-        $display("=================================================");
         if (fail_count == 0)
             $display("TOATE TESTELE AU TRECUT");
         else

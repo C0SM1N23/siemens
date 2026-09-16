@@ -32,7 +32,7 @@
 
 module pic_tb_status;
 
-    // ---- register map (byte offsets) ----
+    // register map (byte offsets)
     localparam CFG0 = 32'h00, SWT0 = 32'h40, STA0 = 32'h80;
     localparam BAND_CONFIG   = 32'hC0, NEST_STATUS  = 32'hC4, NEST_MAX_R = 32'hC8,
            ACTIVE_VEC    = 32'hCC, SPURIOUS_LOG = 32'hD0, ESCALATION = 32'hD4,
@@ -40,7 +40,7 @@ module pic_tb_status;
     localparam RESP_OKAY = 2'b00;
     localparam SW_KEY = 16'hA5A5;
 
-    // ---- SRCx_STATUS field masks ----
+    // SRCx_STATUS field masks
     localparam [31:0] M_PEND = 32'h0000_0001;
     localparam [31:0] M_ACTIVE = 32'h0000_0002;
     localparam [31:0] M_ESC = 32'h0000_0004;
@@ -49,18 +49,18 @@ module pic_tb_status;
     localparam [31:0] M_DDL = 32'hFFFF_0000;
     localparam [31:0] M_STATE = 32'h0000_003F;  // the six state bits together
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT source / CPU pins ----
+    // DUT source / CPU pins
     reg [15:0] irq_src;
     reg cpu_irq_ack, cpu_irq_eoi;
     wire       cpu_irq;
     wire [3:0] cpu_irq_vec;
 
-    // ---- AXI4-Lite master side ----
+    // AXI4-Lite master side
     reg [31:0] awaddr, wdata, araddr;
     reg [3:0] wstrb;
     reg awvalid, wvalid, bready, arvalid, rready;
@@ -118,19 +118,13 @@ module pic_tb_status;
     );
 
     always @(posedge clk) begin
-        if (watch_en && (dut.eff_band[8] !== band_prev)) begin
+        if (!watch_en) begin
+            band_prev <= dut.eff_band[8];
+            band_steps <= 0;
+            band_bad <= 1'b0;
+        end else if (dut.eff_band[8] !== band_prev) begin
             if (dut.eff_band[8] !== (band_prev - 2'd1)) band_bad <= 1'b1;
-        end
-    end
-
-    always @(posedge clk) begin
-        if (watch_en && (dut.eff_band[8] !== band_prev)) begin
             band_steps <= band_steps + 1;
-        end
-    end
-
-    always @(posedge clk) begin
-        if (watch_en && (dut.eff_band[8] !== band_prev)) begin
             band_prev <= dut.eff_band[8];
         end
     end
@@ -199,13 +193,9 @@ module pic_tb_status;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     initial begin
-        $display("\n===========================================================");
         $display("tb_pic_status : SRCx_STATUS field-by-field verification");
-        $display("===========================================================");
 
         irq_src     = 16'b0;
         cpu_irq_ack = 1'b0;
@@ -216,9 +206,7 @@ module pic_tb_status;
         @(posedge clk) #1 rst_n = 1'b1;
         axil_step(2);
 
-        // =====================================================================
         // 1. PEND, bit [0]
-        // =====================================================================
         // PEND is "this source has an ENABLED request and is not in service". The
         // enable term is the part worth proving: a raised line with the source
         // masked must NOT show as pending, otherwise software cannot tell an
@@ -247,9 +235,7 @@ module pic_tb_status;
         chk_field(2, M_STATE, 32'd0, "  SRC2_STATUS untouched by SRC1 activity");
         quiesce;
 
-        // =====================================================================
         // 2. ACTIVE, bit [1]
-        // =====================================================================
         // ACTIVE means "on the nesting stack". The interesting property is that
         // PEND and ACTIVE are independent: a level source that is still asserted
         // while its handler runs is both pending and active at the same time.
@@ -277,9 +263,7 @@ module pic_tb_status;
         chk_field(3, M_STATE, 32'd0, "  after end-of-interrupt: all state bits 0");
         quiesce;
 
-        // =====================================================================
         // 3. DDL_TIMER, bits [31:16], and its gating
-        // =====================================================================
         // The counter runs only while the source is PENDING AND NOT ACTIVE. That
         // gate is the whole point: it measures how long the source waited for
         // service, so it must stop the moment service starts.
@@ -330,9 +314,7 @@ module pic_tb_status;
         chk_field(6, M_DDL, 32'd0, "  DDL_TIMER stays 0 with the deadline disabled");
         quiesce;
 
-        // =====================================================================
         // 4. ESC, bit [2], and EFF_BAND, bits [5:4]
-        // =====================================================================
         // These two are checked together because they are two views of one event:
         // ESC says an escalation happened, EFF_BAND says where the source ended up.
         // Checking only ESC would not catch an escalation that sets the flag and
@@ -388,13 +370,12 @@ module pic_tb_status;
         axil_write(CFG(8), 32'h0004_0006, RESP_OKAY);  // deadline 4, band 3
         axil_write(INT_ENABLE, 32'h0000_0100, RESP_OKAY);
         axil_step(3);
-        band_prev  = dut.eff_band[8];
-        band_steps = 0;
-        band_bad   = 1'b0;
+        @(negedge clk);
         check(32'd3, {30'b0, band_prev}, "  EFF_BAND starts at the configured band 3");
         watch_en   = 1'b1;
         irq_src[8] = 1'b1;
         axil_step(40);  // ample time for 3+ misses
+        @(negedge clk);
         watch_en = 1'b0;
         check(32'd3, band_steps, "  exactly 3 band transitions were observed");
         check(32'd0, {31'b0, band_bad}, "  every transition moved exactly one band");
@@ -406,9 +387,7 @@ module pic_tb_status;
         chk_field(8, M_EFFB, 32'h00, "  EFF_BAND still 0 after many more deadlines");
         quiesce;
 
-        // =====================================================================
         // 5. SPUR, bit [3]
-        // =====================================================================
         // A claim is spurious when the request has already gone away by the time
         // the CPU acknowledges it. The negative case is the one that matters: a
         // source still asserted at the claim and cleared later, inside the handler,
@@ -459,9 +438,7 @@ module pic_tb_status;
         quiesce;
         axil_read_chk(SPURIOUS_LOG, 32'h0000_0000, "  SPURIOUS_LOG cleared by W1C");
 
-        // =====================================================================
         // 6. full life cycle of one source, read at every transition
-        // =====================================================================
         $display("\n-- 6. life cycle of source 12, SRCx_STATUS read at every step --");
         axil_write(CFG(12), 32'h0020_0000, RESP_OKAY);  // deadline 32, band 0, level
         axil_write(INT_ENABLE, 32'h0000_1000, RESP_OKAY);
@@ -509,12 +486,10 @@ module pic_tb_status;
         check(32'd0, rd & 32'h1F, "  RETURNED: nesting depth back to 0");
         quiesce;
 
-        // ---- done ----
+        // done
         axil_step(4);
-        $display("\n========================================");
         if (errors == 0) $display("== PIC STATUS TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC STATUS TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

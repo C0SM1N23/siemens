@@ -51,7 +51,7 @@ module rv32i_cpu_core_sva (
     input ib_arready_i
 );
 
-    // --- interrupt interface shape (REQ4) ---
+    // interrupt interface shape (REQ4)
 
     ack_pulse :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) cpu_irq_ack_i |=> !cpu_irq_ack_i)
@@ -72,7 +72,7 @@ module rv32i_cpu_core_sva (
     ))
     else $error("[core] cpu_irq_eoi_i without a returning MRET");
 
-    // --- interrupts only at instruction boundaries (D2, REQ4) ---
+    // interrupts only at instruction boundaries (D2, REQ4)
 
     irq_at_boundary :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) irq_take_i |-> !lsu_active_i)
@@ -82,7 +82,7 @@ module rv32i_cpu_core_sva (
     assert property (@(posedge clk_i) disable iff (!rst_n_i) cpu_irq_ack_i |-> !lsu_active_i)
     else $error("[core] ack while a data transaction is active");
 
-    // --- trap entry / return sequencing (REQ4, D3) ---
+    // trap entry / return sequencing (REQ4, D3)
 
     trap_sets_in_trap :
     assert property (@(posedge clk_i) disable iff (!rst_n_i)
@@ -115,13 +115,13 @@ module rv32i_cpu_core_sva (
     trap_take_i && s2_advance_i |=> !dxwb_valid_i)
     else $error("[core] trapping instruction reached writeback");
 
-    // --- pipeline motion: a stalled S2 feeds S3 bubbles (REQ5, D1) ---
+    // pipeline motion: a stalled S2 feeds S3 bubbles (REQ5, D1)
 
     stall_bubbles_s3 :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) !s2_advance_i |=> !dxwb_valid_i)
     else $error("[core] S3 got a valid instr while S2 was stalled");
 
-    // --- register file: x0 hardwired to zero (REQ10) ---
+    // register file: x0 hardwired to zero (REQ10)
 
     x0_reads_zero_rs1 :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) rs1_i == 5'b0 |-> rs1_data_i == 32'b0)
@@ -131,7 +131,7 @@ module rv32i_cpu_core_sva (
     assert property (@(posedge clk_i) disable iff (!rst_n_i) rs2_i == 5'b0 |-> rs2_data_i == 32'b0)
     else $error("[core] x0 read non-zero on rs2_i port");
 
-    // --- dbus usage: WSTRB shapes (REQ11) and one direction at a time (D12) ---
+    // dbus usage: WSTRB shapes (REQ11) and one direction at a time (D12)
 
     wstrb_shape :
     assert property (@(posedge clk_i) disable iff (!rst_n_i)
@@ -146,9 +146,9 @@ module rv32i_cpu_core_sva (
     !(dbus_arvalid_i && (dbus_awvalid_i || dbus_wvalid_i)))
     else $error("[core] dbus read and write issued together");
 
-    // --- WFI silence (D23): one sleep window may complete at most the one
-    // --- fetch that was already in flight; a *second* AR handshake means the
-    // --- core kept fetching while supposedly asleep
+    // WFI silence (D23): one sleep window may complete at most the one
+    // fetch that was already in flight; a *second* AR handshake means the
+    // core kept fetching while supposedly asleep
 
     reg wfi_ar_seen_q;
     always @(posedge clk_i or negedge rst_n_i) begin

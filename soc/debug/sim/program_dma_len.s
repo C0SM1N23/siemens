@@ -41,7 +41,7 @@
 _start:
     lui  x14, 2                  # x14 = 0x2000, DMEM base
 
-    # ---- 16 source words at 0x2100 ---------------------------------------
+    # 16 source words at 0x2100
     addi x5, x14, 0x100
     lui  x6, 0xC0DE0
     addi x7, x0, 16
@@ -52,7 +52,7 @@ fill_src:
     addi x7, x7, -1
     bne  x7, x0, fill_src
 
-    # ---- guard the whole destination area --------------------------------
+    # guard the whole destination area
     # 160 words = the five 32-word slots. Written by the CPU on port A, so the
     # DMA's writes on port B later land on top of a known pattern.
     lui  x5, 0x10000
@@ -65,7 +65,7 @@ fill_guard:
     addi x7, x7, -1
     bne  x7, x0, fill_guard
 
-    # ---- the five lengths, at 0x2300 -------------------------------------
+    # the five lengths, at 0x2300
     addi x8, x14, 0x300
     addi x6, x0, 64
     sw   x6, 0(x8)
@@ -78,7 +78,7 @@ fill_guard:
     addi x6, x0, 4
     sw   x6, 16(x8)
 
-    # ---- DMA setup, once -------------------------------------------------
+    # DMA setup, once
     lui  x29, 0x30020            # DMA base
     sw   x0, 0x48(x29)           # SCHED_POLICY = fixed priority
     lui  x6, 0x07D00
@@ -87,7 +87,7 @@ fill_guard:
     addi x6, x0, 0xF
     sw   x6, 0x44(x29)           # INT_ENABLE, so INT_STATUS is observable
 
-    # ---- walk the five lengths -------------------------------------------
+    # walk the five lengths
     lui  x5, 0x10000
     addi x5, x5, 0x20            # destination of slot 0
     addi x8, x14, 0x300          # length pointer
@@ -124,7 +124,7 @@ poll_done:
     addi x9, x9, -1
     bne  x9, x0, xfer_loop
 
-    # ---- done marker last ------------------------------------------------
+    # done marker last
     lui  x30, 0xD05ED
     addi x30, x30, 0x01E
     sw   x30, 0x400(x14)

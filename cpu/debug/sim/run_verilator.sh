@@ -11,10 +11,11 @@ python3 check_lint.py cpu
 SVA=(../sva/axi_lite_sva.sv ../sva/rv32i_cpu_core_sva.sv ../sva/pic_sva.sv ../sva/rv32i_bind_core_sva.sv)
 
 # User coverage is separate from line/toggle coverage (Verilator 5.050 constraint).
+mkdir -p obj_dir/coverage
 verilator --cc --exe --build --timing --timescale 1ns/1ps --assert --coverage-user -Wno-fatal \
     --unroll-count 64 -j 4 --top-module rv32i_tb_cpu_axi \
     --Mdir obj_dir/coverage -o Vrv32i_tb_cpu_axi +incdir+. \
-    sim_main.cpp -f rtl.f -f tb_cpu.f "${SVA[@]}" \
+    "$PWD/sim_main.cpp" -f rtl.f -f tb_cpu.f "${SVA[@]}" \
     ../sva/rv32i_cpu_func_cov.sv ../sva/rv32i_bind_sva.sv > build_coverage.log 2>&1 \
     || { tail -80 build_coverage.log; exit 1; }
 ./obj_dir/coverage/Vrv32i_tb_cpu_axi 2>&1 | tee sim_run.log

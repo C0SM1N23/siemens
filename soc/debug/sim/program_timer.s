@@ -43,7 +43,7 @@ _start:
     lui  x25, 0x30000            # x25 = PIC base
     lui  x26, 0x30010            # x26 = machine timer base
 
-    # ---- let source 7 through the controller ------------------------------
+    # let source 7 through the controller
     addi x30, x0, 0x80
     sw   x30, 0xD8(x25)          # PIC INT_ENABLE = source 7
 
@@ -55,19 +55,19 @@ _start:
     addi x28, x0, 8
     csrrs x0, mstatus, x28       # mstatus.MIE = 1
 
-    # ---- arm the timer a short way ahead of now ---------------------------
+    # arm the timer a short way ahead of now
     sw   x0, 0x0C(x26)           # MTIMECMP_HI = 0 (the low half is still ones)
     lw   x30, 0x00(x26)          # MTIME_LO
     addi x30, x30, 200
     sw   x30, 0x210(x14)         # remember what was armed, for the bench
     sw   x30, 0x08(x26)          # MTIMECMP_LO -> the timer is now armed
 
-    # ---- sleep until it fires ---------------------------------------------
+    # sleep until it fires
     wfi
 wait_irq:
     beq  x31, x0, wait_irq
 
-    # ---- the line really was released -------------------------------------
+    # the line really was released
     lw   x30, 0x9C(x25)          # SRC7_STATUS
     sw   x30, 0x218(x14)
     sw   x31, 0x21C(x14)         # and it fired exactly once
@@ -79,9 +79,7 @@ wait_irq:
 halt:
     beq  x0, x0, halt
 
-# ---------------------------------------------------------------------------
 # interrupt handler
-# ---------------------------------------------------------------------------
 # The timer's request is the comparison itself, held as a level. Moving the
 # compare register out of reach is the only way to release it; returning
 # without doing so re-enters this handler immediately.

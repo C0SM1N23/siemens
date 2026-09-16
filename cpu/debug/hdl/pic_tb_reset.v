@@ -41,7 +41,7 @@
 
 module pic_tb_reset;
 
-    // ---- register map (byte offsets) ----
+    // register map (byte offsets)
     localparam CFG0 = 32'h00, SWT0 = 32'h40, STA0 = 32'h80;
     localparam BAND_CONFIG   = 32'hC0, NEST_STATUS  = 32'hC4, NEST_MAX_R = 32'hC8,
            ACTIVE_VEC    = 32'hCC, SPURIOUS_LOG = 32'hD0, ESCALATION = 32'hD4,
@@ -49,7 +49,7 @@ module pic_tb_reset;
     localparam RESP_OKAY = 2'b00;
     localparam SW_KEY = 16'hA5A5;
 
-    // ---- documented reset values ----
+    // documented reset values
     localparam [31:0] RST_CFG = 32'h0000_0000;
     localparam [31:0] RST_SWT = 32'h0000_0000;
     localparam [31:0] RST_STA = 32'h0000_0000;
@@ -62,18 +62,18 @@ module pic_tb_reset;
     localparam [31:0] RST_INTEN = 32'h0000_0000;
     localparam [31:0] RST_INTST = 32'h0000_0000;
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT source / CPU pins ----
+    // DUT source / CPU pins
     reg [15:0] irq_src;
     reg cpu_irq_ack, cpu_irq_eoi;
     wire       cpu_irq;
     wire [3:0] cpu_irq_vec;
 
-    // ---- AXI4-Lite master side ----
+    // AXI4-Lite master side
     reg [31:0] awaddr, wdata, araddr;
     reg [3:0] wstrb;
     reg awvalid, wvalid, bready, arvalid, rready;
@@ -119,9 +119,7 @@ module pic_tb_reset;
         .s_axi_rready_i (rready)
     );
 
-    // ---------------------------------------------------------------------------
     // helpers
-    // ---------------------------------------------------------------------------
 
     // A value that contains any X or Z reduces to X under the reduction-XOR
     // operator. Checking this explicitly matters because `check` uses === and would
@@ -176,13 +174,9 @@ module pic_tb_reset;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     initial begin
-        $display("\n===========================================================");
         $display("tb_pic_reset : reset verification for hdl/pic.v");
-        $display("===========================================================");
 
         irq_src     = 16'b0;
         cpu_irq_ack = 1'b0;
@@ -190,7 +184,7 @@ module pic_tb_reset;
         axil_idle;
         rst_n = 1'b0;
 
-        // ===== 1. bus and CPU outputs while reset is asserted ==================
+        // 1. bus and CPU outputs while reset is asserted
         $display("\n-- 1. slave port and CPU outputs while rst_n is LOW --");
         if ($test$plusargs("verbose")) $display("   step 1: hold rst_n = 0 for 4 clock cycles");
         axil_step(4);
@@ -207,7 +201,7 @@ module pic_tb_reset;
         check(32'd0, {31'b0, cpu_irq}, "  cpu_irq low during reset");
         check(32'd0, {28'b0, cpu_irq_vec}, "  cpu_irq_vec = 0 during reset");
 
-        // ===== 2. release reset, read the whole map ============================
+        // 2. release reset, read the whole map
         $display("\n-- 2. every mapped register reads its documented reset value --");
         if ($test$plusargs("verbose")) $display("   step 1: release rst_n between clock edges");
         @(posedge clk) #1 rst_n = 1'b1;
@@ -218,14 +212,14 @@ module pic_tb_reset;
             $display("           and the 8 global registers, comparing each to its reset value");
         check_full_reset_map("power-on reset");
 
-        // ===== 3. CPU-side outputs after reset =================================
+        // 3. CPU-side outputs after reset
         $display("\n-- 3. CPU-side outputs after reset --");
         check(32'd0, {31'b0, cpu_irq}, "  cpu_irq inactive after reset");
         check(32'd0, {28'b0, cpu_irq_vec}, "  cpu_irq_vec = 0 after reset");
         chk_defined({31'b0, cpu_irq}, "cpu_irq after reset");
         chk_defined({28'b0, cpu_irq_vec}, "cpu_irq_vec after reset");
 
-        // ===== 4. internal state not visible through a register ================
+        // 4. internal state not visible through a register
         // The nesting stack is the state a "the valid bit covers it" argument would
         // normally leave unreset. NEST_STATUS.TOP_ID and ACTIVE_VEC.ID read it, so
         // an unreset stack would put X on a register read after the first claim.
@@ -238,7 +232,7 @@ module pic_tb_reset;
         end
         check(32'd0, {27'b0, dut.depth}, "  nesting depth = 0 after reset");
 
-        // ===== 5. asynchronous reset from a fully-loaded state =================
+        // 5. asynchronous reset from a fully-loaded state
         // Everything below is set to a NON-reset value first, so a register that is
         // simply never written cannot pass this check by accident.
         $display("\n-- 5. asynchronous reset from a fully configured, nested state --");
@@ -299,7 +293,7 @@ module pic_tb_reset;
         end
         check(32'd0, {27'b0, dut.depth}, "  nesting depth back to 0 after re-reset");
 
-        // ===== 6. the block is disarmed out of reset ===========================
+        // 6. the block is disarmed out of reset
         // INT_ENABLE resetting to 0 is what makes this true, and it is the property
         // the integration relies on: a peripheral that already drives its line at
         // power-up must not produce an interrupt before software is ready for it.
@@ -322,12 +316,10 @@ module pic_tb_reset;
         check(32'd1, {31'b0, cpu_irq}, "  request appears once software enables it");
         irq_src[4] = 1'b0;
 
-        // ---- done ----
+        // done
         axil_step(4);
-        $display("\n========================================");
         if (errors == 0) $display("== PIC RESET TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC RESET TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

@@ -50,18 +50,18 @@
 
 module rv32i_tb_traps;
 
-    // ---- memory map for this bench ----
+    // memory map for this bench
     localparam [31:0] IMEM_BASE = 32'h0000_0000;  // 256 words: 0x0000 .. 0x03FF
     localparam [31:0] DMEM_BASE = 32'h0000_2000;  // 256 words: 0x2000 .. 0x23FF
     localparam [31:0] BAD_FETCH = 32'h0000_8000;  // outside the instruction memory
     localparam [31:0] BAD_DATA = 32'h0000_4000;  // outside the data memory
     localparam IWORDS = 256;
 
-    // ---- program layout ----
+    // program layout
     localparam [31:0] HANDLER = 32'h0000_0080;  // word 32: direct-mode handler
     localparam CASE_WORD = 2;  // the case body starts at 0x08
 
-    // ---- opcodes ----
+    // opcodes
     localparam [6:0] OP_LUI    = 7'b0110111, OP_JAL   = 7'b1101111,
                  OP_JALR   = 7'b1100111, OP_LOAD  = 7'b0000011,
                  OP_STORE  = 7'b0100011, OP_OPIMM = 7'b0010011,
@@ -73,16 +73,16 @@ module rv32i_tb_traps;
     localparam [31:0] BAD_IW = 32'hFFFF_FFFF;  // undefined opcode 1111111
     localparam [31:0] MRET = 32'h3020_0073;
 
-    // ---- CSR numbers used by the test programs ----
+    // CSR numbers used by the test programs
     localparam [11:0] CSR_MSTATUS = 12'h300, CSR_MTVEC = 12'h305, CSR_MIE = 12'h304,
                   CSR_MEPC    = 12'h341;
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- CPU buses ----
+    // CPU buses
     wire [31:0] ib_araddr, ib_rdata;
     wire [2:0] ib_arprot;
     wire ib_arvalid, ib_arready, ib_rvalid, ib_rready;
@@ -95,7 +95,7 @@ module rv32i_tb_traps;
     wire db_arvalid, db_arready, db_rvalid, db_rready;
     wire [1:0] db_bresp, db_rresp;
 
-    // ---- interrupt pins, driven directly by the bench ----
+    // interrupt pins, driven directly by the bench
     reg       cpu_irq;
     reg [3:0] cpu_irq_vec;
     wire cpu_irq_ack, cpu_irq_eoi, cpu_in_trap;
@@ -203,12 +203,10 @@ rv32i_cpu_top #(
         .rready_i (db_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // bus-activity counters: how the "no transaction was issued" checks are made.
     // A misaligned access must trap BEFORE anything reaches the bus, and an
     // illegal store must never write memory; both are negative properties, so they
     // need a witness that counts what did happen rather than what did not.
-    // ---------------------------------------------------------------------------
     integer db_ar_cnt, db_aw_cnt, ack_cnt, eoi_cnt;
 
     // eoi_at_marker samples the EOI count at the instant a handler stores to the
@@ -271,10 +269,8 @@ rv32i_cpu_top #(
         end
     end
 
-    // ---------------------------------------------------------------------------
     // RV32I instruction encoders. Written out in full so each test program below
     // reads as a listing; the field order is the one in the unprivileged spec.
-    // ---------------------------------------------------------------------------
     function [31:0] enc_i;
         input [11:0] imm;
         input [4:0] rs1;
@@ -372,9 +368,7 @@ rv32i_cpu_top #(
         I_CSRRS = enc_i(csr, rs1, 3'b010, rd, OP_SYSTEM);
     endfunction
 
-    // ---------------------------------------------------------------------------
     // case scaffolding
-    // ---------------------------------------------------------------------------
 
     // Fill the image with NOPs and put a self-loop at every handler entry the
     // bench uses. The self-loop matters: after the trap the core must sit at a
@@ -394,9 +388,7 @@ rv32i_cpu_top #(
     // Reset the core, load the image, release reset between clock edges.
     task start_case(input [511:0] name);
         begin
-            $display("\n-----------------------------------------------------------");
             $display("CASE: %0s", name);
-            $display("-----------------------------------------------------------");
             rst_n       = 1'b0;
             cpu_irq     = 1'b0;
             cpu_irq_vec = 4'd0;
@@ -452,17 +444,11 @@ rv32i_cpu_top #(
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     initial begin
-        $display("\n===========================================================");
         $display("tb_traps : one directed test per trap cause");
-        $display("===========================================================");
 
-        // =====================================================================
         // cause 0 : instruction address misaligned
-        // =====================================================================
         // A taken jump whose target has bit 1 set. RV32I without the C extension
         // requires 4-byte aligned instructions, so the target is illegal and the
         // jump traps instead of being taken.
@@ -482,9 +468,7 @@ rv32i_cpu_top #(
             $display("   step 5: no data transaction may have been issued");
         check_no_dbus_traffic;
 
-        // =====================================================================
         // cause 1 : instruction access fault
-        // =====================================================================
         // The jump itself is legal; the fetch at the destination is not. The
         // faulting instruction is the one that could not be fetched, so mepc is
         // the destination, not the jump.
@@ -505,9 +489,7 @@ rv32i_cpu_top #(
             $display("           (the address that could not be fetched, not the jump)");
         expect_trap(32'd1, BAD_FETCH, BAD_FETCH, HANDLER);
 
-        // =====================================================================
         // cause 2 : illegal instruction
-        // =====================================================================
         prog_init;
         prog[CASE_WORD] = BAD_IW;
         start_case("cause 2 - illegal instruction");
@@ -528,9 +510,7 @@ rv32i_cpu_top #(
         check_no_writeback("  x5 untouched by the illegal instruction");
         check_no_dbus_traffic;
 
-        // =====================================================================
         // cause 3 : breakpoint
-        // =====================================================================
         prog_init;
         prog[CASE_WORD] = EBREAK;
         start_case("cause 3 - breakpoint (EBREAK)");
@@ -543,9 +523,7 @@ rv32i_cpu_top #(
             $display("           (mepc points AT the EBREAK, so a debugger can resume it)");
         expect_trap(32'd3, 32'h0000_0008, 32'h0000_0008, HANDLER);
 
-        // =====================================================================
         // cause 11 : environment call from M-mode
-        // =====================================================================
         prog_init;
         prog[CASE_WORD] = ECALL;
         start_case("cause 11 - environment call from M-mode (ECALL)");
@@ -560,9 +538,7 @@ rv32i_cpu_top #(
             $display("            so mtval is 0 - the handler must add 4 to mepc itself)");
         expect_trap(32'd11, 32'h0000_0008, 32'h0000_0000, HANDLER);
 
-        // =====================================================================
         // cause 4 : load address misaligned - word form
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_LUI(5'd1, DMEM_BASE[31:12]);  // x1 = 0x2000
         prog[CASE_WORD+1] = I_LW(5'd5, 5'd1, 12'd1);  // lw x5, 1(x1)
@@ -589,9 +565,7 @@ rv32i_cpu_top #(
         check_no_dbus_traffic;
         check_no_writeback("  x5 untouched by the misaligned load");
 
-        // =====================================================================
         // cause 4 : load address misaligned - halfword form
-        // =====================================================================
         // The halfword rule is different from the word rule (bit 0 only), so it is
         // a separate case: a check that only tested LW would pass on an
         // implementation that forgot halfword alignment entirely.
@@ -608,9 +582,7 @@ rv32i_cpu_top #(
         expect_trap(32'd4, 32'h0000_000C, DMEM_BASE + 32'd1, HANDLER);
         check_no_dbus_traffic;
 
-        // =====================================================================
         // cause 6 : store address misaligned - word form
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_LUI(5'd1, DMEM_BASE[31:12]);
         prog[CASE_WORD+1] = I_SW(5'd0, 5'd1, 12'd2);  // sw x0, 2(x1)
@@ -632,9 +604,7 @@ rv32i_cpu_top #(
             $display("           memory, so the transaction count must be exactly zero");
         check_no_dbus_traffic;
 
-        // =====================================================================
         // cause 6 : store address misaligned - halfword form
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_LUI(5'd1, DMEM_BASE[31:12]);
         prog[CASE_WORD+1] = I_SH(5'd0, 5'd1, 12'd1);  // sh x0, 1(x1)
@@ -646,9 +616,7 @@ rv32i_cpu_top #(
         expect_trap(32'd6, 32'h0000_000C, DMEM_BASE + 32'd1, HANDLER);
         check_no_dbus_traffic;
 
-        // =====================================================================
         // cause 5 : load access fault
-        // =====================================================================
         // The address is aligned, so alignment cannot fire; only the bus response
         // can. This is the ordering that makes the two load causes distinguishable.
         prog_init;
@@ -674,9 +642,7 @@ rv32i_cpu_top #(
         check(32'd1, db_ar_cnt, "  exactly one read transaction was issued");
         check_no_writeback("  x5 untouched by the faulting load");
 
-        // =====================================================================
         // cause 7 : store access fault
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_LUI(5'd1, BAD_DATA[31:12]);
         prog[CASE_WORD+1] = I_SW(5'd0, 5'd1, 12'd0);  // sw x0, 0(x1)
@@ -694,9 +660,7 @@ rv32i_cpu_top #(
         expect_trap(32'd7, 32'h0000_000C, BAD_DATA, HANDLER);
         check(32'd1, db_aw_cnt, "  exactly one write transaction was issued");
 
-        // =====================================================================
         // cause priority : two candidate faults on one instruction
-        // =====================================================================
         // An unmapped AND misaligned address could produce cause 4 or cause 5. The
         // design checks alignment before issuing, so cause 4 must win and no bus
         // transaction may be issued at all. Without this case, an implementation
@@ -717,9 +681,7 @@ rv32i_cpu_top #(
         expect_trap(32'd4, 32'h0000_000C, BAD_DATA + 32'd3, HANDLER);
         check_no_dbus_traffic;
 
-        // =====================================================================
         // machine external interrupt, vector 0 : cause 16
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);  // mstatus.MIE <- 1
         prog[CASE_WORD+1] = I_LUI(5'd4, 20'h00010);  // x4 = 0x00010000 (mie[16])
@@ -739,9 +701,7 @@ rv32i_cpu_top #(
             $display("           mtval = 0, and mepc at an instruction boundary");
         expect_irq_trap(4'd0, HANDLER);
 
-        // =====================================================================
         // machine external interrupt, vector 3 : cause 19
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);
         prog[CASE_WORD+1] = I_LUI(5'd4, 20'h00080);  // mie[19]
@@ -753,9 +713,7 @@ rv32i_cpu_top #(
         if ($test$plusargs("verbose")) $display("   step 2: expect mcause = 0x80000013");
         expect_irq_trap(4'd3, HANDLER);
 
-        // =====================================================================
         // machine external interrupt, vector 15 : cause 31
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);
         prog[CASE_WORD+1] = I_LUI(5'd4, 20'h80000);  // mie[31]
@@ -767,9 +725,7 @@ rv32i_cpu_top #(
         if ($test$plusargs("verbose")) $display("   step 2: expect mcause = 0x8000001F");
         expect_irq_trap(4'd15, HANDLER);
 
-        // =====================================================================
         // negative case : an interrupt masked in mie must never be taken
-        // =====================================================================
         // This is the other half of every case above. If the vector were ignored
         // and any request were taken, all three interrupt cases would still pass.
         prog_init;
@@ -801,9 +757,7 @@ rv32i_cpu_top #(
         check(32'd1, {31'b0, cpu_in_trap}, "  the enabled vector is taken");
         check(32'h8000_0010, dut.csr_file_inst.mcause_q, "  mcause = 0x80000010");
 
-        // =====================================================================
         // negative case : an interrupt with mstatus.MIE = 0 must never be taken
-        // =====================================================================
         prog_init;
         prog[CASE_WORD+0] = I_LUI(5'd4, 20'h00010);  // mie enables cause 16
         prog[CASE_WORD+1] = I_CSRRW(5'd0, CSR_MIE, 5'd4);  // but MIE is left at 0
@@ -824,9 +778,7 @@ rv32i_cpu_top #(
         check(32'd0, {31'b0, cpu_in_trap}, "  cpu_in_trap stayed low");
         check(32'd0, ack_cnt, "  cpu_irq_ack never pulsed");
 
-        // =====================================================================
         // mtvec vectored mode
-        // =====================================================================
         // In vectored mode interrupts enter at BASE + 4*cause while exceptions
         // still enter at BASE. Both halves are checked, because a design that sent
         // everything to BASE + 4*cause would pass an interrupt-only check.
@@ -869,7 +821,6 @@ rv32i_cpu_top #(
             $display("           entry must be BASE = 0x%08h, NOT BASE + 44", HANDLER);
         expect_trap(32'd11, 32'h0000_0008, 32'h0000_0000, HANDLER);
 
-        // =====================================================================
         // Nesting: which trap level an MRET is returning from
         //
         // MRET is one instruction for two different returns. Returning from an
@@ -877,9 +828,8 @@ rv32i_cpu_top #(
         // exception owes it nothing. A core that tracks "an interrupt is in
         // progress" as a single flag cannot tell the two apart, and both cases
         // below are where that shows.
-        // =====================================================================
 
-        // --- a synchronous exception taken inside an interrupt handler -------
+        // a synchronous exception taken inside an interrupt handler
         //
         // Vectored mtvec, BASE = 0x80. Interrupt vector 0 is cause 16, so the
         // interrupt handler entry is BASE + 64 = 0xC0; a synchronous exception
@@ -934,7 +884,7 @@ rv32i_cpu_top #(
         check(32'd1, ack_cnt[31:0], "  exactly one claim was made");
         check(32'd0, {31'b0, cpu_in_trap}, "  cpu_in_trap released on the last MRET");
 
-        // --- two nested interrupt handlers -----------------------------------
+        // two nested interrupt handlers
         //
         //   0xC0  JAL h0        vector 0 entry
         //   0xC4  JAL h1        vector 1 entry
@@ -984,18 +934,14 @@ rv32i_cpu_top #(
         check(32'd2, eoi_cnt[31:0], "  two EOIs came back, one per level");
         check(32'd0, {31'b0, cpu_in_trap}, "  cpu_in_trap released only at the end");
 
-        // ---- done ----
+        // done
         repeat (10) @(posedge clk);
-        $display("\n========================================");
         if (errors == 0) $display("== TRAP CAUSE TESTBENCH: ALL TESTS PASSED ==");
         else $display("== TRAP CAUSE TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 
-    // ---------------------------------------------------------------------------
     // interrupt helpers, declared after the main block for readability
-    // ---------------------------------------------------------------------------
 
     // Wait until the program has finished enabling interrupts, then raise the
     // request. Waiting on the architectural state rather than on a cycle count

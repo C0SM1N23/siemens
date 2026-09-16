@@ -45,9 +45,7 @@ module soc_tb_full2lite;
         .rst_n_o(rst_n)
     );
 
-    // ---------------------------------------------------------------------------
     // full side, driven by this bench
-    // ---------------------------------------------------------------------------
     reg  [31:0] f_awaddr;
     reg  [ 7:0] f_awlen;
     reg  [ 2:0] f_awsize;
@@ -156,9 +154,7 @@ module soc_tb_full2lite;
         .s_rready_i (l_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // full-side master tasks
-    // ---------------------------------------------------------------------------
     reg [31:0] wr_seed;  // pattern the write task lays down
     reg [1:0] last_bresp;
     reg [31:0] rd_word[0:15];  // what the read task collected
@@ -243,9 +239,7 @@ module soc_tb_full2lite;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     integer i;
 
     initial begin
@@ -271,7 +265,7 @@ module soc_tb_full2lite;
         @(posedge rst_n);
         repeat (4) @(posedge clk);
 
-        // -- 1: the DMA's own traffic shape, 8-beat INCR write then read ---------
+        // -- 1: the DMA's own traffic shape, 8-beat INCR write then read
         $display("\n-- 1: 8-beat INCR write, then read back --");
         do_write(32'h0000_0040, 8'd7, SIZE_32, BURST_INCR, 32'hA000_0000, 4'hF);
         check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "8-beat write burst answers OKAY");
@@ -288,7 +282,7 @@ module soc_tb_full2lite;
         for (i = 0; i < 8; i = i + 1)
         check(32'hA000_0000 + i, ram.mem[16+i], "the word landed at the right address");
 
-        // -- 2: single beat, where first and last beat coincide ------------------
+        // -- 2: single beat, where first and last beat coincide
         $display("\n-- 2: single-beat burst (LEN=0) --");
         do_write(32'h0000_0080, 8'd0, SIZE_32, BURST_INCR, 32'hB0000000, 4'hF);
         check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "single-beat write answers OKAY");
@@ -297,7 +291,7 @@ module soc_tb_full2lite;
         check(32'd1, rlast_count, "single beat carries exactly one RLAST");
         check(32'd1, rlast_on_last, "the single beat is the last beat");
 
-        // -- 3: odd length with a partial byte strobe ----------------------------
+        // -- 3: odd length with a partial byte strobe
         $display("\n-- 3: LEN=2 with a half-word strobe --");
         for (i = 0; i < 3; i = i + 1) ram.mem[48+i] = 32'hFFFF_FFFF;
         do_write(32'h0000_00C0, 8'd2, SIZE_32, BURST_INCR, 32'h1234_5678, 4'h3);
@@ -306,14 +300,14 @@ module soc_tb_full2lite;
         check(32'hFFFF_5679, ram.mem[49], "second beat also honoured the strobe");
         check(32'hFFFF_567A, ram.mem[50], "third beat also honoured the strobe");
 
-        // -- 4: FIXED burst, every beat to the same address ----------------------
+        // -- 4: FIXED burst, every beat to the same address
         $display("\n-- 4: FIXED burst --");
         do_write(32'h0000_0100, 8'd3, SIZE_32, BURST_FIXED, 32'hC000_0000, 4'hF);
         check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "FIXED write answers OKAY");
         check(32'hC000_0003, ram.mem[64], "FIXED wrote every beat to one address");
         check(32'h0000_0000, ram.mem[65], "FIXED did not advance to the next word");
 
-        // -- 5: WRAP is outside the supported subset -----------------------------
+        // -- 5: WRAP is outside the supported subset
         $display("\n-- 5: WRAP burst is rejected, not mistranslated --");
         ram.mem[80] = 32'hDEAD_BEEF;
         do_write(32'h0000_0140, 8'd3, SIZE_32, BURST_WRAP, 32'hE000_0000, 4'hF);
@@ -325,14 +319,14 @@ module soc_tb_full2lite;
         check(32'd1, rlast_count, "a rejected read still delivers one RLAST");
         check(32'd1, rlast_on_last, "the rejected read delivers all its beats");
 
-        // -- 6: narrow transfer is outside the supported subset ------------------
+        // -- 6: narrow transfer is outside the supported subset
         $display("\n-- 6: narrow (16-bit) transfer is rejected --");
         ram.mem[96] = 32'hCAFE_F00D;
         do_write(32'h0000_0180, 8'd1, SIZE_16, BURST_INCR, 32'hF000_0000, 4'hF);
         check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "narrow write answers SLVERR");
         check(32'hCAFE_F00D, ram.mem[96], "narrow write left memory untouched");
 
-        // -- 7: back-to-back bursts, no state left behind ------------------------
+        // -- 7: back-to-back bursts, no state left behind
         $display("\n-- 7: back-to-back bursts after a rejected one --");
         do_write(32'h0000_01C0, 8'd7, SIZE_32, BURST_INCR, 32'h5A5A_0000, 4'hF);
         check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "the bridge recovered from SLVERR");
@@ -341,10 +335,8 @@ module soc_tb_full2lite;
         check(32'h5A5A_0000 + i, rd_word[i], "recovered burst reads back clean");
 
         repeat (10) @(posedge clk);
-        $display("\n=====================================================");
         if (errors == 0) $display("== FULL2LITE BRIDGE TESTBENCH: ALL TESTS PASSED ==");
         else $display("== FULL2LITE BRIDGE TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================\n");
         finish_test;
     end
 

@@ -277,12 +277,10 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_dualwrite: Port A si Port B scriu simultan la DOUA ADRESE
     // DIFERITE (nu se asteapta nicio coliziune -- ambele trebuie sa
     // primeasca OKAY). Verifica separat, dupa aceea, ca fiecare adresa
     // contine data scrisa de portul ei.
-    // -------------------------------------------------------------------
     task do_dualwrite;
         input [9:0]  addr_a;
         input [31:0] data_a;
@@ -392,11 +390,9 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_slowwrite: scriere AXI4-Lite simpla, dar BREADY e tinut jos
     // <delay> cicluri suplimentare dupa ce BVALID apare, inainte sa fie
     // asertat. Testeaza toleranta la un master lent pe canalul de raspuns.
-    // -------------------------------------------------------------------
     task do_slowwrite;
         input [8*16-1:0] port;
         input [9:0]      addr;
@@ -437,11 +433,9 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_slowread: citire AXI4-Lite simpla, dar RREADY e tinut jos
     // <delay> cicluri suplimentare dupa ce RVALID apare. Esantioneaza
     // RDATA in fiecare ciclu al asteptarii si confirma ca ramane stabil.
-    // -------------------------------------------------------------------
     task do_slowread;
         input [8*16-1:0] port;
         input [9:0]      addr;
@@ -485,14 +479,12 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_status_slowclear: Port A scrie INT_STATUS=<clear_mask> (W1C) si
     // tine BREADY jos <delay> cicluri; in acest timp, Port B citeste
     // INT_STATUS in fiecare ciclu, ca sa confirme ca stergerea s-a aplicat
     // prompt (la primul ciclu din WR_RESP) si ramane stabila. NU distinge
     // codul vechi (cu bug) de cel nou -- vezi nota din planul de teste --
     // doar confirma corectitudinea functionala sub BREADY intarziat.
-    // -------------------------------------------------------------------
     task do_status_slowclear;
         input [31:0] clear_mask;
         input [31:0] delay;
@@ -530,12 +522,10 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_staggered_write: asiguraem AW si W la momente diferite (5 cicluri
     // intre ele), nu simultan. Verifica in acelasi timp ca ARREADY ramane
     // 0 pe tot parcursul ferestrei (o citire nu poate "sari inaintea"
     // scrierii partial asamblate). mode="AW" -> AW primul; mode="W" -> W primul.
-    // -------------------------------------------------------------------
     task do_staggered_write;
         input [8*16-1:0] port;
         input [8*16-1:0] mode;
@@ -599,13 +589,11 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_reg_read_during_write: Port A scrie <new_value> pe <addr>, Port B
     // citeste simultan aceeasi adresa. Spre deosebire de RWCONFLICT
     // (memorie), aici NU exista SLVERR -- ambele trebuie sa primeasca
     // OKAY, iar cititorul trebuie sa vada valoarea VECHE (registrul se
     // actualizeaza abia pe frontul urmator).
-    // -------------------------------------------------------------------
     task do_reg_read_during_write;
         input [9:0]  addr;
         input [31:0] old_value;
@@ -640,12 +628,10 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_reset_midtransaction: porneste o scriere pe Port A, o lasa in
     // WR_RESP (BVALID activ, BREADY tinut jos deliberat), apoi injecteaza
     // reset in timp ce tranzactia e blocata acolo. Dupa eliberare,
     // confirma revenire curata printr-o scriere noua, completa.
-    // -------------------------------------------------------------------
     task do_reset_midtransaction;
         reg [1:0] resp;
         begin
@@ -700,14 +686,12 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_backtoback_write: doua scrieri fara niciun ciclu liber intre ele.
     // AWVALID/WVALID/BREADY raman sus tot timpul; adresa comuta pe exact
     // muchia pe care se incheie prima tranzactie (BVALID && BREADY), deci a
     // doua cerere e deja valida cand FSM-ul revine in S_IDLE. Asta e cazul
     // zero-gap pe care fisierul de vectori nu il poate exprima, fiindca bucla
     // principala insereaza un @(posedge clk) intre instructiuni.
-    // -------------------------------------------------------------------
     task do_backtoback_write;
         input [8*16-1:0] port;
         input [9:0]      addr1;
@@ -752,13 +736,11 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_toggle_activity: tine AWVALID/WVALID/BREADY sus <cycles> cicluri.
     // FSM-ul face ping-pong S_IDLE <-> S_WR_RESP, cate un ciclu in fiecare,
     // deci mem_valid_o comuta exact la fiecare al doilea ciclu -- pattern-ul
     // de activitate 1-0-1-0 cerut de testul 5.5, pe care fisierul de vectori
     // nu il poate genera comanda cu comanda.
-    // -------------------------------------------------------------------
     task do_toggle_activity;
         input [8*16-1:0] port;
         input [9:0]      addr;
@@ -784,13 +766,11 @@ module tb_dp_sram_top;
     endtask
 
 
-    // -------------------------------------------------------------------
     // do_measure_stall: masoara durata stall-ului in cicluri. Porneste o
     // cerere de scriere si numara muchiile de ceas pana cand AWREADY urca --
     // adica exact cat tine blocajul impus de COOLDOWN. Apoi duce scrierea la
     // capat normal. Fara asta, do_write doar face polling si nu poate afirma
     // "ambele porturi blocate exact N cicluri" (testul 4.5).
-    // -------------------------------------------------------------------
     task do_measure_stall;
         input [8*16-1:0] port;
         input [9:0]      addr;

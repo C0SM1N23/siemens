@@ -2,11 +2,11 @@
 
 module tb_priority_arbiter;
 
-    // --- Semnale de Ceas și Reset ---
+    // Semnale de Ceas și Reset
     reg clk;
     reg rst_n;
 
-    // --- Intrări Arbiter ---
+    // Intrări Arbiter
     reg  [31:0] sched_policy;
     reg  [3:0]  ch_req;
     
@@ -17,7 +17,7 @@ module tb_priority_arbiter;
     
     reg         master_req_ready;
 
-    // --- Ieșiri Arbiter ---
+    // Ieșiri Arbiter
     wire [3:0]  ch_gnt;
     wire        master_req_valid;
     wire [31:0] master_req_addr;
@@ -25,7 +25,7 @@ module tb_priority_arbiter;
     wire        master_req_is_write;
     wire [1:0]  master_req_ch_id;
 
-    // --- Instanțierea DUT (Device Under Test) ---
+    // Instanțierea DUT (Device Under Test)
     priority_arbiter dut (
         .clk(clk),
         .rst_n(rst_n),
@@ -44,7 +44,7 @@ module tb_priority_arbiter;
         .master_req_ch_id(master_req_ch_id)
     );
 
-    // --- Generare Ceas (100 MHz) ---
+    // Generare Ceas (100 MHz)
     always #5 clk = ~clk;
 
     
@@ -125,7 +125,7 @@ module tb_priority_arbiter;
         
         // TEST 1: Modul FIXED PRIORITY (Canalul 0 = Boss)
         
-        $display("\n--- INCEPERE TEST 1: FIXED PRIORITY ---");
+        $display("\nINCEPERE TEST 1: FIXED PRIORITY");
         sched_policy = 32'd0; // Setează Fixed Priority
         
         // Ridicăm cereri SIMULTANE pe canalele 0, 1 și 2
@@ -147,8 +147,8 @@ module tb_priority_arbiter;
         
         #50;
 
-        // --- SECVENȚĂ DE RESET ÎNTRE TESTE ---
-        $display("\n--- RESETARE MODUL PENTRU TESTUL 2 ---");
+        // SECVENȚĂ DE RESET ÎNTRE TESTE
+        $display("\nRESETARE MODUL PENTRU TESTUL 2");
         rst_n = 0;
         #20;
         rst_n = 1;
@@ -157,7 +157,7 @@ module tb_priority_arbiter;
         
         // TEST 2: Modul ROUND ROBIN (Rotația Echitabilă)
         
-        $display("\n--- INCEPERE TEST 2: ROUND ROBIN ---");
+        $display("\nINCEPERE TEST 2: ROUND ROBIN");
         sched_policy = 32'd1; // Setează Round Robin
         
         // Toate cele 4 canale cer magistrala SIMULTAN și NU se dau bătute
@@ -179,7 +179,7 @@ module tb_priority_arbiter;
         clear_request(0); clear_request(1); clear_request(2); clear_request(3);
 
         #50;
-        $display("\n--- TOATE TESTELE AU TRECUT CU SUCCES ---");
+        $display("\nTOATE TESTELE AU TRECUT CU SUCCES");
         $finish;
     end
 

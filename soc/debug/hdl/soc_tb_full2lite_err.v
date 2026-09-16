@@ -59,9 +59,7 @@ module soc_tb_full2lite_err;
         .rst_n_o(rst_n)
     );
 
-    // ---------------------------------------------------------------------------
     // full side, driven by this bench
-    // ---------------------------------------------------------------------------
     reg  [31:0] f_awaddr;
     reg  [ 7:0] f_awlen;
     reg  [ 2:0] f_awsize;
@@ -149,13 +147,11 @@ module soc_tb_full2lite_err;
         .m_rready_o (l_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // lite-side slave with an injectable error
     //
     // The real register front end decides the response from wr_ok_i / rd_ok_i, so
     // pointing those at a beat counter makes it answer SLVERR on a chosen beat and
     // OKAY on every other, through the same path a genuine unmapped access takes.
-    // ---------------------------------------------------------------------------
     integer err_wbeat, err_wbeat2, err_rbeat;
     integer wbeat_cnt, rbeat_cnt;
     integer wbeats_seen;
@@ -231,9 +227,7 @@ module soc_tb_full2lite_err;
         else if (l_arvalid && l_arready) rbeat_cnt <= rbeat_cnt + 1;
     end
 
-    // ---------------------------------------------------------------------------
     // full-side master
-    // ---------------------------------------------------------------------------
     reg [1:0] last_bresp;
     reg [1:0] beat_rresp [0:15];
     integer rlast_count, rlast_on_last, rbeats_taken;
@@ -329,9 +323,7 @@ module soc_tb_full2lite_err;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     integer i, bad;
 
     initial begin
@@ -363,19 +355,15 @@ module soc_tb_full2lite_err;
         last_bresp       = RESP_OKAY;
         for (i = 0; i < 16; i = i + 1) beat_rresp[i] = RESP_OKAY;
 
-        $display("=====================================================");
         $display("== BURST BRIDGE: SLAVE ERROR INSIDE A BURST ==");
-        $display("=====================================================");
 
         wait (rst_n === 1'b1);
         repeat (2) @(posedge clk);
 
-        // =====================================================================
         // 1. the failing beat is the FIRST of eight
         //
         // Seven OKAY responses arrive after it. A bridge that reported the last
         // response instead of the worst one answers OKAY here.
-        // =====================================================================
         $display("\n-- 1. error on the first beat of an 8-beat write --");
         arm_write_err(0, NO_ERR);
         do_write(32'h0000_0000, 8'd7);
@@ -383,9 +371,7 @@ module soc_tb_full2lite_err;
               "first beat failed -> burst answers SLVERR");
         check(32'd8, wbeats_seen[31:0], "all eight beats were still issued to the slave");
 
-        // =====================================================================
         // 2. the failing beat is in the MIDDLE
-        // =====================================================================
         $display("\n-- 2. error on beat 3 of eight --");
         arm_write_err(3, NO_ERR);
         do_write(32'h0000_0020, 8'd7);
@@ -393,46 +379,38 @@ module soc_tb_full2lite_err;
               "middle beat failed -> burst answers SLVERR");
         check(32'd8, wbeats_seen[31:0], "the burst ran to completion after the failure");
 
-        // =====================================================================
         // 3. the failing beat is the LAST one
         //
         // The one case a bridge with no fold at all still gets right, kept so the
         // three positions are covered rather than assumed.
-        // =====================================================================
         $display("\n-- 3. error on the last beat of eight --");
         arm_write_err(7, NO_ERR);
         do_write(32'h0000_0040, 8'd7);
         check({30'd0, RESP_SLVERR}, {30'd0, last_bresp},
               "last beat failed -> burst answers SLVERR");
 
-        // =====================================================================
         // 4. control: nothing fails, so nothing may be reported
         //
         // Without this an implementation that answered SLVERR unconditionally
         // would pass every check above.
-        // =====================================================================
         $display("\n-- 4. no beat fails --");
         arm_write_err(NO_ERR, NO_ERR);
         do_write(32'h0000_0060, 8'd7);
         check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "a clean burst answers OKAY");
         check(32'd8, wbeats_seen[31:0], "eight beats issued");
 
-        // =====================================================================
         // 5. two beats fail in the same burst
-        // =====================================================================
         $display("\n-- 5. two failing beats in one burst --");
         arm_write_err(1, 5);
         do_write(32'h0000_0080, 8'd7);
         check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "two failures still produce one SLVERR");
         check(32'd8, wbeats_seen[31:0], "eight beats issued");
 
-        // =====================================================================
         // 6. the bridge recovers
         //
         // A burst that failed must not leave the write channel in a state where
         // the next one is refused, or the DMA stalls on the transfer after the one
         // that went wrong rather than on the one that did.
-        // =====================================================================
         $display("\n-- 6. a clean burst after a failed one --");
         arm_write_err(2, NO_ERR);
         do_write(32'h0000_00A0, 8'd7);
@@ -441,9 +419,7 @@ module soc_tb_full2lite_err;
         do_write(32'h0000_00C0, 8'd7);
         check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "the next burst is unaffected");
 
-        // =====================================================================
         // 7. a single-beat burst, where first and last are the same beat
-        // =====================================================================
         $display("\n-- 7. single-beat burst that fails --");
         arm_write_err(0, NO_ERR);
         do_write(32'h0000_00E0, 8'd0);
@@ -451,12 +427,10 @@ module soc_tb_full2lite_err;
               "single-beat burst reports its own failure");
         check(32'd1, wbeats_seen[31:0], "exactly one beat issued");
 
-        // =====================================================================
         // 8. reads carry the response per beat
         //
         // The opposite rule to the write side, and it has to be checked as the
         // opposite: the failing beat reports, and no other beat does.
-        // =====================================================================
         $display("\n-- 8. read error stays on its own beat --");
         arm_read_err(3);
         do_read(32'h0000_0000, 8'd7);
@@ -488,10 +462,8 @@ module soc_tb_full2lite_err;
         pattern_enable = 0;
 
         repeat (4) @(posedge clk);
-        $display("\n=====================================================");
         if (errors == 0) $display("== BRIDGE ERROR TESTBENCH: ALL TESTS PASSED ==");
         else $display("== BRIDGE ERROR TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================");
         finish_test;
     end
 

@@ -62,9 +62,7 @@ module soc_tb_stress #(
         .tmr_irq_o    (tmr_irq)
     );
 
-    // ---------------------------------------------------------------------------
     // scoreboard: DMEM byte offset 0x400 is word index 256
-    // ---------------------------------------------------------------------------
     localparam integer        SB_MISMATCH       = 256;            // 0x400
     localparam integer        SB_COLL_IRQ       = 257;            // 0x404
     localparam integer        SB_FAULTS         = 258;            // 0x408
@@ -83,9 +81,7 @@ module soc_tb_stress #(
     // How much contention phase B must actually produce for the run to count.
     localparam integer        MIN_CONTENDED     = 50;
 
-    // ---------------------------------------------------------------------------
     // fabric coverage: what the run actually exercised
-    // ---------------------------------------------------------------------------
     integer arb_both_req;  // cycles with CPU and DMA both asking for DMEM
     integer arb_gnt_cpu, arb_gnt_dma;
     integer sram_both_ports;  // cycles with both SRAM ports active
@@ -195,7 +191,7 @@ module soc_tb_stress #(
             if ($test$plusargs("verbose"))
                 $display("   program finished after %0d cycles\n", timeout);
 
-            // -- the transfer survived the interference ------------------------
+            // -- the transfer survived the interference
             check(32'd0, dut.dmem_inst.mem[SB_MISMATCH],
                   "the transfer is bit-perfect despite the contention");
             for (i = 0; i < 128; i = i + 1)
@@ -212,13 +208,13 @@ module soc_tb_stress #(
             check(ST_DONE, dut.dmem_inst.mem[SB_STATUS], "channel 0 reached STATE_DONE under load");
             check(32'd2, dut.dmem_inst.mem[SB_XFERS], "both DMA transfers completed");
 
-            // -- the DECERR path ------------------------------------------------
+            // -- the DECERR path
             check(dut.dmem_inst.mem[SB_F_BEFORE] + 1, dut.dmem_inst.mem[SB_F_AFTER],
                   "the unmapped access faulted instead of hanging");
             check(CAUSE_LOAD_ACCESS, dut.dmem_inst.mem[SB_MCAUSE],
                   "it faulted as a load access fault");
 
-            // -- the SRAM raised its own interrupt ------------------------------
+            // -- the SRAM raised its own interrupt
             if (!COVERAGE_GATE || dut.dmem_inst.mem[SB_COLL_IRQ] > 0) begin
                 if ($test$plusargs("verbose"))
                     $display(
@@ -230,7 +226,7 @@ module soc_tb_stress #(
                 $display("FAIL: the SRAM never raised a collision interrupt");
             end
 
-            // -- did the run actually exercise the fabric? ----------------------
+            // -- did the run actually exercise the fabric?
             $display("\n   fabric coverage for this run:");
             if ($test$plusargs("verbose"))
                 $display("     DMEM arbiter contended cycles : %0d", arb_both_req);
@@ -303,10 +299,8 @@ module soc_tb_stress #(
         end
 
         repeat (20) @(posedge clk);
-        $display("\n=====================================================");
         if (errors == 0) $display("== SOC STRESS TESTBENCH: ALL TESTS PASSED ==");
         else $display("== SOC STRESS TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================\n");
         finish_test;
     end
 

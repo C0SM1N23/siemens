@@ -56,9 +56,7 @@ module soc_tb_top;
         .tmr_irq_o    (tmr_irq)
     );
 
-    // ---------------------------------------------------------------------------
     // scoreboard: DMEM byte offset 0x200 is word index 128 of the data memory
-    // ---------------------------------------------------------------------------
     localparam integer SB_MISMATCH = 128;  // 0x200
     localparam integer SB_STATUS = 129;  // 0x204  status seen inside the handler
     localparam integer SB_DMA_INT = 130;  // 0x208
@@ -106,7 +104,7 @@ module soc_tb_top;
             if ($test$plusargs("verbose"))
                 $display("   program finished after %0d cycles\n", timeout);
 
-            // -- the transfer itself ------------------------------------------
+            // -- the transfer itself
             check(32'd0, dut.dmem_inst.mem[SB_MISMATCH],
                   "every transferred word matches its source");
             check(32'hC0DE0000, dut.dmem_inst.mem[SB_FIRST],
@@ -120,14 +118,14 @@ module soc_tb_top;
             check(32'hC0DE0000 + i, dut.sram_inst.mem_array_inst.mem[i],
                   "the SRAM array itself holds the transferred word");
 
-            // -- the DMA's own view -------------------------------------------
+            // -- the DMA's own view
             check(ST_DONE, dut.dmem_inst.mem[SB_STATUS],
                   "channel 0 was in STATE_DONE when the handler ran");
             check(32'd0, dut.dmem_inst.mem[SB_IDLE],
                   "clearing CONTROL.enable returned the channel to STATE_IDLE");
             check(32'h1, dut.dmem_inst.mem[SB_DMA_INT], "DMA INT_STATUS named channel 0");
 
-            // -- the interrupt chain ------------------------------------------
+            // -- the interrupt chain
             check(32'd1, dut.dmem_inst.mem[SB_IRQ_CNT], "the handler ran exactly once");
             // ACTIVE_VEC is {[8] valid, [3:0] id}: in service, source 0
             check(32'h0000_0100, dut.dmem_inst.mem[SB_ACT_VEC],
@@ -139,10 +137,8 @@ module soc_tb_top;
         end
 
         repeat (20) @(posedge clk);
-        $display("\n=====================================================");
         if (errors == 0) $display("== SOC SYSTEM TESTBENCH: ALL TESTS PASSED ==");
         else $display("== SOC SYSTEM TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================\n");
         finish_test;
     end
 

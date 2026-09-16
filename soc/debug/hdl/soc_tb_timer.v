@@ -60,9 +60,7 @@ module soc_tb_timer;
 
     localparam         [31:0] DONE_MARKER = 32'hD05E_D01E;
 
-    // ---------------------------------------------------------------------------
     // the line and the claims, watched directly
-    // ---------------------------------------------------------------------------
     integer claims_of_7, tmr_high_cycles, wfi_cycles;
     reg tmr_seen_high;
 
@@ -184,10 +182,8 @@ module soc_tb_timer;
             end
         end
 
-        $display("\n========================================");
         if (errors == 0) $display("== MACHINE TIMER TESTBENCH: ALL TESTS PASSED ==");
         else $display("== MACHINE TIMER TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

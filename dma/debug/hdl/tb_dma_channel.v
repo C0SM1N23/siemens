@@ -2,33 +2,33 @@
 
 module tb_dma_channel;
 
-    // --- Semnale de Ceas și Reset ---
+    // Semnale de Ceas și Reset
     reg clk;
     reg rst_n;
 
-    // --- Intrări de Configurare (dinspre AXI-Lite Slave) ---
+    // Intrări de Configurare (dinspre AXI-Lite Slave)
     reg  [31:0] desc_addr_in;
     reg  [31:0] control_in;
     reg  [31:0] bw_cap_in;
     
-    // --- Ieșiri de Status și Întreruperi ---
+    // Ieșiri de Status și Întreruperi
     wire [31:0] status_out;
     wire        irq_out;
 
-    // --- Interfața cu Priority Arbiter ---
+    // Interfața cu Priority Arbiter
     wire        req_valid;
     wire [31:0] req_addr;
     wire [7:0]  req_len;
     wire        req_is_write;
     reg         arb_gnt;
 
-    // --- Interfața de Feedback de la Master ---
+    // Interfața de Feedback de la Master
     reg         burst_done;
     reg         axi_error;
     reg  [31:0] fetch_data_in;
     reg         fetch_data_valid;
 
-    // --- Instanțierea DUT (Device Under Test) ---
+    // Instanțierea DUT (Device Under Test)
     dma_channel dut (
         .clk(clk),
         .rst_n(rst_n),
@@ -48,7 +48,7 @@ module tb_dma_channel;
         .fetch_data_valid(fetch_data_valid)
     );
 
-    // --- Generare Ceas (100 MHz) ---
+    // Generare Ceas (100 MHz)
     always #5 clk = ~clk;
 
     
@@ -131,9 +131,9 @@ module tb_dma_channel;
         #20;
         rst_n = 1;
         #20;
-        $display("--- INCEPERE SIMULARE CANAL DMA ---");
+        $display("INCEPERE SIMULARE CANAL DMA");
 
-        // --- TEST 1: Transfer Complet (1 Singur Burst de 32 bytes) ---
+        // TEST 1: Transfer Complet (1 Singur Burst de 32 bytes)
         $display("\n[TEST 1] Initiere transfer de 32 octeti (8 cuvinte)");
         // Configurăm Token Bucket: Refill Rate = 10, Max Tokens = 100
         bw_cap_in = {16'd100, 16'd10}; 
@@ -168,7 +168,7 @@ module tb_dma_channel;
         $display("[TIME %0t] Canalul a revenit in IDLE.", $time);
 
         #100;
-        $display("\n--- FINALIZARE SIMULARE ---");
+        $display("\nFINALIZARE SIMULARE");
         $finish;
     end
 

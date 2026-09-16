@@ -2,11 +2,11 @@
 
 module tb_axi4_lite_slave_advanced;
 
-    // --- Semnale de Ceas și Reset ---
+    // Semnale de Ceas și Reset
     reg clk;
     reg rst_n;
 
-    // --- Interfața AXI4-Lite ---
+    // Interfața AXI4-Lite
     reg  [31:0] s_axi_awaddr;
     reg         s_axi_awvalid;
     wire        s_axi_awready;
@@ -25,7 +25,7 @@ module tb_axi4_lite_slave_advanced;
     wire        s_axi_rvalid;
     reg         s_axi_rready;
 
-    // --- Semnale Hardware către/dinspre DMA ---
+    // Semnale Hardware către/dinspre DMA
     wire [31:0] ch0_desc_addr, ch0_control, ch0_bw_cap;
     reg  [31:0] ch0_status_in;
     wire [31:0] ch1_desc_addr, ch1_control, ch1_bw_cap;
@@ -35,7 +35,7 @@ module tb_axi4_lite_slave_advanced;
     // Variabilă internă pentru citiri
     reg [31:0] read_data_capture;
 
-    // --- Instanțierea Modulului DUT ---
+    // Instanțierea Modulului DUT
     axi4_lite_slave dut (
         .clk(clk),
         .rst_n(rst_n),
@@ -71,7 +71,7 @@ module tb_axi4_lite_slave_advanced;
         // Am mapat doar 2 canale pentru concizie, poți adăuga restul
     );
 
-    // --- Generare Ceas (100 MHz) ---
+    // Generare Ceas (100 MHz)
     always #5 clk = ~clk;
 
     
@@ -159,22 +159,22 @@ module tb_axi4_lite_slave_advanced;
         #20;
         rst_n = 1;
         #20;
-        $display("--- INCEPERE SIMULARE ---");
+        $display("INCEPERE SIMULARE");
 
-        // --- TEST 1: Configurare Simplă (Scriere și Citire Descriptor Canal 0) ---
+        // TEST 1: Configurare Simplă (Scriere și Citire Descriptor Canal 0)
         $display("\n[TEST 1] Scriere si verificare ch0_desc_addr (Adresa 0x00)");
         axi_write(32'h0000_0000, 32'hDEADBEEF);
         axi_read(32'h0000_0000, read_data_capture);
         if (read_data_capture !== 32'hDEADBEEF) $error("Test 1 a esuat!");
 
-        // --- TEST 2: Comportament canal independent (Canal 1) ---
+        // TEST 2: Comportament canal independent (Canal 1)
         $display("\n[TEST 2] Configurare independenta ch1_control (Adresa presupusa 0x14)");
         // *Presupunem* că ch1_control e la 0x14 în harta ta de memorie. 
         // Ajustează adresa dacă harta diferă.
         axi_write(32'h0000_0014, 32'h00000001); // Setăm bitul de ENABLE
         axi_read(32'h0000_0014, read_data_capture);
 
-        // --- TEST 3: Verificare Registre Read-Only ---
+        // TEST 3: Verificare Registre Read-Only
         $display("\n[TEST 3] Verificare comportament Read-Only pentru ch0_status_in");
         ch0_status_in = 32'hCAFEBABE; // Hardware-ul raportează acest status
         // Încercăm să scriem din software peste el (la adresa de status, presupusă 0x08)
@@ -185,7 +185,7 @@ module tb_axi4_lite_slave_advanced;
         else 
             $error("Test 3 a esuat: S-a rescris un registru Read-Only!");
 
-        // --- TEST 4: Mecanismul Write-1-to-Clear (W1C) pentru Întreruperi ---
+        // TEST 4: Mecanismul Write-1-to-Clear (W1C) pentru Întreruperi
         // Presupunând că registrul INT_STATUS este la 0x40
         $display("\n[TEST 4] Testare mecanism W1C pe INT_STATUS (Adresa 0x40)");
         // 1. Citește starea curentă (ar trebui să aibă setat bitul de la simularea ta hardware)
@@ -195,13 +195,13 @@ module tb_axi4_lite_slave_advanced;
         // 3. Verifică dacă a fost curățat
         axi_read(32'h0000_0040, read_data_capture);
         
-        // --- TEST 5: Acces la o adresă invalidă (Opțional, depinde de implementarea ta) ---
+        // TEST 5: Acces la o adresă invalidă (Opțional, depinde de implementarea ta)
         $display("\n[TEST 5] Testare adresa nemapata (0xFFFFFFFF)");
         axi_write(32'hFFFF_FFFF, 32'h12345678);
         // Aici ar trebui ca s_axi_bresp să fie 2'b10 (SLVERR) dacă slave-ul e complet strict AXI.
 
         #50;
-        $display("\n--- FINALIZARE SIMULARE ---");
+        $display("\nFINALIZARE SIMULARE");
         $finish;
     end
 

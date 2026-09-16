@@ -54,9 +54,7 @@ module soc_tb_dma_len;
         .tmr_irq_o    (tmr_irq)
     );
 
-    // ---------------------------------------------------------------------------
     // what the program was asked to do
-    // ---------------------------------------------------------------------------
     localparam integer        NSLOT       = 5;
     localparam integer        SLOT_WORDS  = 32;             // 128 bytes per slot
     localparam         [31:0] GUARD       = 32'hBADD_0000;
@@ -150,10 +148,8 @@ module soc_tb_dma_len;
         end
 
         repeat (20) @(posedge clk);
-        $display("\n=====================================================");
         if (errors == 0) $display("== SOC DMA LENGTH TESTBENCH: ALL TESTS PASSED ==");
         else $display("== SOC DMA LENGTH TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================\n");
         finish_test;
     end
 

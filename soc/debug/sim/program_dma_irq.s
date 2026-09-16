@@ -44,7 +44,7 @@
 _start:
     lui  x14, 2                  # x14 = 0x2000, DMEM base
 
-    # ---- fill 16 source words --------------------------------------------
+    # fill 16 source words
     addi x5, x14, 0x100
     lui  x6, 0xBEEF0             # x6 = 0xBEEF0000
     addi x7, x0, 16
@@ -55,7 +55,7 @@ fill_loop:
     addi x7, x7, -1
     bne  x7, x0, fill_loop
 
-    # ---- descriptor: DMEM 0x2100 -> SRAM data, 64 bytes -------------------
+    # descriptor: DMEM 0x2100 -> SRAM data, 64 bytes
     addi x6, x14, 0x100
     sw   x6, 0(x14)              # desc[0] = src
     lui  x5, 0x10000
@@ -66,7 +66,7 @@ fill_loop:
     addi x6, x0, 1
     sw   x6, 12(x14)             # desc[3] = ctrl, bit0 = last segment
 
-    # ---- the interrupt path is fully armed EXCEPT at the DMA -------------
+    # the interrupt path is fully armed EXCEPT at the DMA
     # Everything downstream of the DMA is open, so if anything arrives it is
     # the DMA's mask that failed and nothing else.
     lui  x28, 0x30000            # PIC
@@ -81,7 +81,7 @@ fill_loop:
     addi x28, x0, 8
     csrrs x0, mstatus, x28       # mstatus.MIE = 1
 
-    # ---- program the DMA with its interrupt output masked ----------------
+    # program the DMA with its interrupt output masked
     lui  x29, 0x30020            # x29 = DMA base
     sw   x0, 0x48(x29)           # SCHED_POLICY = 0 (fixed priority)
     lui  x6, 0x07D00
@@ -92,19 +92,19 @@ fill_loop:
     addi x6, x0, 1
     sw   x6, 0x04(x29)           # CH0_CONTROL.enable = 1 -> the transfer starts
 
-    # ---- poll, because there is deliberately no interrupt to sleep on ----
+    # poll, because there is deliberately no interrupt to sleep on
 poll_done:
     lw   x30, 0x0C(x29)          # CH0_STATUS
     addi x5, x0, 4               # STATE_DONE
     bne  x30, x5, poll_done
 
-    # ---- give an interrupt that should not exist time to arrive ----------
+    # give an interrupt that should not exist time to arrive
     addi x7, x0, 60
 settle:
     addi x7, x7, -1
     bne  x7, x0, settle
 
-    # ---- four independent views of "nothing was raised" -------------------
+    # four independent views of "nothing was raised"
     sw   x31, 0x204(x14)         # interrupts taken so far
     lw   x30, 0x40(x29)
     sw   x30, 0x208(x14)         # DMA INT_STATUS: the event did happen
@@ -116,14 +116,14 @@ settle:
     lw   x30, 0x0C(x29)
     sw   x30, 0x214(x14)         # CH0_STATUS: still STATE_DONE
 
-    # ---- unmask: the same pending event must now arrive -------------------
+    # unmask: the same pending event must now arrive
     addi x6, x0, 0xF
     sw   x6, 0x44(x29)           # DMA INT_ENABLE = all four channels
 wait_irq:
     beq  x31, x0, wait_irq
     sw   x31, 0x218(x14)         # interrupts taken after unmasking
 
-    # ---- the data has to be right either way ------------------------------
+    # the data has to be right either way
     lui  x5, 0x10000
     addi x5, x5, 0x20            # SRAM data pointer
     addi x6, x14, 0x100          # source pointer
@@ -149,9 +149,7 @@ cmp_ok:
 halt:
     beq  x0, x0, halt
 
-# ---------------------------------------------------------------------------
 # interrupt handler
-# ---------------------------------------------------------------------------
 # The channel's line is a level that stays asserted while the channel sits in
 # STATE_DONE, so the enable goes first: it lets the channel fall back to IDLE
 # and drop its request. Only then does writing 1 to INT_STATUS release it.

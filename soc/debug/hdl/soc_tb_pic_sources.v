@@ -55,9 +55,7 @@ module soc_tb_pic_sources;
 
     localparam         [31:0] DONE_MARKER = 32'hD05E_D01E;
 
-    // ---------------------------------------------------------------------------
     // claims counted per slot, straight off the controller
-    // ---------------------------------------------------------------------------
     integer claims_of    [0:15];
     integer total_claims;
     integer i;
@@ -123,10 +121,8 @@ module soc_tb_pic_sources;
             check(32'd0, {31'b0, cpu_in_trap}, "no trap level left open at the end");
         end
 
-        $display("\n========================================");
         if (errors == 0) $display("== PIC SOURCE RANGE TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC SOURCE RANGE TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

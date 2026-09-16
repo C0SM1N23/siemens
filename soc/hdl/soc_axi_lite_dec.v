@@ -56,9 +56,7 @@ module soc_axi_lite_dec #(
 
     localparam [1:0] RESP_DECERR = 2'b11;
 
-    // ---------------------------------------------------------------------------
     // window compare
-    // ---------------------------------------------------------------------------
     wire [N-1:0] aw_hit;
     wire [N-1:0] ar_hit;
 
@@ -79,9 +77,7 @@ module soc_axi_lite_dec #(
     wire aw_none = m_awvalid_i && ~|aw_hit;
     wire ar_none = m_arvalid_i && ~|ar_hit;
 
-    // ---------------------------------------------------------------------------
     // latched select, held from the address handshake until the response completes
-    // ---------------------------------------------------------------------------
     reg [N-1:0] wr_sel_q, rd_sel_q;
     reg wr_err_q, rd_err_q;
     reg wr_addr_valid_q;
@@ -123,9 +119,7 @@ module soc_axi_lite_dec #(
     wire [N-1:0] wr_sel = wr_addr_valid_q ? wr_sel_q : aw_hit;
     wire         wr_err = wr_addr_valid_q ? wr_err_q : aw_none;
 
-    // ---------------------------------------------------------------------------
     // DECERR responder for unmapped addresses
-    // ---------------------------------------------------------------------------
     reg err_awdone, err_wdone, err_bvalid;
     reg  err_rvalid;
 
@@ -165,9 +159,7 @@ module soc_axi_lite_dec #(
         else if (m_arvalid_i && err_arready) err_rvalid <= 1'b1;
     end
 
-    // ---------------------------------------------------------------------------
     // one-hot response muxes
-    // ---------------------------------------------------------------------------
     reg [ 1:0] bresp_mux;
     reg [ 1:0] rresp_mux;
     reg [31:0] rdata_mux;
@@ -190,9 +182,7 @@ module soc_axi_lite_dec #(
         for (k = 0; k < N; k = k + 1) if (rd_sel_q[k]) rdata_mux = s_rdata_i[k*32+:32];
     end
 
-    // ---------------------------------------------------------------------------
     // master-side outputs
-    // ---------------------------------------------------------------------------
     assign m_awready_o = !wr_addr_valid_q && (aw_none ? err_awready : |(aw_hit & s_awready_i));
     assign m_wready_o  = !wr_data_valid_q && (wr_err ? err_wready : |(wr_sel & s_wready_i));
     assign m_bvalid_o  = wr_addr_valid_q && (wr_err_q ? err_bvalid : |(wr_sel_q & s_bvalid_i));
@@ -203,9 +193,7 @@ module soc_axi_lite_dec #(
     assign m_rresp_o   = rd_err_q ? RESP_DECERR : rresp_mux;
     assign m_rdata_o   = rd_err_q ? 32'h0 : rdata_mux;
 
-    // ---------------------------------------------------------------------------
     // slave-side outputs: payload broadcast, VALID/READY qualified by the select
-    // ---------------------------------------------------------------------------
     generate
         for (i = 0; i < N; i = i + 1) begin : g_fanout
             assign s_awaddr_o[i*32+:32] = m_awaddr_i;

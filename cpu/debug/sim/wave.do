@@ -21,12 +21,12 @@ log -r /rv32i_tb_cpu_axi/*
 # start from a clean wave window, so re-running sim.do doesn't stack duplicates
 delete wave *
 
-# ---------------------------------------------------------------- clock / reset
+# clock / reset
 add wave -noupdate -divider {CLK / RESET}
 add wave -noupdate /rv32i_tb_cpu_axi/clk
 add wave -noupdate /rv32i_tb_cpu_axi/rst_n
 
-# ============================================================ IBUS  (read-only)
+# IBUS  (read-only)
 # One link: CPU fetch master <-> imem slave. AR = address the CPU asks for,
 # R = the instruction word the memory returns.
 add wave -noupdate -divider {IBUS  CPU-M <-> imem : AR (addr out)}
@@ -39,7 +39,7 @@ add wave -noupdate /rv32i_tb_cpu_axi/ib_rready
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/ib_rdata
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/ib_rresp
 
-# ======================================================= DBUS @ CPU master port
+# DBUS @ CPU master port
 # What the CPU drives OUT and receives back on the data bus, before the decoder.
 add wave -noupdate -divider {DBUS @ CPU-M : AW (waddr)}
 add wave -noupdate /rv32i_tb_cpu_axi/db_awvalid
@@ -64,7 +64,7 @@ add wave -noupdate /rv32i_tb_cpu_axi/db_rready
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/db_rdata
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/db_rresp
 
-# ============================================================= dmem slave port
+# dmem slave port
 # The default dbus leg after the decoder: what dmem actually sees / answers.
 add wave -noupdate -divider {dmem SLAVE : AW / W / B (write)}
 add wave -noupdate /rv32i_tb_cpu_axi/d0_awvalid
@@ -86,7 +86,7 @@ add wave -noupdate /rv32i_tb_cpu_axi/d0_rready
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/d0_rdata
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/d0_rresp
 
-# ============================================================== PIC slave port
+# PIC slave port
 add wave -noupdate -divider {PIC SLAVE : AW / W / B (write)}
 add wave -noupdate /rv32i_tb_cpu_axi/pp_awvalid
 add wave -noupdate /rv32i_tb_cpu_axi/pp_awready
@@ -107,7 +107,7 @@ add wave -noupdate /rv32i_tb_cpu_axi/pp_rready
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/pp_rdata
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/pp_rresp
 
-# =========================================================== mtimer slave port
+# mtimer slave port
 add wave -noupdate -divider {mtimer SLAVE : AW / W / B (write)}
 add wave -noupdate /rv32i_tb_cpu_axi/t_awvalid
 add wave -noupdate /rv32i_tb_cpu_axi/t_awready
@@ -128,7 +128,7 @@ add wave -noupdate /rv32i_tb_cpu_axi/t_rready
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/t_rdata
 add wave -noupdate -radix hexadecimal /rv32i_tb_cpu_axi/t_rresp
 
-# ================================================================= IRQ / trap
+# IRQ / trap
 add wave -noupdate -divider {IRQ / TRAP}
 add wave -noupdate -radix binary   /rv32i_tb_cpu_axi/irq_src
 add wave -noupdate                 /rv32i_tb_cpu_axi/tmr_irq

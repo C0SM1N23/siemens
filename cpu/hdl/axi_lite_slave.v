@@ -40,7 +40,7 @@ module axi_lite_slave (
 
     localparam RESP_OKAY = 2'b00, RESP_SLVERR = 2'b10;
 
-    // --- write: collect AW and W independently, respond once both are in ---
+    // write: collect AW and W independently, respond once both are in
     reg aw_got_q, w_got_q;
     reg  [ 5:0] awoff_q;
     reg  [31:0] wdata_q;
@@ -106,7 +106,7 @@ module axi_lite_slave (
     assign wr_data_o     = wdata_q;
     assign wr_strb_o     = wstrb_q;
 
-    // --- read: accept AR when no response pending, register data next cycle ---
+    // read: accept AR when no response pending, register data next cycle
     wire ar_hs = s_axi_arvalid_i && s_axi_arready_o;
     assign s_axi_arready_o = !s_axi_rvalid_o;
     assign rd_addr_o       = s_axi_araddr_i[7:2];

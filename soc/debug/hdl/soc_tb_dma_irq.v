@@ -55,9 +55,7 @@ module soc_tb_dma_irq;
         .tmr_irq_o    (tmr_irq)
     );
 
-    // ---------------------------------------------------------------------------
     // scoreboard: DMEM byte offset 0x200 is word index 128
-    // ---------------------------------------------------------------------------
     localparam integer        SB_MISMATCH   = 128;            // 0x200
     localparam integer        SB_IRQ_MASKED = 129;            // 0x204
     localparam integer        SB_DMA_STATUS = 130;            // 0x208
@@ -71,14 +69,12 @@ module soc_tb_dma_irq;
     localparam         [31:0] DONE_MARKER   = 32'hD05E_D01E;
     localparam integer        ST_DONE       = 4;              // dma_channel STATE_DONE
 
-    // ---------------------------------------------------------------------------
     // The line itself, watched continuously.
     //
     // The program can only sample; a request that rose and fell between two of its
     // loads would be invisible to it. This counts every cycle the DMA drove its
     // request while the mask was still clear, so a glitch is caught as well as a
     // level.
-    // ---------------------------------------------------------------------------
     reg     unmasked_q;
     integer irq_while_masked;
     integer cpu_irq_while_masked;
@@ -181,10 +177,8 @@ module soc_tb_dma_irq;
                   "the handler was entered for source 0");
         end
 
-        $display("\n========================================");
         if (errors == 0) $display("== DMA INTERRUPT MASK TESTBENCH: ALL TESTS PASSED ==");
         else $display("== DMA INTERRUPT MASK TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

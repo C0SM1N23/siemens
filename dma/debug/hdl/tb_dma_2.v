@@ -32,7 +32,7 @@ module tb_dma_2;
     reg         clk;
     reg         rst_n;
 
-    //=======Interfata AXI4-Lite=========
+    // Interfata AXI4-Lite
     //Citire
     reg  [31:0] s_axi_araddr;
     reg         s_axi_arvalid;
@@ -55,9 +55,8 @@ module tb_dma_2;
     wire        s_axi_wready;
     wire        s_axi_bvalid;
     wire [ 1:0] s_axi_bresp;
-    //===================================
 
-    //=======Interfata AXI4-Full=========
+    // Interfata AXI4-Full
     wire [31:0] m_axi_araddr;
     wire [ 7:0] m_axi_arlen;   
     wire        m_axi_arvalid; 
@@ -83,34 +82,30 @@ module tb_dma_2;
     reg  [ 1:0] m_axi_bresp;
     reg         m_axi_bvalid;
     wire        m_axi_bready;
-    //===================================
 
     // Memorie simulata (SRAM) - 32 KB
     // AXI e byte-adressable, dar memoria e word-adressable, de ex
     // Adresa AXI 8 -> 8/4=2 -> ram_memory[2]
     reg [31:0] ram_memory [0:8191];
 
-    //====Variabile citire din fisier====
+    // Variabile citire din fisier
     reg  [31:0] read_val;
     integer     fd;             // File descriptor
     integer     scan_result;    // Verifica daca s-a citit corect linia
     reg [8*8-1:0] cmd;      // String pentru comanda ("W", "R", "D") - max 8 caractere
     reg [31:0]  addr_arg;    // Argumentul 1 din fisier (Adresa sau Timp)
     reg [31:0]  data_arg;    // Argumentul 2 din fisier (Date)
-    //===================================
 
-    //====Variabile pentru citirea din RAM====
+    // Variabile pentru citirea din RAM
     reg [31:0] current_read_addr;
     reg [7:0]  burst_len;
     integer    beat;
-    //========================================
 
-    //====Variabile pentru scrierea in RAM====
+    // Variabile pentru scrierea in RAM
     reg [31:0] current_write_addr;
     reg [7:0]  write_burst_len;
     integer    w_beat;
     integer    i;
-    //=======================================
 
     initial begin
         clk = 1'b0;
@@ -168,7 +163,7 @@ module tb_dma_2;
         .m_axi_bready(m_axi_bready)
     );
 
-    //======TASK-uri pentru citire si scriere AXI4-Lite========
+    // TASK-uri pentru citire si scriere AXI4-Lite
     task axi_lite_write;
         input [31:0] addr;
         input [31:0] data;
@@ -227,9 +222,8 @@ module tb_dma_2;
             s_axi_rready <= 1'b0;
         end
     endtask
-    //======================================
 
-    //===Task pentru scrierea directa in RAM (backdoor)===
+    // Task pentru scrierea directa in RAM (backdoor)
     task backdoor_ram_write;
         input [31:0] byte_addr;
         input [31:0] data;
@@ -237,9 +231,8 @@ module tb_dma_2;
             ram_memory[byte_addr >> 2] = data;
         end
     endtask
-    //======================================
 
-    //=== TASK DE RESET PARAMETRIZABIL ===
+    // TASK DE RESET PARAMETRIZABIL
     task apply_reset;
         input integer reset_cycles;
         begin
@@ -251,9 +244,8 @@ module tb_dma_2;
             $display("[%0t] INFO: Reset Complet.", $time);
         end
     endtask
-    //====================================
 
-    //=== TASK PENTRU PREGATIREA TRANSFERULUI IN RAM ===
+    // TASK PENTRU PREGATIREA TRANSFERULUI IN RAM
     task setup_dma_transfer;
         input [31:0] desc_addr;
         input [31:0] src_addr;
@@ -276,9 +268,8 @@ module tb_dma_2;
             $display("[%0t] INFO: RAM setat -> Desc: %h, Src: %h, Dst: %h", $time, desc_addr, src_addr, dst_addr);
         end
     endtask
-    //====================================
 
-    //=== TASK PENTRU PORNIREA UNUI CANAL ===
+    // TASK PENTRU PORNIREA UNUI CANAL
     task start_channel;
         input [31:0] base_reg_addr; // Ex: ADDR_CH0_DESC_ADDR
         input [31:0] desc_addr;
@@ -296,9 +287,8 @@ module tb_dma_2;
             $display("[%0t] INFO: Canal lansat la adresa de baza %h", $time, base_reg_addr);
         end
     endtask
-    //====================================
 
-    //=== TASK PENTRU ASTEPTAREA FINALIZARII (POLLING) ===
+    // TASK PENTRU ASTEPTAREA FINALIZARII (POLLING)
     task wait_channel_done;
         input [31:0] status_reg_addr; // Ex: ADDR_CH0_STATUS
         reg   [31:0] st;
@@ -312,9 +302,8 @@ module tb_dma_2;
             $display("[%0t] INFO: Canalul cu STATUS reg %h a terminat (STATE_DONE)!", $time, status_reg_addr);
         end
     endtask
-    //====================================
 
-    //======Citire din fisier, citire si scriere registrii, etc========
+    // Citire din fisier, citire si scriere registrii, etc
     initial begin
         clk = 1'b0;
         rst_n = 1'b0;
@@ -466,7 +455,7 @@ module tb_dma_2;
                 axi_lite_write(ADDR_SCHED_POLICY, 32'h00000001, 0);
 
                 // 4. Lansam TOATE cele 4 canale simultan
-                $display("\n--- LANSARE 4 CANALE CONCURENTE ---");
+                $display("\nLANSARE 4 CANALE CONCURENTE");
                 start_channel(ADDR_CH0_DESC_ADDR, 32'h00000100, 32'h00200008); 
                 start_channel(ADDR_CH1_DESC_ADDR, 32'h00000200, 32'h00200008);
                 start_channel(ADDR_CH2_DESC_ADDR, 32'h00000300, 32'h00200008);
@@ -484,10 +473,8 @@ module tb_dma_2;
                 axi_lite_write(ADDR_CH2_CONTROL, 32'h0, 0);
                 axi_lite_write(ADDR_CH3_CONTROL, 32'h0, 0);
 
-                // --- VERIFICARE AUTOMATA (BACKDOOR READ) ---
-                $display("\n===========================================");
+                // VERIFICARE AUTOMATA (BACKDOOR READ)
                 $display("   VERIFICARE REZULTATE 4 CANALE ");
-                $display("===========================================");
                 
                 // Printam doar prima valoare din fiecare destinatie ca "sanity check" in consola
                 $display("CH0 (Dest: 0x2000) -> Data: 0x%h", ram_memory[(32'h00002000 >> 2)]);
@@ -504,12 +491,10 @@ module tb_dma_2;
                 end else begin
                     $display("\n>>> TEST FAILED! S-au pierdut date in trafic. <<<");
                 end
-                $display("===========================================\n");
 
                 #100;
                 $finish;
             end
         join   
     end
-    //========================================================
 endmodule

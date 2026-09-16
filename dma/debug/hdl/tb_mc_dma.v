@@ -29,7 +29,6 @@ module tb_mc_dma;
     localparam [31:0] v6 = 32'h07070707;
     localparam [31:0] v7 = 32'h08080808;
 
-    // ========================================================
     // TEST SELECTOR: Change this value to run different tests
     // 1 = T01: AXI4-Lite Register R/W
     // 2 = T02: IRQ Masking (INT_ENABLE = 0)
@@ -38,14 +37,13 @@ module tb_mc_dma;
     // 5 = T05: Bandwidth Throttling (Token Bucket)
     // 6 = T06: Suspend (Abort) and Resume
     // 7 = T07: Unaligned Transfer (40 Bytes)
-    // ========================================================
     integer ACTIVE_TEST = 7; // <--- Change this value to select the test case
 
     reg         clk;
     reg         rst_n;
     wire [3:0]  irq; // <--- Added to monitor interrupt signals
 
-    //======AXI4-Lite Interface========
+    // AXI4-Lite Interface
     reg  [31:0] s_axi_araddr;
     reg         s_axi_arvalid;
     reg         s_axi_rready;
@@ -65,7 +63,7 @@ module tb_mc_dma;
     wire        s_axi_bvalid;
     wire [ 1:0] s_axi_bresp;
 
-    //=======AXI4-Full Interface=========
+    // AXI4-Full Interface
     wire [31:0] m_axi_araddr;
     wire [ 7:0] m_axi_arlen;   
     wire        m_axi_arvalid; 
@@ -92,7 +90,7 @@ module tb_mc_dma;
     // Simulated Memory (SRAM) - 32 KB
     reg [31:0] ram_memory [0:8191];
 
-    //====File Read Variables====
+    // File Read Variables
     reg  [31:0] read_val;
     integer     fd;             
     integer     scan_result;    
@@ -100,7 +98,7 @@ module tb_mc_dma;
     reg [31:0]  addr_arg;    
     reg [31:0]  data_arg;    
 
-    //====RAM Read/Write Variables====
+    // RAM Read/Write Variables
     reg [31:0] current_read_addr;
     reg [7:0]  burst_len;
     integer    beat;
@@ -163,7 +161,7 @@ module tb_mc_dma;
         .m_axi_bready(m_axi_bready)
     );
 
-    //======AXI4-Lite TASKs========
+    // AXI4-Lite TASKs
     task axi_lite_write;
         input [31:0] addr;
         input [31:0] data;
@@ -207,7 +205,7 @@ module tb_mc_dma;
         end
     endtask
 
-    //======Utility TASKs========
+    // Utility TASKs
     task backdoor_ram_write;
         input [31:0] byte_addr;
         input [31:0] data;
@@ -270,7 +268,7 @@ module tb_mc_dma;
         end
     endtask
 
-    //======Main Initial Block========
+    // Main Initial Block
     initial begin
         clk = 1'b0;
         rst_n = 1'b0;
@@ -357,14 +355,12 @@ module tb_mc_dma;
                 for (k = 0; k < 8192; k = k + 1) ram_memory[k] = 32'h00000000;
                 apply_reset(27); 
 
-                $display("\n===========================================");
                 $display("   STARTING TEST SUITE - RUNNING TEST %0d", ACTIVE_TEST);
-                $display("===========================================\n");
 
                 case (ACTIVE_TEST)
                     1: begin
-                        // ========= T01: AXI4-Lite Register R/W Test ========
-                        $display("--- [T01] RUNNING: AXI4-Lite Register R/W ---");
+                        // T01: AXI4-Lite Register R/W Test
+                        $display("[T01] RUNNING: AXI4-Lite Register R/W");
                         axi_lite_write(ADDR_CH0_BW_CAP, 32'hDEADBEEF, 0);
                         axi_lite_read(ADDR_CH0_BW_CAP, read_val);
                         if (read_val === 32'hDEADBEEF) $display(">>> [T01] PASSED");
@@ -372,8 +368,8 @@ module tb_mc_dma;
                     end
 
                     2: begin
-                        // ========= T02: IRQ Masking Test ========
-                        $display("--- [T02] RUNNING: IRQ Masking (INT_ENABLE = 0) ---");
+                        // T02: IRQ Masking Test
+                        $display("[T02] RUNNING: IRQ Masking (INT_ENABLE = 0)");
                         axi_lite_write(ADDR_INT_ENABLE, 32'h00000000, 0);
                         setup_dma_transfer(32'h0100, 32'h1000, 32'h2000, 32'h20, 32'hA1A1A1A1);
                         start_channel(ADDR_CH0_DESC_ADDR, 32'h0100, 32'h00200008); 
@@ -385,8 +381,8 @@ module tb_mc_dma;
                     end
 
                     3: begin
-                        // ========= T03: IRQ Write-1-To-Clear (W1C) Test ========
-                        $display("--- [T03] RUNNING: IRQ W1C Behavior ---");
+                        // T03: IRQ Write-1-To-Clear (W1C) Test
+                        $display("[T03] RUNNING: IRQ W1C Behavior");
                         axi_lite_write(ADDR_INT_ENABLE, 32'h0000000F, 0);
                         setup_dma_transfer(32'h0200, 32'h3000, 32'h4000, 32'h20, 32'hB2B2B2B2);
                         start_channel(ADDR_CH0_DESC_ADDR, 32'h0200, 32'h00200008); 
@@ -407,8 +403,8 @@ module tb_mc_dma;
                     end
 
                     4: begin
-                        // ========= T04: Concurrent Channels Arbitration ========
-                        $display("--- [T04] RUNNING: 4-Channel Concurrent Arbitration ---");
+                        // T04: Concurrent Channels Arbitration
+                        $display("[T04] RUNNING: 4-Channel Concurrent Arbitration");
                         setup_dma_transfer(32'h0500, 32'h1000, 32'h2000, 32'h20, 32'hAAAA0000);
                         setup_dma_transfer(32'h0600, 32'h3000, 32'h4000, 32'h20, 32'hBBBB0000);
                         setup_dma_transfer(32'h0700, 32'h5000, 32'h6000, 32'h20, 32'hCCCC0000);
@@ -435,8 +431,8 @@ module tb_mc_dma;
                     end
 
                     5: begin
-                        // ========= T05: Bandwidth Throttling (Token Bucket) ========
-                        $display("--- [T05] RUNNING: Bandwidth Throttling (CH0 Slow vs CH1 Fast) ---");
+                        // T05: Bandwidth Throttling (Token Bucket)
+                        $display("[T05] RUNNING: Bandwidth Throttling (CH0 Slow vs CH1 Fast)");
                         setup_dma_transfer(32'h0900, 32'h8000, 32'h8100, 32'h40, 32'hE5E5E5E5);
                         setup_dma_transfer(32'h0A00, 32'h8200, 32'h8300, 32'h40, 32'hF6F6F6F6);
                         
@@ -454,8 +450,8 @@ module tb_mc_dma;
                     end
 
                     6: begin
-                        // ========= T06: Suspend (Abort) and Resume ========
-                        $display("--- [T06] RUNNING: Suspend (Abort) and Resume ---");
+                        // T06: Suspend (Abort) and Resume
+                        $display("[T06] RUNNING: Suspend (Abort) and Resume");
                         setup_dma_transfer(32'h0300, 32'h5000, 32'h6000, 32'h80, 32'hC3C3C3C3); 
                         start_channel(ADDR_CH1_DESC_ADDR, 32'h0300, 32'h00200008); 
                         
@@ -473,8 +469,8 @@ module tb_mc_dma;
                     end
 
                     7: begin
-                        // ========= T07: Unaligned Transfer Test ========
-                        $display("--- [T07] RUNNING: Unaligned Transfer (40 Bytes) ---");
+                        // T07: Unaligned Transfer Test
+                        $display("[T07] RUNNING: Unaligned Transfer (40 Bytes)");
                         setup_dma_transfer(32'h0400, 32'h6800, 32'h7000, 32'h28, 32'hD4D4D4D4); 
                         start_channel(ADDR_CH2_DESC_ADDR, 32'h0400, 32'h00200008); 
                         wait_channel_done(ADDR_CH2_STATUS);

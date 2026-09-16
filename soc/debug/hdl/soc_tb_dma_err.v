@@ -68,9 +68,7 @@ module soc_tb_dma_err;
     localparam integer ST_DONE    = 4;
     localparam integer ST_ERROR   = 5;
 
-    // ---------------------------------------------------------------------------
     // the responses the bridge collected, and the one it produced
-    // ---------------------------------------------------------------------------
     localparam [1:0] RESP_OKAY = 2'b00;
 
     integer lite_err_beats;  // beats the fabric answered with an error
@@ -177,10 +175,8 @@ module soc_tb_dma_err;
                   "up to the last word the window covers");
         end
 
-        $display("\n========================================");
         if (errors == 0) $display("== DMA BURST ERROR TESTBENCH: ALL TESTS PASSED ==");
         else $display("== DMA BURST ERROR TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

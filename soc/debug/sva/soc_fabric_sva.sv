@@ -13,9 +13,7 @@
 
 `timescale 1ns / 1ps
 
-// ===========================================================================
 // axi_lite_dec: address decode and response routing
-// ===========================================================================
 module soc_axi_lite_dec_sva #(
     parameter NAME = "dec",
     parameter integer N = 2
@@ -136,9 +134,7 @@ module soc_axi_lite_dec_sva #(
 
 endmodule
 
-// ===========================================================================
 // axi_lite_arb: round-robin grant for a shared slave
-// ===========================================================================
 module soc_axi_lite_arb_sva #(
     parameter NAME = "arb",
     parameter integer M = 2
@@ -214,9 +210,7 @@ module soc_axi_lite_arb_sva #(
 
 endmodule
 
-// ===========================================================================
 // axi_full2lite: burst splitting
-// ===========================================================================
 module soc_axi_full2lite_sva #(
     parameter NAME = "bridge"
 ) (

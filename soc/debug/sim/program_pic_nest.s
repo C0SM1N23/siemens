@@ -42,7 +42,7 @@ _start:
     lui  x14, 2                  # x14 = 0x2000, DMEM base
     lui  x25, 0x30000            # x25 = PIC base, kept live for the handler
 
-    # ---- two sources, two bands ------------------------------------------
+    # two sources, two bands
     # Slot 8 in band 0, slot 9 in band 2. Under the reset band ordering band 0
     # is the most urgent and band 2 is not, so 8 outranks 9.
     sw   x0, 0x20(x25)           # SRC8_CONFIG  = band 0, level, no deadline
@@ -51,7 +51,7 @@ _start:
     addi x30, x0, 0x300          # slots 8 and 9
     sw   x30, 0xD8(x25)          # PIC INT_ENABLE
 
-    # ---- the core takes both ---------------------------------------------
+    # the core takes both
     addi x28, x0, irq_handler
     csrrw x0, mtvec, x28         # direct mode
     lui  x28, 0x3000             # mie[25:24] = controller sources 9 and 8
@@ -62,7 +62,7 @@ _start:
     addi x28, x0, 8
     csrrs x0, mstatus, x28       # mstatus.MIE = 1
 
-    # ---- raise the LESS urgent source first ------------------------------
+    # raise the LESS urgent source first
     lui  x6, 0xA5A50
     addi x6, x6, 1               # keyed software trigger, request bit set
     sw   x6, 0x64(x25)           # SRC9_SW_TRIG
@@ -71,7 +71,7 @@ wait_both:
     addi x30, x0, 2
     bne  x31, x30, wait_both
 
-    # ---- what is left behind ---------------------------------------------
+    # what is left behind
     sw   x31, 0x200(x14)
     lw   x30, 0xC4(x25)          # NEST_STATUS
     andi x30, x30, 0x1F
@@ -86,9 +86,7 @@ wait_both:
 halt:
     beq  x0, x0, halt
 
-# ---------------------------------------------------------------------------
 # interrupt handler, entered for both sources
-# ---------------------------------------------------------------------------
 # One handler, dispatching on the source the controller says it is serving.
 # The two paths must not share a live register across the preemption: the outer
 # path keeps its spin counter in x27, which the inner path never writes.
@@ -100,7 +98,7 @@ irq_handler:
     addi x29, x0, 8
     beq  x28, x29, inner
 
-# ---- outer: the less urgent source ----------------------------------------
+# outer: the less urgent source
 outer:
     # Before anything can preempt this handler, save the two pieces of state a
     # second trap would overwrite. mepc and mstatus are single registers: the
@@ -137,7 +135,7 @@ outer_spin:
     csrrw x0, mstatus, x21
     mret
 
-# ---- inner: the more urgent source, running inside the outer one -----------
+# inner: the more urgent source, running inside the outer one
 inner:
     sw   x30, 0x20C(x14)         # ACTIVE_VEC as the inner handler sees it
     lw   x30, 0xC4(x25)

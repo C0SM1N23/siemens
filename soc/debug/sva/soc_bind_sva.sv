@@ -16,9 +16,7 @@
 
 `timescale 1ns / 1ps
 
-// ===========================================================================
 // protocol on the fabric ports the CPU block's bind file does not reach
-// ===========================================================================
 
 // the burst bridge's AXI4-Lite master side: what the DMA looks like to the
 // fabric once its bursts have been split
@@ -183,9 +181,7 @@ bind dp_sram axi_lite_sva #(
     .rready_i (b_rready_i)
 );
 
-// ===========================================================================
 // AXI4-Full on the DMA's master port, watched from the bridge's slave side
-// ===========================================================================
 // Protocol only. The subset assertions are off here because tb_full2lite
 // drives an unsupported burst on purpose; they are asserted on the DMA's own
 // port below, which is where they are a statement about the design.
@@ -222,9 +218,7 @@ bind soc_axi_full2lite soc_axi_full_sva #(
     .rready_i (s_rready_i)
 );
 
-// ===========================================================================
 // the fabric's own decisions
-// ===========================================================================
 bind soc_axi_lite_dec soc_axi_lite_dec_sva #(
     .NAME("dec"),
     .N   (N)

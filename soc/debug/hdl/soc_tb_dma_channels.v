@@ -61,13 +61,11 @@ module soc_tb_dma_channels;
     localparam         [31:0] DONE_MARKER = 32'hD05E_D01E;
     localparam integer        ST_DONE     = 4;
 
-    // ---------------------------------------------------------------------------
     // the grant, watched directly
     //
     // The arbiter issues a one-cycle grant pulse per burst and the top level latches
     // which channel owns the bus, so the two things worth counting are how many
     // bursts each channel won and how often ownership moved.
-    // ---------------------------------------------------------------------------
     wire    [3:0] gnt_pulse = dut.dma_inst.ch_gnt;
     wire    [3:0] owner = dut.dma_inst.active_master_ch;
 
@@ -171,10 +169,8 @@ module soc_tb_dma_channels;
             end
         end
 
-        $display("\n========================================");
         if (errors == 0) $display("== DMA CHANNEL TESTBENCH: ALL TESTS PASSED ==");
         else $display("== DMA CHANNEL TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

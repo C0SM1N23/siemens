@@ -41,7 +41,7 @@ module pic_sva #(
     input        eoi_pop_i
 );
 
-    // --- D-LAT: cpu_irq_i / cpu_irq_vec_i are the registered offer -------------------
+    // D-LAT: cpu_irq_i / cpu_irq_vec_i are the registered offer
     // shadow sampled on the same edge from the same inputs, so a testbench that
     // moves irq_src_i right after the edge cannot race the compare against $past.
     reg       exp_irq;
@@ -70,7 +70,7 @@ module pic_sva #(
     assert property (@(posedge clk_i) disable iff (!rst_n_i) cpu_irq_i |-> cpu_irq_vec_i == exp_vec)
     else $error("[pic] cpu_irq_vec_i != registered offered id");
 
-    // --- D-BAND: the offered source is eligible and wins the priority race -------
+    // D-BAND: the offered source is eligible and wins the priority race
     offer_is_pending :
     assert property (@(posedge clk_i) disable iff (!rst_n_i)
     offer_val_i |-> (req_i[res_id_i] && !active_i[res_id_i]))
@@ -88,7 +88,7 @@ module pic_sva #(
     (offer_val_i && has_active_i) |-> (res_key_i > top_key_i))
     else $error("[pic] offered a source not strictly above the in-service top");
 
-    // --- D-NEST: nesting-stack bounds and motion ---------------------------------
+    // D-NEST: nesting-stack bounds and motion
     max_within_hw :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) nest_max_i <= MAXNEST)
     else $error("[pic] NEST_MAX exceeds the physical stack");

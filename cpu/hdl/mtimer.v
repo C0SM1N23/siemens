@@ -40,8 +40,8 @@ module mtimer (
     reg  [63:0] mtime_q;
     reg  [63:0] mtimecmp_q;  // reset all-ones = disarmed (D26)
 
-    // --- AXI4-Lite slave (D27): shared handshake in axi_lite_slave; the mtimer
-    // just describes its four registers (all writable; past CMP_HI SLVERR) ---
+    // AXI4-Lite slave (D27): shared handshake in axi_lite_slave; the mtimer
+    // just describes its four registers (all writable; past CMP_HI SLVERR)
     wire        reg_wr;
     wire [5:0] reg_waddr, reg_raddr;
     wire [31:0] reg_wdata, reg_rdata;

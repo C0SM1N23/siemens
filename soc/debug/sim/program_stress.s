@@ -71,7 +71,7 @@ _start:
     addi x27, x0, 0
     addi x26, x0, 0
 
-    # ---- fill 128 source words -------------------------------------------
+    # fill 128 source words
     addi x5, x14, 0x100
     lui  x6, 0x5A5A0
     addi x7, x0, 128
@@ -82,7 +82,7 @@ fill_loop:
     addi x7, x7, -1
     bne  x7, x0, fill_loop
 
-    # ---- zero the SRAM data region ---------------------------------------
+    # zero the SRAM data region
     # The SRAM array holds X out of reset. The CPU is about to read this region
     # concurrently with the DMA writing it, and an X pulled into a register is
     # a fault that surfaces somewhere else entirely. Zero it first.
@@ -94,7 +94,7 @@ zero_loop:
     addi x7, x7, -1
     bne  x7, x0, zero_loop
 
-    # ---- descriptor A: first 256 bytes, DMEM -> SRAM ---------------------
+    # descriptor A: first 256 bytes, DMEM -> SRAM
     addi x6, x14, 0x100
     sw   x6, 0(x14)              # desc[0] = src
     addi x5, x25, 0x20
@@ -104,7 +104,7 @@ zero_loop:
     addi x6, x0, 1
     sw   x6, 12(x14)             # desc[3] = ctrl, last segment
 
-    # ---- descriptor B: the next 256 bytes, straight after it -------------
+    # descriptor B: the next 256 bytes, straight after it
     addi x6, x14, 0x200
     sw   x6, 16(x14)
     addi x5, x25, 0x120
@@ -114,14 +114,14 @@ zero_loop:
     addi x6, x0, 1
     sw   x6, 28(x14)
 
-    # ---- arm the SRAM's own interrupt ------------------------------------
+    # arm the SRAM's own interrupt
     # SRAM register words: 0 = INT_STATUS, 1 = INT_ENABLE.
     # Enable collision (bit 0) and cooldown (bit 1) so a real conflict reaches
     # the PIC on source 4.
     addi x30, x0, 3
     sw   x30, 4(x25)             # SRAM INT_ENABLE = collision | cooldown
 
-    # ---- arm the PIC: source 0 (DMA ch0) and source 4 (SRAM) -------------
+    # arm the PIC: source 0 (DMA ch0) and source 4 (SRAM)
     lui  x28, 0x30000
     addi x30, x0, 0x11
     sw   x30, 0xD8(x28)          # PIC INT_ENABLE = src0 | src4
@@ -133,7 +133,7 @@ zero_loop:
     addi x28, x0, 8
     csrrs x0, mstatus, x28       # mstatus.MIE = 1
 
-    # ---- one-time DMA configuration --------------------------------------
+    # one-time DMA configuration
     sw   x0, 0x48(x29)           # SCHED_POLICY = fixed
     lui  x6, 0x07D00
     addi x6, x6, 0xC8            # max_tokens = 2000, refill = 200 per window
@@ -141,9 +141,7 @@ zero_loop:
     addi x6, x0, 0xF
     sw   x6, 0x44(x29)           # DMA INT_ENABLE = all four channels
 
-    # =====================================================================
     # PHASE A: hunt SRAM collisions
-    # =====================================================================
     # Getting the CPU and the DMA onto the same word in the same cycle took
     # three attempts, and the failures are the instructive part:
     #
@@ -221,9 +219,7 @@ burst_arrived:
 phase_a_range:
     beq  x31, x0, phase_a_loop
 
-    # =====================================================================
     # PHASE B: contend the DMEM arbiter
-    # =====================================================================
     # Both masters now want the same single-ported memory: the DMA reads its
     # descriptor and its source data out of DMEM while the CPU does nothing but
     # write and read DMEM back. Every pass checks the round trip, so a grant
@@ -244,7 +240,7 @@ phase_b_loop:
 phase_b_ok:
     blt  x31, x9, phase_b_loop
 
-    # ---- both transfers must be intact despite everything above ----------
+    # both transfers must be intact despite everything above
     addi x5, x25, 0x20
     addi x6, x14, 0x100
     addi x7, x0, 128
@@ -267,7 +263,7 @@ cmp_ok:
     lw   x30, 0(x25)
     sw   x30, 0x418(x14)         # SRAM INT_STATUS as left by the handler
 
-    # ---- deliberate unmapped access: the decoder must answer DECERR ------
+    # deliberate unmapped access: the decoder must answer DECERR
     # Nothing is mapped at 0x5000_0000. The access must fault rather than hang,
     # which is the whole point of having a decode-error responder.
     sw   x26, 0x410(x14)         # fault count before
@@ -284,9 +280,7 @@ cmp_ok:
 halt:
     beq  x0, x0, halt
 
-# ---------------------------------------------------------------------------
 # one handler for everything: mtvec is in direct mode
-# ---------------------------------------------------------------------------
 trap_handler:
     csrrs x30, mcause, x0
     blt  x30, x0, is_interrupt   # mcause[31] set reads as negative

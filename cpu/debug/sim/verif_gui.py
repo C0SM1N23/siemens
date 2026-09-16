@@ -63,7 +63,7 @@ INFRA_TOKENS = (
 STATUS_COLOR = {"PASS": "#2e9e4f", "FAIL": "#d23131",
                 "INFRA": "#e08a00", "RUN": "#888888", "IDLE": "#666666"}
 
-# ------------------------------------------------------------ info tab text
+# info tab text
 INFO_PAGES = [
     ("ModelSim TB + waveforms", """\
 What it does: opens ModelSim (GUI), compiles the RTL and the testbenches, loads
@@ -233,7 +233,7 @@ def vsim_running() -> bool:
     return ("vsim" in out) or ("vish" in out)
 
 
-# ---------------------------------------------------------------- verdicts
+# verdicts
 # ModelSim: require exit code zero and exact completion counts.
 # AND zero FAIL: AND no infra token. Infra tokens win (orange).
 
@@ -303,7 +303,7 @@ def verdict_asm(lines, rc):
            ("INFRA", "assembly failed (see the log)")
 
 
-# ------------------------------------------------------------------- app
+# app
 class App(tk.Tk):
     POLL_MS = 60
     MAX_SHOWN_LINES = 8000
@@ -334,7 +334,7 @@ class App(tk.Tk):
         self.after(self.POLL_MS, self._poll)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    # ---------------------------------------------------------- style
+    # style
     def _style(self):
         st = ttk.Style(self)
         try:
@@ -367,7 +367,7 @@ class App(tk.Tk):
                      fieldbackground="#fbfbfc", background="#fbfbfc")
         st.configure("Treeview.Heading", font=("Segoe UI Semibold", 9))
 
-    # ------------------------------------------------------------ UI
+    # UI
     def _build_ui(self):
         # header
         head = ttk.Frame(self)
@@ -591,7 +591,7 @@ class App(tk.Tk):
             self._log_line("[gui] wsl not found - the Verilator button is disabled")
         self._clear_stale_lock(startup=True)
 
-    # ----------------------------------------------------------- jobs
+    # jobs
     def _gflags(self):
         out = []
         for k, dv in PARAM_DEFAULTS.items():
@@ -678,7 +678,7 @@ class App(tk.Tk):
         threading.Thread(target=self._worker, args=(job,),
                          daemon=True).start()
 
-    # --------------------------------------------------------- worker
+    # worker
     def _worker(self, job):
         lines = []
 
@@ -772,7 +772,7 @@ class App(tk.Tk):
             st, sm = job["verdict"](lines, proc.returncode or 0)
             self.q.put(("done", job, st, sm + " (fereastra inchisa)"))
 
-    # ----------------------------------------------------------- queue
+    # queue
     def _poll(self):
         batch = []
         try:
@@ -807,7 +807,7 @@ class App(tk.Tk):
             self.elapsed_lbl.config(text=f"{el // 60:02d}:{el % 60:02d}")
         self.after(self.POLL_MS, self._poll)
 
-    # -------------------------------------------------------- helpers
+    # helpers
     def _status(self, kind, text):
         self.status_dot.config(fg=STATUS_COLOR.get(kind, "#666"))
         self.status_lbl.config(text=text)
@@ -878,7 +878,7 @@ class App(tk.Tk):
             except OSError as e:
                 self._log_line(f"[gui] cannot remove the lock: {e}")
 
-    # -------------------------------------------------------- actions
+    # actions
     def _stop(self):
         self.abort_chain = True
         self.chain = []

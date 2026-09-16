@@ -60,9 +60,7 @@ module soc_tb_pic_escalate;
 
     localparam         [31:0] DONE_MARKER = 32'hD05E_D01E;
 
-    // ---------------------------------------------------------------------------
     // the order the controller actually claimed them in
-    // ---------------------------------------------------------------------------
     integer claim_seq[0:3];
     integer claim_n;
 
@@ -134,10 +132,8 @@ module soc_tb_pic_escalate;
             check(32'd0, {31'b0, cpu_in_trap}, "no trap level left open");
         end
 
-        $display("\n========================================");
         if (errors == 0) $display("== PIC ESCALATION TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC ESCALATION TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

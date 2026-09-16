@@ -53,9 +53,7 @@ module soc_tb_pic_nest;
         .tmr_irq_o    (tmr_irq)
     );
 
-    // ---------------------------------------------------------------------------
     // scoreboard
-    // ---------------------------------------------------------------------------
     localparam integer        SB_ENTRIES    = 128;            // 0x200
     localparam integer        SB_VEC_OUTER  = 129;            // 0x204
     localparam integer        SB_DEPTH_OUT  = 130;            // 0x208
@@ -69,9 +67,7 @@ module soc_tb_pic_nest;
 
     localparam         [31:0] DONE_MARKER   = 32'hD05E_D01E;
 
-    // ---------------------------------------------------------------------------
     // continuous observation of the nesting stack
-    // ---------------------------------------------------------------------------
     wire    [4:0] depth = dut.pic_inst.depth;
     wire          claim = dut.pic_inst.claim_push;
     wire    [3:0] claim_id = dut.pic_inst.claimed_id;
@@ -209,10 +205,8 @@ module soc_tb_pic_nest;
             check(32'd0, {31'b0, cpu_in_trap}, "no trap level left open at the end");
         end
 
-        $display("\n========================================");
         if (errors == 0) $display("== PIC NESTING TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC NESTING TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

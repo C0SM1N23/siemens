@@ -71,9 +71,7 @@ module soc_axi_full_sva #(
     wire       ar_hs = arvalid_i && arready_i;
     wire       r_hs = rvalid_i && rready_i;
 
-    // ---------------------------------------------------------------------------
     // shadow state: which burst is in flight and how far through it we are
-    // ---------------------------------------------------------------------------
     reg        rd_out_q;  // a read burst is in flight
     reg  [7:0] rd_len_q;  // its ARLEN
     reg  [7:0] rd_beat_q;  // beats delivered so far
@@ -166,9 +164,7 @@ module soc_axi_full_sva #(
         end
     end
 
-    // ---------------------------------------------------------------------------
     // read channel
-    // ---------------------------------------------------------------------------
     ar_valid_stable :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) arvalid_i && !arready_i |=> arvalid_i)
     else $error("[%0s] ARVALID dropped before ARREADY", NAME);
@@ -226,9 +222,7 @@ module soc_axi_full_sva #(
     assert property (@(posedge clk_i) disable iff (!rst_n_i) r_hs |-> rresp_i != 2'b01)
     else $error("[%0s] RRESP = EXOKAY is illegal here", NAME);
 
-    // ---------------------------------------------------------------------------
     // write channel
-    // ---------------------------------------------------------------------------
     aw_valid_stable :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) awvalid_i && !awready_i |=> awvalid_i)
     else $error("[%0s] AWVALID dropped before AWREADY", NAME);
@@ -297,11 +291,9 @@ module soc_axi_full_sva #(
     assert property (@(posedge clk_i) disable iff (!rst_n_i) b_hs |-> bresp_i != 2'b01)
     else $error("[%0s] BRESP = EXOKAY is illegal here", NAME);
 
-    // ---------------------------------------------------------------------------
     // the subset the bridge supports. These are not AXI rules - AXI allows WRAP
     // and narrow transfers - they are the contract between this master and the
     // bridge in front of it, asserted where it is cheapest to see violated.
-    // ---------------------------------------------------------------------------
     generate
         if (CHECK_SUBSET) begin : g_subset
 
@@ -336,9 +328,7 @@ module soc_axi_full_sva #(
     assert property (@(posedge clk_i) !rst_n_i |-> !arvalid_i && !awvalid_i && !wvalid_i)
     else $error("[%0s] a VALID was asserted during reset", NAME);
 
-    // ---------------------------------------------------------------------------
     // functional cover: the burst shapes that actually occurred
-    // ---------------------------------------------------------------------------
     cov_read_burst_8 :
     cover property (@(posedge clk_i) disable iff (!rst_n_i) ar_hs && arlen_i == 8'd7);
     cov_write_burst_8 :

@@ -52,7 +52,7 @@
 
 module rv32i_tb_csr_ro;
 
-    // ---- CSR addresses ----
+    // CSR addresses
     localparam MSTATUS  = 12'h300, MISA     = 12'h301, MIE      = 12'h304,
            MTVEC    = 12'h305, MSCRATCH = 12'h340, MEPC     = 12'h341,
            MCAUSE   = 12'h342, MTVAL    = 12'h343, MIP      = 12'h344;
@@ -65,12 +65,12 @@ module rv32i_tb_csr_ro;
 
     localparam [31:0] THIS_HART = 32'h0000_002A;  // a distinctive, non-zero id
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT interface ----
+    // DUT interface
     reg [11:0] csr_addr;
     reg [31:0] csr_wdata;
     reg [ 1:0] csr_op;
@@ -123,7 +123,6 @@ rv32i_csr_file #(
         .ev_wfi_sleep_i (ev_wfi_sleep)
     );
 
-    // ---------------------------------------------------------------------------
     // drivers
     //
     // The CSR read is combinational from csr_addr, and a write commits on the clock
@@ -131,7 +130,6 @@ rv32i_csr_file #(
     // way cpu_top drives it. Every task therefore applies the inputs just after a
     // posedge, samples the combinational outputs, lets one edge pass, and parks the
     // enables again.
-    // ---------------------------------------------------------------------------
 
     // Pure read. The result lands in `rd`; illegal is checked against exp_illegal.
     task csr_read(input [11:0] a, input exp_illegal, input [511:0] name);
@@ -208,13 +206,9 @@ rv32i_csr_file #(
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     initial begin
-        $display("\n===========================================================");
         $display("tb_csr_ro : CSR read-only / WARL / reset verification");
-        $display("===========================================================");
 
         csr_addr      = 12'h000;
         csr_wdata     = 32'b0;
@@ -238,9 +232,7 @@ rv32i_csr_file #(
         @(posedge clk) #1 rst_n = 1'b1;
         repeat (2) @(posedge clk);
 
-        // =====================================================================
         // 1. reset values
-        // =====================================================================
         $display("\n-- 1. reset value of every implemented CSR --");
         if ($test$plusargs("verbose")) $display("   step 1: the trap and status CSRs");
         // MPP is hardwired to 2'b11 (M-mode), so mstatus never reads as 0
@@ -277,9 +269,7 @@ rv32i_csr_file #(
         for (i = MHPMC3H; i <= MHPMC7H; i = i + 1)
         csr_read_chk(i[11:0], 32'h0000_0000, "  mhpmcounter3..7h  reset = 0");
 
-        // =====================================================================
         // 2. read-only CSRs
-        // =====================================================================
         $display("\n-- 2. read-only CSRs: a write must trap and change nothing --");
         if ($test$plusargs("verbose"))
             $display("   step 1: mip is read-only because the PIC drives it, not software");
@@ -299,9 +289,7 @@ rv32i_csr_file #(
         irq_lines = 16'h0000;
         @(posedge clk);
 
-        // =====================================================================
         // 3. read-only FIELDS inside writable CSRs
-        // =====================================================================
         // These are the bits a register-level test misses: the CSR accepts the
         // write, so nothing traps, but part of the value must not survive.
         $display("\n-- 3. read-only and reserved FIELDS inside writable CSRs --");
@@ -358,9 +346,7 @@ rv32i_csr_file #(
         csr_read_chk(MTVEC, 32'hDEAD_BEEC, "  reserved MODE=3 reads back as direct");
         csr_write(MTVEC, 32'h0000_0000, 1'b0, "  mtvec restored");
 
-        // =====================================================================
         // 4. misa is WARL, not read-only
-        // =====================================================================
         // This is the distinction the bench exists to make. misa is writable in the
         // spec, so a write must NOT trap; this implementation supports exactly one
         // configuration, so the written value is discarded. A design that made misa
@@ -374,9 +360,7 @@ rv32i_csr_file #(
         csr_write_op(MISA, 32'hFFFF_FFFF, `CSROP_RC, 1'b0, "  CSRRC to misa does not trap");
         csr_read_chk(MISA, 32'h4000_0100, "  misa still unchanged");
 
-        // =====================================================================
         // 5. tied-off performance registers
-        // =====================================================================
         // 24 counters + 24 upper halves + 24 event selectors = 72 addresses that
         // exist but are hardwired to zero. They must read 0 and swallow writes:
         // trapping would break software that enumerates the counter set.
@@ -405,9 +389,7 @@ rv32i_csr_file #(
             csr_read_chk(i[11:0], i - 32'h322, "fixed HPM event unchanged");
         end
 
-        // =====================================================================
         // 6. absent CSRs raise illegal on both read and write
-        // =====================================================================
         $display("\n-- 6. CSRs that are not implemented at all raise illegal --");
         if ($test$plusargs("verbose"))
             $display("   step 1: mcountinhibit (0x320) is deliberately absent - the spec");
@@ -434,9 +416,7 @@ rv32i_csr_file #(
         csr_read(12'h322, 1'b1, "  0x322, one below mhpmevent3, raises illegal");
         csr_read(12'h340, 1'b0, "  0x340 (mscratch) is implemented, no trap");
 
-        // =====================================================================
         // 7. the pure-read exception
-        // =====================================================================
         // CSRRS / CSRRC with rs1 = x0 is defined as a read with no write side
         // effect, so it must not trap even on a read-only CSR. cpu_top implements
         // this by not raising csr_wen; the check here is that csr_ren alone on a
@@ -446,9 +426,7 @@ rv32i_csr_file #(
         csr_read(MHARTID, 1'b0, "  read of mhartid alone does not trap");
         csr_read(MVENDID, 1'b0, "  read of mvendorid alone does not trap");
 
-        // =====================================================================
         // 8. counters are writable in M-mode, per Priv. spec 3.1.11
-        // =====================================================================
         // The counters that ARE implemented must be writable on both halves, which
         // is the other side of section 5: tied off is not the same as read-only.
         $display("\n-- 8. implemented counters are writable on both halves --");
@@ -462,9 +440,7 @@ rv32i_csr_file #(
         csr_write(MHPMC3H, 32'h0000_4444, 1'b0, "  mhpmcounter3 high half write accepted");
         csr_read_chk(MHPMC3H, 32'h0000_4444, "  mhpmcounter3 high half round-trip");
 
-        // =====================================================================
         // 9. reset returns every CSR to its reset value
-        // =====================================================================
         $display("\n-- 9. asynchronous reset from a fully written state --");
         if ($test$plusargs("verbose"))
             $display("   step 1: confirm the CSRs currently hold non-reset values");
@@ -492,12 +468,10 @@ rv32i_csr_file #(
         csr_read_chk(MHARTID, THIS_HART, "  mhartid unaffected by reset (parameter)");
         csr_read_chk(MISA, 32'h4000_0100, "  misa unaffected by reset (hardwired)");
 
-        // ---- done ----
+        // done
         repeat (4) @(posedge clk);
-        $display("\n========================================");
         if (errors == 0) $display("== CSR READ-ONLY TESTBENCH: ALL TESTS PASSED ==");
         else $display("== CSR READ-ONLY TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

@@ -8,12 +8,12 @@ module rv32i_tb_isa #(
     localparam [31:0] DMEM_BASE = 32'h2000;
     localparam IWORDS = 2048;
     `include "program_isa_count.vh"
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- CPU buses ----
+    // CPU buses
     wire [31:0] ib_araddr, ib_rdata;
     wire [2:0] ib_arprot;
     wire ib_arvalid, ib_arready, ib_rvalid, ib_rready;
@@ -26,7 +26,7 @@ module rv32i_tb_isa #(
     wire db_arvalid, db_arready, db_rvalid, db_rready;
     wire [1:0] db_bresp, db_rresp;
 
-    // ---- interrupt pins, driven directly by the bench ----
+    // interrupt pins, driven directly by the bench
     wire       cpu_irq = 1'b0;
     wire [3:0] cpu_irq_vec = 4'b0;
     wire cpu_irq_ack, cpu_irq_eoi, cpu_in_trap;

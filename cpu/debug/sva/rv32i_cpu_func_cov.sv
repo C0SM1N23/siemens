@@ -98,7 +98,7 @@ module rv32i_cpu_func_cov (
         endcase
     endfunction
 
-    // --- counters, grouped by sampling point ---
+    // counters, grouped by sampling point
 
     integer cls_cnt[0:10];  // committed instruction classes
     integer ld_cnt[0:7];  // load sizes (funct3: LB LH LW LBU LHU)
@@ -589,7 +589,7 @@ module rv32i_cpu_func_cov (
         end
     end
 
-    // --- report + coverage gate ---
+    // report + coverage gate
     //
     // Each bin is tagged required (REQ) or optional (OPT). A required bin that
     // stays 0 fails the gate — that is a coverage regression, checked as hard as a
@@ -616,7 +616,7 @@ module rv32i_cpu_func_cov (
         hit_n     = 0;
         tot_n     = 0;
         gate_fail = 0;
-        $display("[FCOV] ---- functional coverage report ----");
+        $display("[FCOV] functional coverage report");
 
         rep("class LUI", cls_cnt[C_LUI], REQ);
         rep("class AUIPC", cls_cnt[C_AUIPC], REQ);
@@ -709,7 +709,7 @@ module rv32i_cpu_func_cov (
         rep("dbus write SLVERR", db_wr_slverr, REQ);
         rep("dbus write DECERR", db_wr_decerr, REQ);
 
-        $display("[FCOV] ---- %0d/%0d bins hit (%0d%%) ----", hit_n, tot_n, (hit_n * 100) / tot_n);
+        $display("[FCOV] %0d/%0d bins hit (%0d%%)", hit_n, tot_n, (hit_n * 100) / tot_n);
         if (gate_fail == 0) $display("[FCOV] == COVERAGE GATE PASSED ==");
         else $display("[FCOV] == COVERAGE GATE FAILED: %0d required bin(s) missed ==", gate_fail);
     end

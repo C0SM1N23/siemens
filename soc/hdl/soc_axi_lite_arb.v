@@ -52,9 +52,7 @@ module soc_axi_lite_arb #(
     output     [ 0:0] s_rready_o
 );
 
-    // ---------------------------------------------------------------------------
     // request / grant
-    // ---------------------------------------------------------------------------
     wire [M-1:0] req = m_awvalid_i | m_arvalid_i;
 
     reg  [M-1:0] gnt;  // one-hot, zero while idle
@@ -97,9 +95,7 @@ module soc_axi_lite_arb #(
         end
     end
 
-    // ---------------------------------------------------------------------------
     // granted master's payload onto the slave
-    // ---------------------------------------------------------------------------
 
     always @(*) begin : update_s_awaddr_o
         integer k;
@@ -143,9 +139,7 @@ module soc_axi_lite_arb #(
     assign s_arvalid_o[0] = !write_grant_q && |(gnt & m_arvalid_i);
     assign s_rready_o[0]  = !write_grant_q && |(gnt & m_rready_i);
 
-    // ---------------------------------------------------------------------------
     // slave's responses back to the granted master, everyone else sees zeros
-    // ---------------------------------------------------------------------------
     genvar g;
     generate
         for (g = 0; g < M; g = g + 1) begin : g_fanin

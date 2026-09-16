@@ -67,12 +67,12 @@ module rv32i_tb_bp;
     localparam IDX_W     = 7;               // $clog2(128)
     localparam TAG_W     = 32 - IDX_W - 2;  // 23
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT ports ----
+    // DUT ports
     reg  [31:0] lookup_pc;
     wire        pred_taken;
     wire [31:0] pred_target;
@@ -132,7 +132,7 @@ rv32i_branch_predictor #(
         .update_link_i  (update_link)
     );
 
-    // ---- helpers ----
+    // helpers
 
     task chk_defined(input [31:0] v, input [511:0] name);
         begin
@@ -220,11 +220,9 @@ rv32i_branch_predictor #(
         update_ret    = 1'b0;
         update_link   = 32'b0;
 
-        $display("\n=== tb_bp: branch predictor block verification ===");
+        $display("\ntb_bp: branch predictor block verification");
 
-        // ================================================================
         $display("\n[1] reset: the table is empty and nothing holds X");
-        // ================================================================
         rst_n = 1'b0;
         step(4);
 
@@ -268,9 +266,7 @@ rv32i_branch_predictor #(
         @(posedge clk) #1 rst_n = 1'b1;
         step(1);
 
-        // ================================================================
         $display("\n[2] every index misses out of reset, and a miss is not-taken");
-        // ================================================================
         // exhaustive over the 128-entry index space: an entry that resets at
         // index 0 and not at index 91 is exactly what a spot check misses
         for (i = 0; i < ENTRIES; i = i + 1) begin
@@ -290,9 +286,7 @@ rv32i_branch_predictor #(
         end
         check(32'd1, 32'd1, "  miss predicts not-taken (no stored target exists)");
 
-        // ================================================================
         $display("\n[3] learn, re-learn: the 1-bit state follows the last outcome");
-        // ================================================================
         pc_a = 32'h0000_0100;
 
         upd_btb(pc_a, 1'b1, 32'h0000_0200);
@@ -309,9 +303,7 @@ rv32i_branch_predictor #(
         check(32'd1, {31'b0, pred_taken}, "  taken again: the state is not sticky");
         check(32'h0000_0240, pred_target, "  the target was replaced too");
 
-        // ================================================================
         $display("\n[4] indexing is 1:1 over the whole table");
-        // ================================================================
         // write every entry with a distinct, recognisable target, then read all
         // of them back. Aliasing in either direction shows up as a wrong target.
         for (i = 0; i < ENTRIES; i = i + 1)
@@ -334,9 +326,7 @@ rv32i_branch_predictor #(
                 $display("PASS:   all %0d entries hold their own target", ENTRIES);
         end
 
-        // ================================================================
         $display("\n[5] the tag is full: aliasing evicts, it does not false-hit");
-        // ================================================================
         // index = PC[8:2], so two PCs 512 bytes apart share an index and differ
         // in the lowest tag bit - the bit an off-by-one in the split would move
         pc_a = 32'h0002_0100;
@@ -356,9 +346,7 @@ rv32i_branch_predictor #(
         look(pc_a);
         check(32'd0, {31'b0, pred_taken}, "  A has been evicted, not aliased onto B");
 
-        // ================================================================
         $display("\n[6] update_en_i gates the write");
-        // ================================================================
         pc_a = 32'h0003_0100;
         upd_btb(pc_a, 1'b1, 32'h1234_0000);
         look(pc_a);
@@ -374,9 +362,7 @@ rv32i_branch_predictor #(
         check(32'd1, {31'b0, pred_taken}, "  no update: direction unchanged");
         check(32'h1234_0000, pred_target, "  no update: target unchanged");
 
-        // ================================================================
         $display("\n[7] RAS: calls push, returns pop, is_ret routes the prediction");
-        // ================================================================
         // a return site: one BTB entry, tagged is_ret, with a deliberately wrong
         // stored target so that any prediction taken from the BTB is visible
         pc_b = 32'h0004_0100;  // the "ret" instruction
@@ -413,9 +399,7 @@ rv32i_branch_predictor #(
         look(pc_b);
         check(32'h1111_1000, pred_target, "  now predicting the first link");
 
-        // ================================================================
         $display("\n[8] RAS underflow: a return with an empty stack");
-        // ================================================================
         upd(pc_b, 1'b1, 32'hBAD0_BAD0, 1'b1, 1'b0, 1'b1, 32'b0);
         check(32'd0, {27'b0, ras_count}, "  the stack is now empty");
         look(pc_b);
@@ -428,9 +412,7 @@ rv32i_branch_predictor #(
         check(32'hBAD0_BAD0, pred_target, "  still the BTB target, still not X");
         chk_defined(pred_target, "  pred_target after underflow");
 
-        // ================================================================
         $display("\n[9] RAS overflow: RAS_DEPTH+2 calls wrap and lose the oldest");
-        // ================================================================
         // links are 0xE0000000 + n so that the identity of every entry that comes
         // back out is unambiguous
         for (i = 1; i <= RAS_DEPTH + 2; i = i + 1) begin
@@ -475,9 +457,7 @@ rv32i_branch_predictor #(
         check(32'hBAD0_BAD0, pred_target,
               "  links 1 and 2 were overwritten by the wrap, as documented");
 
-        // ================================================================
         $display("\n[10] both-link JALR: call and return together replace the top");
-        // ================================================================
         // with an empty stack, push_only wins, so the pair behaves as a push
         upd(32'h0008_01C0, 1'b1, 32'h0009_0000, 1'b0, 1'b1, 1'b1, 32'h4444_4000);
         check(32'd1, {27'b0, ras_count}, "  empty stack: the pair pushes");
@@ -496,9 +476,7 @@ rv32i_branch_predictor #(
         look(pc_b);
         check(32'h4444_4000, pred_target, "  under it, the entry the replace did not touch");
 
-        // ================================================================
         $display("\n[11] RAS_DEPTH = 0: the stack is tied off, not merely empty");
-        // ================================================================
         // dut0 has seen exactly the same stimulus as dut throughout, so the only
         // thing that can explain a difference is the parameter
         look(pc_b);
@@ -509,9 +487,7 @@ rv32i_branch_predictor #(
         look(32'h0004_0310);
         check(32'h7777_0000, pred_target0, "  a normal entry is unaffected");
 
-        // ================================================================
         $display("\n[12] asynchronous reset from a fully trained state");
-        // ================================================================
         look(32'h0001_0004);
         check(32'd1, {31'b0, pred_taken}, "  precondition: the table is trained");
         upd(32'h000A_01E0, 1'b1, 32'h000B_0000, 1'b0, 1'b1, 1'b0, 32'h9999_9000);
@@ -546,12 +522,10 @@ rv32i_branch_predictor #(
             errors = errors + 1;
         end
 
-        // ---- done ----
+        // done
         step(2);
-        $display("\n========================================");
         if (errors == 0) $display("== BRANCH PREDICTOR TESTBENCH: ALL TESTS PASSED ==");
         else $display("== BRANCH PREDICTOR TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

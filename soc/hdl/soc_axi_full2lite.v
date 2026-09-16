@@ -7,7 +7,7 @@ module soc_axi_full2lite (
     input clk_i,
     input rst_n_i,
 
-    // ---- AXI4-Full slave side (faces the DMA's master port) ----
+    // AXI4-Full slave side (faces the DMA's master port)
     input  [31:0] s_awaddr_i,
     input  [ 7:0] s_awlen_i,
     input  [ 2:0] s_awsize_i,
@@ -34,7 +34,7 @@ module soc_axi_full2lite (
     output        s_rvalid_o,
     input         s_rready_i,
 
-    // ---- AXI4-Lite master side (faces the interconnect) ----
+    // AXI4-Lite master side (faces the interconnect)
     output [31:0] m_awaddr_o,
     output [ 2:0] m_awprot_o,
     output        m_awvalid_o,
@@ -66,9 +66,7 @@ module soc_axi_full2lite (
     // slaves ignore PROT, so drive the "data, secure, unprivileged" constant.
     localparam [2:0] PROT_DATA = 3'b000;
 
-    // ===========================================================================
     // read channel
-    // ===========================================================================
     localparam [1:0] R_IDLE = 2'd0, R_RUN = 2'd1,  // walking the beats on the lite side
     R_ERR = 2'd2;  // unsupported request: answer without a bus access
 
@@ -143,9 +141,7 @@ module soc_axi_full2lite (
         else if (m_arvalid_o && m_arready_i) r_ar_sent <= 1'b1;
     end
 
-    // ===========================================================================
     // write channel
-    // ===========================================================================
     localparam [1:0] W_IDLE = 2'd0, W_RUN = 2'd1,  // walking the beats on the lite side
     W_ERR = 2'd2,  // unsupported request: swallow the beats
     W_RESP = 2'd3;  // one full B for the whole burst

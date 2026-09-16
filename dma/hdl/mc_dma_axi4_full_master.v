@@ -140,7 +140,7 @@ module mc_dma_axi4_full_master (
 
     // 3. Arbiter Ready Signal
     // Tells the arbiter we are free to take a new command
-    // ==== FIX 2: Semnal combinațional dependent doar de stare ====
+    // FIX 2: Semnal combinațional dependent doar de stare
     always @(*) begin
         if (state == STATE_IDLE)
             master_req_ready_o = 1'b1;

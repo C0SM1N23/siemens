@@ -55,7 +55,7 @@ _start:
     lui  x25, 0x10000
     addi x25, x25, 0x20          # x25 = SRAM data base, after its 8 registers
 
-    # ---- four source blocks, one recognisable pattern each ----------------
+    # four source blocks, one recognisable pattern each
     # Channel n gets 0xC0DEn000 upward, so a word tells you which channel was
     # supposed to have written it.
     addi x20, x0, 0              # channel index
@@ -77,7 +77,7 @@ fill_word:
     addi x23, x0, 4
     bne  x20, x23, fill_ch
 
-    # ---- four descriptors, one per channel --------------------------------
+    # four descriptors, one per channel
     addi x20, x0, 0
 desc_ch:
     slli x21, x20, 4             # 16 bytes per descriptor
@@ -100,7 +100,7 @@ desc_ch:
     addi x23, x0, 4
     bne  x20, x23, desc_ch
 
-    # ---- round-robin, and a bandwidth cap wide enough not to throttle -----
+    # round-robin, and a bandwidth cap wide enough not to throttle
     addi x6, x0, 1
     sw   x6, 0x48(x29)           # SCHED_POLICY = 1 (round robin)
     lui  x6, 0x07D00
@@ -112,7 +112,7 @@ desc_ch:
     addi x6, x0, 0xF
     sw   x6, 0x44(x29)           # INT_ENABLE, so INT_STATUS is observable
 
-    # ---- point each channel at its descriptor -----------------------------
+    # point each channel at its descriptor
     addi x6, x14, 0x00
     sw   x6, 0x00(x29)           # CH0_DESC_ADDR
     addi x6, x14, 0x10
@@ -122,14 +122,14 @@ desc_ch:
     addi x6, x14, 0x30
     sw   x6, 0x30(x29)           # CH3_DESC_ADDR
 
-    # ---- start all four back to back, so they overlap ---------------------
+    # start all four back to back, so they overlap
     addi x6, x0, 1
     sw   x6, 0x04(x29)           # CH0_CONTROL.enable
     sw   x6, 0x14(x29)           # CH1_CONTROL.enable
     sw   x6, 0x24(x29)           # CH2_CONTROL.enable
     sw   x6, 0x34(x29)           # CH3_CONTROL.enable
 
-    # ---- wait for every channel to report DONE ----------------------------
+    # wait for every channel to report DONE
     # No interrupt is used: this program is about the data path and the
     # arbiter, and polling keeps the CPU on the bus while the channels work,
     # which is the condition the arbiter is meant to handle.
@@ -151,7 +151,7 @@ wait_all:
     lw   x30, 0x40(x29)
     sw   x30, 0x210(x14)         # INT_STATUS: all four channels reported
 
-    # ---- compare each channel's quarter against its own source ------------
+    # compare each channel's quarter against its own source
     addi x20, x0, 0
 cmp_ch:
     slli x22, x20, 5

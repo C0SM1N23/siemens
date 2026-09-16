@@ -44,9 +44,7 @@ module soc_axi_lite_ram #(
         if (INIT_FILE != "") $readmemh(INIT_FILE, mem);
     end
 
-    // ---------------------------------------------------------------------------
     // backpressure generator (absent unless STALL_PROB > 0)
-    // ---------------------------------------------------------------------------
     wire ar_stall, aw_stall, w_stall;
 
     generate
@@ -80,9 +78,7 @@ module soc_axi_lite_ram #(
         end
     endgenerate
 
-    // ---------------------------------------------------------------------------
     // write channel
-    // ---------------------------------------------------------------------------
     reg aw_q, w_q, bvalid_q;
     reg [31:0] awaddr_q, wdata_q;
     reg [ 3:0] wstrb_q;
@@ -166,9 +162,7 @@ module soc_axi_lite_ram #(
         end
     end
 
-    // ---------------------------------------------------------------------------
     // read channel
-    // ---------------------------------------------------------------------------
     reg        rvalid_q;
     reg [31:0] rdata_q;
 

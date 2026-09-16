@@ -3,17 +3,17 @@
 
 module pic_tb_reference;
 
-    // ---- register map (byte offsets) ----
+    // register map (byte offsets)
     localparam CFG0 = 32'h00, SWT0 = 32'h40, STA0 = 32'h80;
     localparam BAND_CONFIG = 32'hC0, ESCALATION = 32'hD4, INT_ENABLE = 32'hD8;
     localparam RESP_OKAY = 2'b00;
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT source / CPU pins ----
+    // DUT source / CPU pins
     reg [15:0] irq_src;
     reg [15:0] cpu_mask;
     reg cpu_irq_ack, cpu_irq_eoi;
@@ -21,7 +21,7 @@ module pic_tb_reference;
     wire [ 3:0] cpu_irq_vec;
     wire [15:0] pending;
 
-    // ---- AXI4-Lite master side ----
+    // AXI4-Lite master side
     reg [31:0] awaddr, wdata, araddr;
     reg [3:0] wstrb;
     reg awvalid, wvalid, bready, arvalid, rready;

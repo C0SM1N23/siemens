@@ -36,7 +36,7 @@ _start:
     lui  x14, 2                  # x14 = 0x2000, DMEM base
     lui  x25, 0x30000            # x25 = PIC base
 
-    # ---- slot 8 more urgent than slot 9, and only slot 9 has a deadline ---
+    # slot 8 more urgent than slot 9, and only slot 9 has a deadline
     addi x30, x0, 2
     sw   x30, 0x20(x25)          # SRC8_CONFIG = band 1, no deadline
     lui  x30, 0x20               # deadline 32 in [31:16]
@@ -46,7 +46,7 @@ _start:
     addi x30, x0, 0x300
     sw   x30, 0xD8(x25)          # PIC INT_ENABLE = slots 8 and 9
 
-    # ---- the core is told about both, but keeps its door shut for now -----
+    # the core is told about both, but keeps its door shut for now
     addi x28, x0, irq_handler
     csrrw x0, mtvec, x28         # direct mode
     lui  x28, 0x3000             # mie[25:24] = sources 9 and 8
@@ -54,19 +54,19 @@ _start:
     addi x31, x0, 0
     addi x21, x14, 0x200         # scoreboard write pointer
 
-    # ---- raise both while nothing can be claimed --------------------------
+    # raise both while nothing can be claimed
     lui  x6, 0xA5A50
     addi x6, x6, 1
     sw   x6, 0x64(x25)           # SRC9_SW_TRIG, the one with the deadline
     sw   x6, 0x60(x25)           # SRC8_SW_TRIG, the one that outranks it
 
-    # ---- wait, comfortably longer than the deadline -----------------------
+    # wait, comfortably longer than the deadline
     addi x7, x0, 100
 esc_wait:
     addi x7, x7, -1
     bne  x7, x0, esc_wait
 
-    # ---- the escalation is visible before anything is serviced ------------
+    # the escalation is visible before anything is serviced
     lw   x30, 0xA4(x25)          # SRC9_STATUS: ESC set, effective band moved
     sw   x30, 0x208(x14)
     lw   x30, 0xA0(x25)          # SRC8_STATUS: untouched, still band 1
@@ -74,7 +74,7 @@ esc_wait:
     lw   x30, 0xDC(x25)          # INT_STATUS: the global escalation flag
     sw   x30, 0x210(x14)
 
-    # ---- now let them through, most urgent first --------------------------
+    # now let them through, most urgent first
     addi x28, x0, 8
     csrrs x0, mstatus, x28       # mstatus.MIE = 1
 
@@ -90,9 +90,7 @@ wait_both:
 halt:
     beq  x0, x0, halt
 
-# ---------------------------------------------------------------------------
 # interrupt handler
-# ---------------------------------------------------------------------------
 # No nesting here, so no saved state to restore: this test is about the order
 # the two handlers are entered in, and each one runs to completion.
 irq_handler:

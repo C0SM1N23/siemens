@@ -36,7 +36,7 @@ _start:
     lui  x14, 2                  # x14 = 0x2000, DMEM base
     lui  x25, 0x30000            # x25 = PIC base
 
-    # ---- every slot enabled, all at the same priority ---------------------
+    # every slot enabled, all at the same priority
     # Left at their reset configuration: band 0, intra 0, level-triggered. The
     # only thing that separates them is the slot number, which is what makes a
     # wrong vector obvious.
@@ -52,7 +52,7 @@ _start:
     addi x28, x0, 8
     csrrs x0, mstatus, x28       # mstatus.MIE = 1
 
-    # ---- raise one slot at a time, lowest first ---------------------------
+    # raise one slot at a time, lowest first
     addi x20, x0, 0              # slot index
     addi x21, x14, 0x200         # scoreboard write pointer
 slot_loop:
@@ -70,7 +70,7 @@ wait_slot:
     addi x24, x0, 16
     bne  x20, x24, slot_loop
 
-    # ---- what is left behind ---------------------------------------------
+    # what is left behind
     sw   x31, 0x240(x14)
     lw   x30, 0xC4(x25)          # NEST_STATUS
     andi x30, x30, 0x1F
@@ -83,9 +83,7 @@ wait_slot:
 halt:
     beq  x0, x0, halt
 
-# ---------------------------------------------------------------------------
 # interrupt handler
-# ---------------------------------------------------------------------------
 # Nothing to acknowledge at the peripheral: a software-triggered request is
 # consumed by the claim itself, so returning is all that is needed.
 irq_handler:

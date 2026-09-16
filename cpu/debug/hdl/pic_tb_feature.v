@@ -23,7 +23,7 @@
 
 module pic_tb_feature;
 
-    // ---- register map (byte offsets) ----
+    // register map (byte offsets)
     localparam CFG0 = 32'h00, SWT0 = 32'h40, STA0 = 32'h80;
     localparam BAND_CONFIG   = 32'hC0, NEST_STATUS = 32'hC4, NEST_MAX_R  = 32'hC8,
            ACTIVE_VEC    = 32'hCC, SPURIOUS_LOG = 32'hD0, ESCALATION  = 32'hD4,
@@ -31,18 +31,18 @@ module pic_tb_feature;
     localparam RESP_OKAY = 2'b00, RESP_SLVERR = 2'b10;
     localparam SW_KEY = 16'hA5A5;
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT source / CPU pins ----
+    // DUT source / CPU pins
     reg [15:0] irq_src;
     reg cpu_irq_ack, cpu_irq_eoi;
     wire       cpu_irq;
     wire [3:0] cpu_irq_vec;
 
-    // ---- AXI4-Lite master side ----
+    // AXI4-Lite master side
     reg [31:0] awaddr, wdata, araddr;
     reg [3:0] wstrb;
     reg awvalid, wvalid, bready, arvalid, rready;
@@ -87,12 +87,10 @@ module pic_tb_feature;
         .s_axi_rready_i (rready)
     );
 
-    // ---------------------------------------------------------------------------
     // AXI4-Lite master access. The driver itself lives in tb_axil_master.vh, shared
     // with the block-level register benches, so all five benches drive the slave
     // exactly the same way and a change to the protocol handling happens once.
     // These two names are kept because the stimulus below reads better with them.
-    // ---------------------------------------------------------------------------
     task axi_write(input [31:0] a, input [31:0] d, input [1:0] exp);
         begin
             axil_write(a, d, exp);
@@ -105,9 +103,7 @@ module pic_tb_feature;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // interrupt-handshake helpers
-    // ---------------------------------------------------------------------------
     task wait_offer(input [3:0] ev);
         integer to;
         begin
@@ -183,9 +179,7 @@ module pic_tb_feature;
         STA = STA0 + (i << 2);
     endfunction
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     initial begin
         irq_src     = 16'b0;
         cpu_irq_ack = 1'b0;
@@ -203,7 +197,7 @@ module pic_tb_feature;
         rst_n = 1'b1;
         step(2);
 
-        // ===== 1. reset defaults + basic level interrupt =====================
+        // 1. reset defaults + basic level interrupt
         $display("\n-- 1. reset defaults + basic level interrupt --");
         axi_read(BAND_CONFIG, RESP_OKAY);
         check(32'h0000001B, rd, "BAND_CONFIG default");
@@ -249,7 +243,7 @@ module pic_tb_feature;
         check(32'd0, rd & 32'h1F, "depth = 0 after eoi");
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
 
-        // ===== 2. custom priority grouping ===================================
+        // 2. custom priority grouping
         $display("\n-- 2. priority grouping (inter-band / intra-band / tie) --");
         // src1 band0, src2 band1  -> band0 wins
         axi_write(CFG(1), 32'h0000_0000, RESP_OKAY);  // band0, intra0
@@ -303,7 +297,7 @@ module pic_tb_feature;
         step(2);
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
 
-        // ===== 3. preemption with nesting ===================================
+        // 3. preemption with nesting
         $display("\n-- 3. preemption with nesting --");
         axi_write(CFG(8), 32'h0000_0004, RESP_OKAY);  // band2
         axi_write(CFG(9), 32'h0000_0000, RESP_OKAY);  // band0 (higher)
@@ -330,7 +324,7 @@ module pic_tb_feature;
         axi_read(NEST_STATUS, RESP_OKAY);
         check(32'd0, rd & 32'h1F, "depth = 0 after outer eoi");
 
-        // ===== 4. NEST_MAX enforcement + overflow ===========================
+        // 4. NEST_MAX enforcement + overflow
         $display("\n-- 4. NEST_MAX enforcement --");
         axi_write(INT_STATUS, 32'h7, RESP_OKAY);  // clear sticky flags
         axi_write(NEST_MAX_R, 32'd1, RESP_OKAY);  // limit nesting to depth 1
@@ -357,7 +351,7 @@ module pic_tb_feature;
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
         axi_write(INT_STATUS, 32'h7, RESP_OKAY);
 
-        // ===== 5. spurious detection ========================================
+        // 5. spurious detection
         $display("\n-- 5. spurious interrupt detection --");
         axi_write(CFG(12), 32'h0000_0000, RESP_OKAY);  // level, band0
         axi_write(INT_ENABLE, 32'h1000, RESP_OKAY);
@@ -381,7 +375,7 @@ module pic_tb_feature;
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
         axi_write(INT_STATUS, 32'h7, RESP_OKAY);
 
-        // ===== 6. deadline-aware escalation =================================
+        // 6. deadline-aware escalation
         $display("\n-- 6. deadline escalation (jump to band0) --");
         axi_write(ESCALATION, 32'h0000_0000, RESP_OKAY);  // jump to band0, single
         axi_write(CFG(13), 32'h0008_0006, RESP_OKAY);  // band3, deadline 8 cycles
@@ -410,7 +404,7 @@ module pic_tb_feature;
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
         axi_write(INT_STATUS, 32'h7, RESP_OKAY);
 
-        // ===== 7. software triggers =========================================
+        // 7. software triggers
         $display("\n-- 7. software-triggered interrupts --");
         axi_write(CFG(15), 32'h0000_0000, RESP_OKAY);  // band0
         axi_write(INT_ENABLE, 32'h8000, RESP_OKAY);
@@ -431,7 +425,7 @@ module pic_tb_feature;
         step(2);
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
 
-        // ===== 8. edge-triggered source =====================================
+        // 8. edge-triggered source
         $display("\n-- 8. edge-triggered source --");
         axi_write(CFG(0), 32'h0000_0001, RESP_OKAY);  // edge, band0
         axi_write(INT_ENABLE, 32'h0001, RESP_OKAY);
@@ -449,7 +443,7 @@ module pic_tb_feature;
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
         axi_write(CFG(0), 32'h0000_0000, RESP_OKAY);
 
-        // ===== 9. AXI error responses =======================================
+        // 9. AXI error responses
         $display("\n-- 9. AXI4-Lite responses --");
         axi_read(32'h00F0, RESP_SLVERR);  // unmapped word
         begin
@@ -467,7 +461,7 @@ module pic_tb_feature;
         end
         axi_write(INT_ENABLE, 32'h0, RESP_OKAY);  // a normal write still OKAYs
 
-        // ===== 10. source re-banded while active keeps its claimed priority ===
+        // 10. source re-banded while active keeps its claimed priority
         // brief "Custom Priority Grouping" Q4: a source moved between bands while
         // an interrupt from it is already active must not corrupt nesting. The key
         // is snapshotted at claim, so the active threshold is stable.
@@ -494,7 +488,7 @@ module pic_tb_feature;
         step(2);
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
 
-        // ===== 11. deadline escalation preempts an active lower source ========
+        // 11. deadline escalation preempts an active lower source
         $display("\n-- 11. escalation drives preemption of an in-service source --");
         axi_write(ESCALATION, 32'h0000_0000, RESP_OKAY);  // jump to band0
         axi_write(CFG(10), 32'h0000_0004, RESP_OKAY);  // src10 band2, no deadline
@@ -522,7 +516,7 @@ module pic_tb_feature;
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
         axi_write(INT_STATUS, 32'h7, RESP_OKAY);
 
-        // ===== 12. bump + multi escalation walks the effective band up ========
+        // 12. bump + multi escalation walks the effective band up
         $display("\n-- 12. bump mode + multi-escalation --");
         axi_write(ESCALATION, 32'h0000_0110, RESP_OKAY);  // MODE=bump[4], MULTI[8]
         axi_write(CFG(12), 32'h0004_0006, RESP_OKAY);  // src12 band3, deadline 4
@@ -541,12 +535,10 @@ module pic_tb_feature;
         axi_write(INT_ENABLE, 32'h0000, RESP_OKAY);
         axi_write(INT_STATUS, 32'h7, RESP_OKAY);
 
-        // ---- done ----
+        // done
         step(4);
-        $display("\n========================================");
         if (errors == 0) $display("== PIC TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

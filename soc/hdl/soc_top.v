@@ -32,9 +32,7 @@ module soc_top #(
     output       tmr_irq_o
 );
 
-    // ---------------------------------------------------------------------------
     // slave index assignment on each decoder
-    // ---------------------------------------------------------------------------
     localparam integer SD_DMEM = 0;  // CPU data bus decoder
     localparam integer SD_SRAM = 1;
     localparam integer SD_PIC  = 2;
@@ -46,9 +44,7 @@ module soc_top #(
     localparam integer SX_SRAM = 1;
     localparam integer NX      = 2;
 
-    // ---------------------------------------------------------------------------
     // CPU
-    // ---------------------------------------------------------------------------
     wire [31:0] ibus_araddr;
     wire [ 2:0] ibus_arprot;
     wire ibus_arvalid, ibus_arready;
@@ -124,10 +120,8 @@ module soc_top #(
         .cpu_in_trap_o(cpu_in_trap_o)
     );
 
-    // ---------------------------------------------------------------------------
     // instruction path: ibus -> IMEM. A one-slave decoder, present so a fetch
     // outside the IMEM window gets DECERR instead of no response at all.
-    // ---------------------------------------------------------------------------
     wire [31:0] imem_araddr;
     wire [ 2:0] imem_arprot;
     wire imem_arvalid, imem_arready;
@@ -214,9 +208,7 @@ module soc_top #(
         .s_rready_i (imem_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // DMA master -> AXI4-Lite
-    // ---------------------------------------------------------------------------
     wire [31:0] dmam_awaddr;
     wire [ 7:0] dmam_awlen;
     wire [ 2:0] dmam_awsize;
@@ -302,9 +294,7 @@ module soc_top #(
         .m_rready_o (xl_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // CPU data bus decoder: DMEM, SRAM port A, PIC, timer, DMA registers
-    // ---------------------------------------------------------------------------
     wire [ND*32-1:0] d_awaddr, d_wdata, d_araddr, d_rdata;
     wire [ND*3-1:0] d_awprot, d_arprot;
     wire [ND*4-1:0] d_wstrb;
@@ -360,9 +350,7 @@ module soc_top #(
         .s_rready_o (d_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // DMA decoder: DMEM, SRAM port B
-    // ---------------------------------------------------------------------------
     wire [NX*32-1:0] x_awaddr, x_wdata, x_araddr, x_rdata;
     wire [NX*3-1:0] x_awprot, x_arprot;
     wire [NX*4-1:0] x_wstrb;
@@ -418,9 +406,7 @@ module soc_top #(
         .s_rready_o (x_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // DMEM arbiter: master 0 = CPU data bus, master 1 = DMA
-    // ---------------------------------------------------------------------------
     wire [31:0] dmem_awaddr, dmem_wdata, dmem_araddr, dmem_rdata;
     wire [2:0] dmem_awprot, dmem_arprot;
     wire [3:0] dmem_wstrb;
@@ -507,11 +493,9 @@ module soc_top #(
         .s_rready_i (dmem_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // dual-port SRAM: port A from the CPU, port B from the DMA, same window.
     // Its ports are 10 bits wide, which is exactly the window size, so the low
     // bits of the system address are the block-local address unchanged.
-    // ---------------------------------------------------------------------------
     wire sram_irq;
     assign sram_irq_o = sram_irq;
 
@@ -561,9 +545,7 @@ module soc_top #(
         .irq_o(sram_irq)
     );
 
-    // ---------------------------------------------------------------------------
     // DMA: AXI4-Lite register slave on the CPU bus, AXI4-Full master on the fabric
-    // ---------------------------------------------------------------------------
     wire [3:0] dma_irq;
     assign dma_irq_o = dma_irq;
 
@@ -617,9 +599,7 @@ module soc_top #(
         .m_axi_rready_o (dmam_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // interrupt controller and machine timer
-    // ---------------------------------------------------------------------------
     wire tmr_irq;
     assign tmr_irq_o = tmr_irq;
 

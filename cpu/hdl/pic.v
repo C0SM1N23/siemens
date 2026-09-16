@@ -107,7 +107,7 @@ module pic (
     wire [15:0] escalate_v;  // per-source escalation pulse
 
     // band-urgency lookup (band_cfg passed in so the assign stays sensitive to it)
-    function [1:0] band_urg;
+    function automatic [1:0] band_urg;
         input [1:0] b;
         input [7:0] bc;
         case (b)
@@ -120,21 +120,22 @@ module pic (
 
     // Next band with strictly higher urgency, using BAND_CONFIG.
     // Hold the current band if no higher urgency exists.
-    function [1:0] band_bump;
+    function automatic [1:0] band_bump;
         input [1:0] b;
         input [7:0] bc;
-        reg [1:0] cur, best;
+        reg [1:0] cur, best, candidate;
         reg     found;
         integer k;
         begin
-            cur       = band_urg(b, bc);
+            cur       = bc[{b, 1'b0}+:2];
             best      = 2'd0;
             found     = 1'b0;
             band_bump = b;
             for (k = 0; k < 4; k = k + 1) begin
-                if (band_urg(k[1:0], bc) > cur)
-                    if (!found || band_urg(k[1:0], bc) < best) begin
-                        best      = band_urg(k[1:0], bc);
+                candidate = bc[k*2+:2];
+                if (candidate > cur)
+                    if (!found || candidate < best) begin
+                        best      = candidate;
                         band_bump = k[1:0];
                         found     = 1'b1;
                     end

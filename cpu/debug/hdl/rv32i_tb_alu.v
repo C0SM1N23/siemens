@@ -47,7 +47,7 @@
 
 module rv32i_tb_alu;
 
-    // ---- boundary patterns used throughout ----
+    // boundary patterns used throughout
     localparam [31:0] ZERO   = 32'h0000_0000;
     localparam [31:0] ONE    = 32'h0000_0001;
     localparam [31:0] MINUS1 = 32'hFFFF_FFFF;
@@ -59,7 +59,7 @@ module rv32i_tb_alu;
     localparam [6:0] F7_0 = 7'b0000000;   // the "normal" funct7
     localparam [6:0] F7_1 = 7'b0100000;   // the SUB / SRA variant
 
-    // ---- DUT ports ----
+    // DUT ports
     reg [31:0] opa, opb_reg, opb_imm;
     reg            alusrc;
     reg     [ 3:0] aluop;
@@ -131,11 +131,9 @@ rv32i_alu_top dut (
         funct3  = 3'b000;
         funct7  = F7_0;
 
-        $display("\n=== tb_alu: arithmetic path block verification ===");
+        $display("\ntb_alu: arithmetic path block verification");
 
-        // ================================================================
         $display("\n[1] operand select: ALUSrc_i chooses register or immediate");
-        // ================================================================
         aluop   = `ALUOP_ADD;
         funct3  = 3'b000;
         funct7  = F7_0;
@@ -151,9 +149,7 @@ rv32i_alu_top dut (
         check(32'h0000_1300, result, "  ALUSrc=1 takes the immediate");
         alusrc = 1'b0;
 
-        // ================================================================
         $display("\n[2] the ALUOp decode, exhaustive over what RV32I can present");
-        // ================================================================
         // Operands chosen so that every operation produces a different answer:
         // A = 0x0000_0011, B = 0x0000_0003. ADD=0x14 SUB=0x0E AND=0x01 OR=0x13
         // XOR=0x12 SLL=0x88 SRL=0x02 SRA=0x02 SLT=0 SLTU=0.
@@ -227,9 +223,7 @@ rv32i_alu_top dut (
         eval(4'b1111, 3'b111, F7_1, pa, pb, 32'h0000_0014,
              "  an unused ALUOp falls back to ADD, not to X");
 
-        // ================================================================
         $display("\n[3] ADD and SUB at the sign boundary");
-        // ================================================================
         eval(`ALUOP_FUNCT, 3'b000, F7_0, ZERO, ZERO, ZERO, "  0 + 0");
         eval(`ALUOP_FUNCT, 3'b000, F7_0, INTMAX, ONE, INTMIN, "  INT_MAX + 1 wraps to INT_MIN");
         eval(`ALUOP_FUNCT, 3'b000, F7_0, MINUS1, ONE, ZERO, "  -1 + 1 = 0, carry out discarded");
@@ -242,9 +236,7 @@ rv32i_alu_top dut (
         eval(`ALUOP_FUNCT, 3'b000, F7_1, ZERO, INTMIN, INTMIN,
              "  0 - INT_MIN is INT_MIN (it has no positive counterpart)");
 
-        // ================================================================
         $display("\n[4] shifts: every amount 0..31, then the [4:0] masking");
-        // ================================================================
         // exhaustive over the shift amount for all three operations. The pattern
         // has both halves set so a lost or duplicated bit is visible.
         for (i = 0; i < 32; i = i + 1)
@@ -284,9 +276,7 @@ rv32i_alu_top dut (
         eval(`ALUOP_FUNCT, 3'b101, F7_0, INTMIN, 32'hFFFF_FFE0, INTMIN,
              "  SRL by 0xFFFFFFE0 masks to a shift of 0");
 
-        // ================================================================
         $display("\n[5] SLT and SLTU: the pairs that separate them");
-        // ================================================================
         eval(`ALUOP_FUNCT, 3'b010, F7_0, MINUS1, ONE, ONE, "  SLT:  -1 < 1 is true");
         eval(`ALUOP_FUNCT, 3'b011, F7_0, MINUS1, ONE, ZERO, "  SLTU: 0xFFFFFFFF < 1 is false");
         eval(`ALUOP_FUNCT, 3'b010, F7_0, ONE, MINUS1, ZERO, "  SLT:  1 < -1 is false");
@@ -301,9 +291,7 @@ rv32i_alu_top dut (
         eval(`ALUOP_FUNCT, 3'b010, F7_0, ZERO, ZERO, ZERO, "  SLT:  0 < 0 is false");
         eval(`ALUOP_FUNCT, 3'b011, F7_0, ZERO, ONE, ONE, "  SLTU: 0 < 1 is true");
 
-        // ================================================================
         $display("\n[6] AND, OR, XOR over the boundary-pattern matrix");
-        // ================================================================
         // 4 x 4 patterns x 3 operations; the identities (x & 0 = 0, x | -1 = -1,
         // x ^ x = 0) are all inside this matrix
         for (i = 0; i < 4; i = i + 1) begin
@@ -330,9 +318,7 @@ rv32i_alu_top dut (
                 $display("PASS:   AND/OR/XOR correct over all 16 boundary-pattern pairs");
         end
 
-        // ================================================================
         $display("\n[7] LUI and AUIPC");
-        // ================================================================
         eval(`ALUOP_LUI, 3'b000, F7_0, 32'hFFFF_FFFF, 32'h1234_5000, 32'h1234_5000,
              "  LUI passes B through and ignores A entirely");
         eval(`ALUOP_LUI, 3'b000, F7_0, ZERO, ZERO, ZERO, "  LUI of zero");
@@ -341,12 +327,10 @@ rv32i_alu_top dut (
         eval(`ALUOP_AUIPC, 3'b000, F7_0, 32'h0000_0004, 32'hFFFF_F000, 32'hFFFF_F004,
              "  AUIPC with a negative immediate");
 
-        // ---- done ----
+        // done
         #10;
-        $display("\n========================================");
         if (errors == 0) $display("== ALU TESTBENCH: ALL TESTS PASSED ==");
         else $display("== ALU TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

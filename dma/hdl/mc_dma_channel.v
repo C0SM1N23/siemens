@@ -227,7 +227,7 @@ module mc_dma_channel (
             req_valid_o <= 1'b0;
     end
 
-    // ==== FIX 1: Semnalele de date devin pur combinaționale ====
+    // FIX 1: Semnalele de date devin pur combinaționale
     always @(*) begin
         req_is_write_o = 1'b0;
         req_len_o      = 8'h00;

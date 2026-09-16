@@ -5,7 +5,7 @@
 
 module rv32i_tb_counters;
 
-    // ---- CSR addresses ----
+    // CSR addresses
     localparam MSTATUS  = 12'h300, MISA     = 12'h301, MIE      = 12'h304,
            MTVEC    = 12'h305, MSCRATCH = 12'h340, MEPC     = 12'h341,
            MCAUSE   = 12'h342, MTVAL    = 12'h343, MIP      = 12'h344;
@@ -18,12 +18,12 @@ module rv32i_tb_counters;
 
     localparam [31:0] THIS_HART = 32'h0000_002A;  // a distinctive, non-zero id
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT interface ----
+    // DUT interface
     reg [11:0] csr_addr;
     reg [31:0] csr_wdata;
     reg [ 1:0] csr_op;

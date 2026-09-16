@@ -53,9 +53,7 @@ module soc_tb_perip_backpressure;
         .rst_n_o(rst_n)
     );
 
-    // ---------------------------------------------------------------------------
     // master side of the decoder, driven by this bench
-    // ---------------------------------------------------------------------------
     reg [31:0] m_awaddr, m_wdata, m_araddr;
     reg [3:0] m_wstrb;
     reg m_awvalid, m_wvalid, m_bready, m_arvalid, m_rready;
@@ -119,9 +117,7 @@ module soc_tb_perip_backpressure;
         .s_rready_o (s_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // the three real slaves
-    // ---------------------------------------------------------------------------
     dp_sram sram (
         .clk_i      (clk),
         .rst_n_i    (rst_n),
@@ -219,9 +215,7 @@ module soc_tb_perip_backpressure;
         .s_axi_rready_i (s_rready[SD_TMR])
     );
 
-    // ---------------------------------------------------------------------------
     // master tasks that stall the response channel on purpose
-    // ---------------------------------------------------------------------------
     reg [31:0] rd;
     reg [31:0] held_first, held_last;
     reg [1:0] held_resp;
@@ -361,9 +355,7 @@ module soc_tb_perip_backpressure;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     reg [31:0] before_pic, before_tmr, before_sram;
 
     initial begin
@@ -383,17 +375,13 @@ module soc_tb_perip_backpressure;
         held_last    = 0;
         held_resp    = 0;
 
-        $display("=====================================================");
         $display("== PERIPHERAL SLAVES UNDER RESPONSE BACKPRESSURE ==");
-        $display("=====================================================");
 
         wait (rst_n === 1'b1);
         repeat (3) @(posedge clk);
 
-        // -----------------------------------------------------------------
         // give each slave a value worth holding, so a response that decayed
         // to zero could not be mistaken for a correct one
-        // -----------------------------------------------------------------
         write_stalled(`SOC_PIC_BASE + 32'hC0, 32'h0000_0027, 0);  // BAND_CONFIG
         write_stalled(`SOC_TMR_BASE + 32'h08, 32'h1234_5678, 0);  // MTIMECMP_LO
         write_stalled(`SOC_SRAM_BASE + 32'h40, 32'hFEED_BEEF, 0);  // an SRAM word
@@ -408,9 +396,7 @@ module soc_tb_perip_backpressure;
         check(32'h1234_5678, before_tmr, "precondition: timer holds a value");
         check(32'hFEED_BEEF, before_sram, "precondition: memory holds a value");
 
-        // =====================================================================
         // 1. the interrupt controller
-        // =====================================================================
         $display("\n-- 1. interrupt controller --");
         stall_case(`SOC_PIC_BASE + 32'hC0, 1, "controller, 1 cycle: ");
         stall_case(`SOC_PIC_BASE + 32'hC0, 3, "controller, 3 cycles:");
@@ -420,9 +406,7 @@ module soc_tb_perip_backpressure;
         check(32'd0, unstable[31:0], "controller write response held steady");
         check(32'd0, extra_accept[31:0], "controller took no second write address");
 
-        // =====================================================================
         // 2. the machine timer
-        // =====================================================================
         $display("\n-- 2. machine timer --");
         stall_case(`SOC_TMR_BASE + 32'h08, 1, "timer, 1 cycle:      ");
         stall_case(`SOC_TMR_BASE + 32'h08, 3, "timer, 3 cycles:     ");
@@ -432,9 +416,7 @@ module soc_tb_perip_backpressure;
         check(32'd0, unstable[31:0], "timer write response held steady");
         check(32'd0, extra_accept[31:0], "timer took no second write address");
 
-        // =====================================================================
         // 3. the dual-port SRAM
-        // =====================================================================
         $display("\n-- 3. dual-port memory --");
         stall_case(`SOC_SRAM_BASE + 32'h40, 1, "memory, 1 cycle:     ");
         stall_case(`SOC_SRAM_BASE + 32'h40, 3, "memory, 3 cycles:    ");
@@ -444,13 +426,11 @@ module soc_tb_perip_backpressure;
         check(32'd0, unstable[31:0], "memory write response held steady");
         check(32'd0, extra_accept[31:0], "memory took no second write address");
 
-        // =====================================================================
         // 4. nothing was consumed twice
         //
         // A slave that treated a held response as a completed one could advance
         // internal state per stalled cycle. Reading the same words back proves it
         // did not.
-        // =====================================================================
         $display("\n-- 4. registers unchanged by the stalls --");
         read_plain(`SOC_PIC_BASE + 32'hC0);
         check(before_pic, rd, "controller register survived the stalls");
@@ -465,10 +445,8 @@ module soc_tb_perip_backpressure;
         check(32'hCAFE_F00D, rd, "the stalled memory write did land, exactly once");
 
         repeat (4) @(posedge clk);
-        $display("\n=====================================================");
         if (errors == 0) $display("== PERIPHERAL BACKPRESSURE TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PERIPHERAL BACKPRESSURE TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================");
         finish_test;
     end
 

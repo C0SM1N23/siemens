@@ -37,7 +37,7 @@
 
 module pic_tb_ro;
 
-    // ---- register map (byte offsets) ----
+    // register map (byte offsets)
     localparam CFG0 = 32'h00, SWT0 = 32'h40, STA0 = 32'h80;
     localparam BAND_CONFIG   = 32'hC0, NEST_STATUS  = 32'hC4, NEST_MAX_R = 32'hC8,
            ACTIVE_VEC    = 32'hCC, SPURIOUS_LOG = 32'hD0, ESCALATION = 32'hD4,
@@ -47,18 +47,18 @@ module pic_tb_ro;
 
     localparam ALL_ONES = 32'hFFFF_FFFF;
 
-    // ---- clock / reset ----
+    // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
     always #5 clk = ~clk;
 
-    // ---- DUT source / CPU pins ----
+    // DUT source / CPU pins
     reg [15:0] irq_src;
     reg cpu_irq_ack, cpu_irq_eoi;
     wire       cpu_irq;
     wire [3:0] cpu_irq_vec;
 
-    // ---- AXI4-Lite master side ----
+    // AXI4-Lite master side
     reg [31:0] awaddr, wdata, araddr;
     reg [3:0] wstrb;
     reg awvalid, wvalid, bready, arvalid, rready;
@@ -119,7 +119,6 @@ module pic_tb_ro;
         STA = STA0 + (k << 2);
     endfunction
 
-    // ---------------------------------------------------------------------------
     // The read-only test, as one reusable four-step sequence:
     //   1  read the register and remember what the hardware put there
     //   2  require it to be non-zero, so step 4 can actually prove something
@@ -132,7 +131,6 @@ module pic_tb_ro;
     // the two reads. The counter is not left untested: it is checked separately,
     // against the stronger property that it keeps counting rather than taking the
     // written value (see check_ro_counter below).
-    // ---------------------------------------------------------------------------
     task check_read_only(input [31:0] a, input [31:0] pattern, input [31:0] cmp_mask,
                          input [511:0] name);
         begin
@@ -194,13 +192,9 @@ module pic_tb_ro;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     // stimulus
-    // ---------------------------------------------------------------------------
     initial begin
-        $display("\n===========================================================");
         $display("tb_pic_ro : read-only and reserved-bit verification, hdl/pic.v");
-        $display("===========================================================");
 
         irq_src     = 16'b0;
         cpu_irq_ack = 1'b0;
@@ -211,9 +205,7 @@ module pic_tb_ro;
         @(posedge clk) #1 rst_n = 1'b1;
         axil_step(2);
 
-        // =====================================================================
         // 1. SRC0_STATUS .. SRC15_STATUS : 16 read-only registers
-        // =====================================================================
         $display("\n-- 1. SRCx_STATUS (0x80 + 4*x), read-only, all 16 indices --");
         if ($test$plusargs("verbose"))
             $display("   step 1: enable all 16 sources so a raised line becomes a request");
@@ -255,9 +247,7 @@ module pic_tb_ro;
                   "  SRCx_STATUS state bits unchanged after a rejected write of 0");
         end
 
-        // =====================================================================
         // 2. NEST_STATUS : read-only
-        // =====================================================================
         $display("\n-- 2. NEST_STATUS (0xC4), read-only --");
         if ($test$plusargs("verbose"))
             $display("   step 1: claim one interrupt so DEPTH and TOP_ID are both non-zero");
@@ -269,9 +259,7 @@ module pic_tb_ro;
             $display("   step 2: attempt a write, require SLVERR and an unchanged value");
         check_read_only(NEST_STATUS, ALL_ONES, ALL_ONES, "NEST_STATUS");
 
-        // =====================================================================
         // 3. ACTIVE_VEC : read-only
-        // =====================================================================
         $display("\n-- 3. ACTIVE_VEC (0xCC), read-only --");
         if ($test$plusargs("verbose"))
             $display("   step 1: an interrupt is still in service, so VALID and ID are set");
@@ -287,9 +275,7 @@ module pic_tb_ro;
         axil_write(INT_STATUS, 32'h0000_0007, RESP_OKAY);
         for (i = 0; i < 16; i = i + 1) axil_write(CFG(i), 32'h0000_0000, RESP_OKAY);
 
-        // =====================================================================
         // 4. unmapped offsets
-        // =====================================================================
         // The map ends at word 55 (0xDC). Everything above it inside the 8-bit
         // decoded window must answer SLVERR on both directions, so a stray pointer
         // produces a precise access-fault trap in the CPU instead of a silent
@@ -304,9 +290,7 @@ module pic_tb_ro;
                 $display("PASS: all 8 unmapped words answer SLVERR on read and on write");
         end
 
-        // =====================================================================
         // 5. reserved bits inside writable registers
-        // =====================================================================
         // Reserved bits are hardwired to zero: writing 1 into them must not stick.
         // Otherwise software that sets a "don't care" bit today acquires a
         // dependency on it, and a later revision that defines the bit breaks it.
@@ -357,9 +341,7 @@ module pic_tb_ro;
             check(32'd0, rd & 32'hFFFF_FFFE, "  SRCx_SW_TRIG bits [31:1] read 0");
         end
 
-        // =====================================================================
         // 6. SRCx_SW_TRIG.KEY is write-only
-        // =====================================================================
         // The key is consumed by the write decode and is never stored, so it must
         // read back as 0. If it read back, software could discover the key by
         // reading the register, which defeats the point of having one.
@@ -379,9 +361,7 @@ module pic_tb_ro;
         axil_read_chk(SWT(0), 32'h0000_0000, "  SRC0_SW_TRIG cleared");
         axil_write(INT_ENABLE, 32'h0000_0000, RESP_OKAY);
 
-        // =====================================================================
         // 7. write-1-to-clear registers ignore a written 0
-        // =====================================================================
         // W1C is the other half of read-only-ness: a bit software cannot SET. A
         // read-modify-write that puts a 0 back must leave a set bit alone,
         // otherwise every handler that touches the register loses events it never
@@ -429,9 +409,7 @@ module pic_tb_ro;
         axil_step(3);
         axil_write(INT_ENABLE, 32'h0000_0000, RESP_OKAY);
 
-        // =====================================================================
         // 8. NEST_MAX is WARL: out-of-range writes are clamped, not stored
-        // =====================================================================
         $display("\n-- 8. NEST_MAX (0xC8) clamps out-of-range writes to [1,16] --");
         if ($test$plusargs("verbose"))
             $display("   step 1: write 0 - a depth limit of 0 would mask every offer forever");
@@ -451,9 +429,7 @@ module pic_tb_ro;
         axil_read_chk(NEST_MAX_R, 32'd5, "  NEST_MAX write of 5 stores 5");
         axil_write(NEST_MAX_R, 32'd8, RESP_OKAY);  // back to the reset value
 
-        // =====================================================================
         // 9. byte-strobe writes to a read-only register
-        // =====================================================================
         // wr_ok is decoded from the address alone, so a narrow write must be
         // rejected exactly like a word write. A slave that only checked the full
         // word case would let a byte store slip through.
@@ -490,12 +466,10 @@ module pic_tb_ro;
         irq_src = 16'h0000;
         axil_write(INT_ENABLE, 32'h0000_0000, RESP_OKAY);
 
-        // ---- done ----
+        // done
         axil_step(4);
-        $display("\n========================================");
         if (errors == 0) $display("== PIC READ-ONLY TESTBENCH: ALL TESTS PASSED ==");
         else $display("== PIC READ-ONLY TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("========================================");
         finish_test;
     end
 

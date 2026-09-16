@@ -17,9 +17,7 @@
 
 module tb_mc_dma_top;
 
-    // -------------------------------------------------------------------
     // Register map (trebuie sa corespunda cu axi4_lite_slave.v)
-    // -------------------------------------------------------------------
     localparam ADDR_CH0_DESC_ADDR = 8'h00, ADDR_CH0_CONTROL = 8'h04, ADDR_CH0_BW_CAP = 8'h08, ADDR_CH0_STATUS = 8'h0C;
     localparam ADDR_CH1_DESC_ADDR = 8'h10, ADDR_CH1_CONTROL = 8'h14, ADDR_CH1_BW_CAP = 8'h18, ADDR_CH1_STATUS = 8'h1C;
     localparam ADDR_CH2_DESC_ADDR = 8'h20, ADDR_CH2_CONTROL = 8'h24, ADDR_CH2_BW_CAP = 8'h28, ADDR_CH2_STATUS = 8'h2C;
@@ -37,16 +35,12 @@ module tb_mc_dma_top;
 
     integer errors = 0;
 
-    // -------------------------------------------------------------------
     // Clock / Reset
-    // -------------------------------------------------------------------
     reg clk = 0;
     reg rst_n = 0;
     always #5 clk = ~clk; // 100 MHz
 
-    // -------------------------------------------------------------------
     // AXI4-Lite (CPU -> DUT)
-    // -------------------------------------------------------------------
     reg  [31:0] s_axi_awaddr;
     reg         s_axi_awvalid;
     wire        s_axi_awready;
@@ -65,9 +59,7 @@ module tb_mc_dma_top;
     wire        s_axi_rvalid;
     reg         s_axi_rready;
 
-    // -------------------------------------------------------------------
     // AXI4-Full (DUT -> Memorie)
-    // -------------------------------------------------------------------
     wire [31:0] m_axi_awaddr;
     wire [7:0]  m_axi_awlen;
     wire [2:0]  m_axi_awsize;
@@ -96,9 +88,7 @@ module tb_mc_dma_top;
 
     wire [3:0] irq;
 
-    // -------------------------------------------------------------------
     // DUT
-    // -------------------------------------------------------------------
     mc_dma_top dut (
         .clk(clk), .rst_n(rst_n), .irq(irq),
 
@@ -125,7 +115,7 @@ module tb_mc_dma_top;
     
     reg [31:0] mem [0:(1<<18)-1];
 
-    // ---- Canal de citire (AR/R) ----
+    // Canal de citire (AR/R)
     reg        rd_active;
     reg [31:0] rd_addr;
     reg [7:0]  rd_len;
@@ -163,7 +153,7 @@ module tb_mc_dma_top;
         end
     end
 
-    // ---- Canal de scriere (AW/W/B) ----
+    // Canal de scriere (AW/W/B)
     reg        wr_active;
     reg [31:0] wr_addr;
     reg [7:0]  wr_beat;
@@ -341,7 +331,7 @@ module tb_mc_dma_top;
         localparam DST_ADDR  = 32'h0000_3000;
         localparam LEN_BYTES = 32'd32; // 8 cuvinte -> exact un burst read + un burst write
         begin
-            $display("\n===== Scenariul 1: Transfer simplu, un canal (CH0), Fixed Priority =====");
+            $display("\nScenariul 1: Transfer simplu, un canal (CH0), Fixed Priority");
 
             fill_source(SRC_ADDR, 8, 32'hA000_0000);
             write_descriptor(DESC_ADDR, SRC_ADDR, DST_ADDR, LEN_BYTES);
@@ -381,7 +371,7 @@ module tb_mc_dma_top;
 
         localparam LEN_BYTES  = 32'd32;
         begin
-            $display("\n===== Scenariul 2: Arbitrare Round-Robin intre CH1 si CH2 (simultan) =====");
+            $display("\nScenariul 2: Arbitrare Round-Robin intre CH1 si CH2 (simultan)");
 
             fill_source(SRC1_ADDR, 8, 32'hB100_0000);
             fill_source(SRC2_ADDR, 8, 32'hB200_0000);
@@ -456,12 +446,10 @@ module tb_mc_dma_top;
 
         repeat (10) @(posedge clk);
 
-        $display("\n=====================================================");
         if (errors == 0)
             $display("REZULTAT: TOATE TESTELE AU TRECUT (0 erori)");
         else
             $display("REZULTAT: %0d EROARE(I) DETECTATE", errors);
-        $display("=====================================================\n");
 
         $finish;
     end

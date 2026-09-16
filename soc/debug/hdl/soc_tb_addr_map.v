@@ -39,7 +39,7 @@ module soc_tb_addr_map;
     reg     [31:0] rd;
     `include "tb_check.vh"
 
-    // ---- master side ----
+    // master side
     reg [31:0] m_awaddr, m_wdata, m_araddr;
     reg [3:0] m_wstrb;
     reg m_awvalid, m_wvalid, m_bready, m_arvalid, m_rready;
@@ -47,7 +47,7 @@ module soc_tb_addr_map;
     wire [1:0] m_bresp, m_rresp;
     wire [31:0] m_rdata;
 
-    // ---- slave side ----
+    // slave side
     wire [N*32-1:0] s_awaddr, s_wdata, s_araddr;
     wire [N*3-1:0] s_awprot, s_arprot;
     wire [N*4-1:0] s_wstrb;
@@ -104,11 +104,9 @@ module soc_tb_addr_map;
         .s_rready_o (s_rready)
     );
 
-    // ---------------------------------------------------------------------------
     // Slave stubs. Each answers OKAY one cycle after its address handshake and
     // returns its own index as read data, so a check can tell WHICH slave was
     // reached, not merely that something answered.
-    // ---------------------------------------------------------------------------
     genvar g;
     generate
         for (g = 0; g < N; g = g + 1) begin : g_slv
@@ -143,9 +141,7 @@ module soc_tb_addr_map;
         end
     endgenerate
 
-    // ---------------------------------------------------------------------------
     // bus access
-    // ---------------------------------------------------------------------------
     reg [1:0] rresp_got, bresp_got;  // last response, checked by the tasks below
 
     task do_read(input [31:0] a);
@@ -233,7 +229,6 @@ module soc_tb_addr_map;
         end
     endtask
 
-    // ---------------------------------------------------------------------------
     initial begin
         m_awaddr  = 0;
         m_wdata   = 0;
@@ -251,9 +246,7 @@ module soc_tb_addr_map;
         #1 rst_n = 1'b1;
         repeat (2) @(posedge clk);
 
-        $display("=====================================================");
         $display("== SOC ADDRESS MAP: WINDOWS AND ALIASING ==");
-        $display("=====================================================");
 
         $display("\n-- Address-window routing --");
         expect_hit(`SOC_DMEM_BASE, SD_DMEM, "DMEM base");
@@ -322,10 +315,8 @@ module soc_tb_addr_map;
         check(32'd3, {30'b0, bresp_got}, "mapped write DECERR");
         slave_response = RESP_OKAY;
 
-        $display("\n=====================================================");
         if (errors == 0) $display("== SOC ADDRESS MAP TESTBENCH: ALL TESTS PASSED ==");
         else $display("== SOC ADDRESS MAP TESTBENCH: %0d FAILURE(S) ==", errors);
-        $display("=====================================================");
         finish_test;
     end
 

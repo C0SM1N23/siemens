@@ -37,9 +37,7 @@ module soc_tb_map_consistency;
 
     initial begin
         errors = 0;
-        $display("=====================================================");
         $display("== ADDRESS MAP CONSISTENCY ==");
-        $display("=====================================================");
         $display("The CPU block's testbench map must name the same addresses as");
         $display("the map the SoC design is built from.");
         $display("");
@@ -73,10 +71,8 @@ module soc_tb_map_consistency;
               "the DMA window is in the same region the bench decodes");
 
         $display("");
-        $display("=====================================================");
         if (errors == 0) $display("== ADDRESS MAP CONSISTENCY: ALL TESTS PASSED ==");
         else $display("== ADDRESS MAP CONSISTENCY: %0d FAILURE(S) ==", errors);
-        $display("=====================================================");
         finish_test;
     end
 

@@ -63,7 +63,7 @@ module axi_lite_sva #(
         else if (r_hs && !ar_hs) rd_out_q <= 1'b0;
     end
 
-    // --- read channel properties ---
+    // read channel properties
 
     ar_valid_stable :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) arvalid_i && !arready_i |=> arvalid_i)
@@ -112,7 +112,7 @@ module axi_lite_sva #(
         end
     endgenerate
 
-    // --- read channel functional cover points ---
+    // read channel functional cover points
 
     cov_ar_backpressure :
     cover property (@(posedge clk_i) disable iff (!rst_n_i) arvalid_i && !arready_i);
@@ -123,7 +123,7 @@ module axi_lite_sva #(
     cov_r_decerr :
     cover property (@(posedge clk_i) disable iff (!rst_n_i) r_hs && rresp_i == 2'b11);
 
-    // --- write channel properties (masters with a write path only) ---
+    // write channel properties (masters with a write path only)
 
     generate
         if (HAS_WRITE) begin : g_write
