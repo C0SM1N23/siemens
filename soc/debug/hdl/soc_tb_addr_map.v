@@ -193,6 +193,79 @@ module soc_tb_addr_map;
         end
     endtask
 
+    // Issue a read and leave its response on the master port, unread. RREADY
+    // stays low, so the decoder still owes this response when the next request
+    // arrives - the state the ordering checks below need.
+    task read_pending(input [31:0] a, input integer slv, input [511:0] name);
+        begin
+            @(negedge clk);
+            m_araddr  = a;
+            m_arvalid = 1;
+            m_rready  = 0;
+            @(posedge clk);
+            while (!m_arready) @(posedge clk);
+            @(negedge clk);
+            m_arvalid = 0;
+            @(posedge clk);
+            while (!m_rvalid) @(posedge clk);
+            check(32'h5000_0000 + slv, m_rdata, name);
+        end
+    endtask
+
+    task read_pending_unmapped(input [31:0] a, input [511:0] name);
+        begin
+            @(negedge clk);
+            m_araddr  = a;
+            m_arvalid = 1;
+            m_rready  = 0;
+            @(posedge clk);
+            while (!m_arready) @(posedge clk);
+            @(negedge clk);
+            m_arvalid = 0;
+            @(posedge clk);
+            while (!m_rvalid) @(posedge clk);
+            check(32'd3, {30'b0, m_rresp}, name);
+        end
+    endtask
+
+    // Present a second AR without waiting for it to be accepted.
+    task offer_read(input [31:0] a);
+        begin
+            @(negedge clk);
+            m_araddr  = a;
+            m_arvalid = 1;
+        end
+    endtask
+
+    // Accept the response that was left pending, then release RREADY.
+    task take_read(input integer slv, input [511:0] name);
+        begin
+            @(negedge clk);
+            m_rready = 1;
+            @(posedge clk);
+            check(32'h5000_0000 + slv, m_rdata, name);
+            @(negedge clk);
+            m_rready = 0;
+        end
+    endtask
+
+    // Run the request left waiting on the master port to completion.
+    task finish_offered_read(input [1:0] resp, input [31:0] data, input [511:0] name);
+        begin
+            @(posedge clk);
+            while (!m_arready) @(posedge clk);
+            @(negedge clk);
+            m_arvalid = 0;
+            m_rready  = 1;
+            @(posedge clk);
+            while (!m_rvalid) @(posedge clk);
+            check({30'b0, resp}, {30'b0, m_rresp}, name);
+            check(data, m_rdata, name);
+            @(negedge clk);
+            m_rready = 0;
+        end
+    endtask
+
     // an address that must reach slave `slv`
     task expect_hit(input [31:0] a, input integer slv, input [511:0] name);
         begin
@@ -306,6 +379,58 @@ module soc_tb_addr_map;
         check(32'd0, {30'b0, m_bresp}, "W-before-AW completes on the new route");
         @(negedge clk);
         m_bready = 0;
+
+        $display("-- Read ordering: one outstanding read at a time --");
+        // The decoder holds one read route. If it accepts a second AR while the
+        // first response is still sitting on the master port unread, the mux
+        // follows the new route and the pending R changes under the master:
+        // RDATA moves while RVALID is high and RREADY is low, which is both a
+        // protocol violation and a response delivered from the wrong slave.
+        read_pending(`SOC_DMEM_BASE, SD_DMEM, "first read waits on the master");
+        offer_read(`SOC_PIC_BASE);
+        repeat (3) begin
+            @(posedge clk);
+            check(32'd0, {31'b0, m_arready}, "second read is refused while a response waits");
+            check(32'd0, {{(32 - N) {1'b0}}, s_arvalid}, "no slave sees the second ARVALID");
+            check(32'd1, {31'b0, m_rvalid}, "the pending response stays valid");
+            check(32'h5000_0000 + SD_DMEM, m_rdata, "the pending RDATA does not move");
+            check(32'd0, {30'b0, m_rresp}, "the pending RRESP does not move");
+        end
+        take_read(SD_DMEM, "the first response is the one delivered");
+        finish_offered_read(RESP_OKAY, 32'h5000_0000 + SD_PIC, "the deferred read then reaches the PIC");
+
+        // Same ordering rule when the deferred request is unmapped: it waits for
+        // the pending response, then gets its own DECERR from the responder.
+        read_pending(`SOC_SRAM_BASE, SD_SRAM, "mapped read waits before an unmapped one");
+        offer_read(32'h5000_0000);
+        repeat (3) begin
+            @(posedge clk);
+            check(32'd0, {31'b0, m_arready}, "unmapped read is refused while a response waits");
+            check(32'd1, {31'b0, m_rvalid}, "the mapped response stays valid");
+            check(32'h5000_0000 + SD_SRAM, m_rdata, "the mapped RDATA does not move");
+            check(32'd0, {30'b0, m_rresp}, "the mapped RRESP does not move");
+        end
+        take_read(SD_SRAM, "the mapped response survives the unmapped request");
+        finish_offered_read(RESP_DECERR, 32'h0, "the deferred unmapped read answers DECERR");
+
+        // ...and the other way round: a DECERR waiting to be read must not be
+        // replaced by a mapped slave's response.
+        read_pending_unmapped(32'h3003_0000, "unmapped read waits on the master");
+        offer_read(`SOC_TMR_BASE);
+        repeat (3) begin
+            @(posedge clk);
+            check(32'd0, {31'b0, m_arready}, "mapped read is refused while a DECERR waits");
+            check(32'd0, {{(32 - N) {1'b0}}, s_arvalid}, "no slave sees the deferred ARVALID");
+            check(32'd1, {31'b0, m_rvalid}, "the DECERR stays valid");
+            check(32'd3, {30'b0, m_rresp}, "the DECERR is not overwritten");
+        end
+        @(negedge clk);
+        m_rready = 1;
+        @(posedge clk);
+        check(32'd3, {30'b0, m_rresp}, "the DECERR is the response delivered");
+        @(negedge clk);
+        m_rready = 0;
+        finish_offered_read(RESP_OKAY, 32'h5000_0000 + SD_TMR, "the deferred read then reaches the timer");
 
         $display("-- Mapped slave response propagation --");
         slave_response = RESP_DECERR;

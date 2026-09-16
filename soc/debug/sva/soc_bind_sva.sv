@@ -233,16 +233,28 @@ bind soc_axi_lite_dec soc_axi_lite_dec_sva #(
     .rd_sel_q_i (rd_sel_q),
     .wr_err_q_i (wr_err_q),
     .rd_err_q_i (rd_err_q),
+
+    .wr_addr_valid_q_i(wr_addr_valid_q),
+    .wr_data_valid_q_i(wr_data_valid_q),
+    .rd_addr_valid_q_i(rd_addr_valid_q),
+
     .m_awvalid_i(m_awvalid_i),
     .m_awready_i(m_awready_o),
+    .m_wvalid_i (m_wvalid_i),
+    .m_wready_i (m_wready_o),
     .m_arvalid_i(m_arvalid_i),
     .m_arready_i(m_arready_o),
     .m_bvalid_i (m_bvalid_o),
     .m_bresp_i  (m_bresp_o),
+    .m_bready_i (m_bready_i),
     .m_rvalid_i (m_rvalid_o),
+    .m_rdata_i  (m_rdata_o),
     .m_rresp_i  (m_rresp_o),
+    .m_rready_i (m_rready_i),
     .s_awvalid_i(s_awvalid_o),
-    .s_arvalid_i(s_arvalid_o)
+    .s_arvalid_i(s_arvalid_o),
+    .s_rvalid_i (s_rvalid_i),
+    .s_bvalid_i (s_bvalid_i)
 );
 
 bind soc_axi_lite_arb soc_axi_lite_arb_sva #(
@@ -251,18 +263,29 @@ bind soc_axi_lite_arb soc_axi_lite_arb_sva #(
 ) arb_sva_i (
     .clk_i        (clk_i),
     .rst_n_i      (rst_n_i),
-    .gnt_i        (gnt),
-    .req_i        (req),
-    .sel_i        (sel),
-    .release_gnt_i(release_gnt),
-    .m_awready_i  (m_awready_o),
-    .m_wready_i   (m_wready_o),
-    .m_arready_i  (m_arready_o),
-    .m_bvalid_i   (m_bvalid_o),
-    .m_rvalid_i   (m_rvalid_o),
-    .s_awvalid_i  (s_awvalid_o[0]),
-    .s_wvalid_i   (s_wvalid_o[0]),
-    .s_arvalid_i  (s_arvalid_o[0])
+    .gnt_i          (gnt),
+    .req_i          (req),
+    .sel_i          (sel),
+    .release_gnt_i  (release_gnt),
+    .write_grant_q_i(write_grant_q),
+    .aw_taken_q_i   (aw_taken_q),
+    .w_taken_q_i    (w_taken_q),
+    .ar_taken_q_i   (ar_taken_q),
+    .m_awready_i    (m_awready_o),
+    .m_wready_i     (m_wready_o),
+    .m_arready_i    (m_arready_o),
+    .m_bvalid_i     (m_bvalid_o),
+    .m_rvalid_i     (m_rvalid_o),
+    .s_awvalid_i    (s_awvalid_o[0]),
+    .s_awready_i    (s_awready_i),
+    .s_wvalid_i     (s_wvalid_o[0]),
+    .s_wready_i     (s_wready_i),
+    .s_arvalid_i    (s_arvalid_o[0]),
+    .s_arready_i    (s_arready_i),
+    .s_bvalid_i     (s_bvalid_i),
+    .s_bready_i     (s_bready_o[0]),
+    .s_rvalid_i     (s_rvalid_i),
+    .s_rready_i     (s_rready_o[0])
 );
 
 bind soc_axi_full2lite soc_axi_full2lite_sva #(
@@ -281,6 +304,17 @@ bind soc_axi_full2lite soc_axi_full2lite_sva #(
     .w_addr_i   (w_addr),
     .w_fixed_i  (w_fixed),
     .w_resp_i   (w_resp),
+
+    .s_arvalid_i   (s_arvalid_i),
+    .s_arready_i   (s_arready_o),
+    .ar_supported_i(ar_supported),
+    .s_awvalid_i   (s_awvalid_i),
+    .s_awready_i   (s_awready_o),
+    .aw_supported_i(aw_supported),
+    .s_wvalid_i    (s_wvalid_i),
+    .s_wready_i    (s_wready_o),
+    .s_wlast_i     (s_wlast_i),
+
     .s_rvalid_i (s_rvalid_o),
     .s_rready_i (s_rready_i),
     .s_rlast_i  (s_rlast_o),

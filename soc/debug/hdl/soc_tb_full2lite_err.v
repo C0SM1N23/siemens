@@ -31,6 +31,10 @@
 //   6  every beat of the burst is still consumed when a beat fails
 //   7  the bridge is not left stuck: a clean burst after a failed one is OKAY
 //   8  read error is per beat, does not spread, and RLAST still lands last
+//   9  a clean read after a failed one
+//  10  DECERR outranks SLVERR in the fold, in either arrival order
+//  11  every fold above again, with the master accepting each beat and each
+//      response three cycles late
 //
 // The lite-side slave is the design's own AXI4-Lite register front end, with
 // its "this offset is writable / readable" input driven from a beat counter.
@@ -227,7 +231,10 @@ module soc_tb_full2lite_err;
         else if (l_arvalid && l_arready) rbeat_cnt <= rbeat_cnt + 1;
     end
 
-    // full-side master
+    // full-side master. beat_gap is how many cycles the master leaves a beat or
+    // a response waiting before it accepts it - zero is the immediate case the
+    // checks above use, anything else holds VALID up across idle cycles.
+    integer beat_gap;
     reg [1:0] last_bresp;
     reg [1:0] beat_rresp [0:15];
     integer rlast_count, rlast_on_last, rbeats_taken;
@@ -268,6 +275,7 @@ module soc_tb_full2lite_err;
             f_awvalid = 1'b0;
 
             for (b = 0; b <= len; b = b + 1) begin
+                repeat (beat_gap) @(negedge clk);
                 f_wdata  = 32'hA5A5_0000 + b;
                 f_wstrb  = 4'hF;
                 f_wlast  = (b == {24'd0, len});
@@ -279,6 +287,7 @@ module soc_tb_full2lite_err;
                 f_wlast  = 1'b0;
             end
 
+            repeat (beat_gap) @(negedge clk);
             f_bready = 1'b1;
             @(posedge clk);
             while (!f_bvalid) @(posedge clk);
@@ -308,6 +317,7 @@ module soc_tb_full2lite_err;
             f_arvalid = 1'b0;
 
             for (b = 0; b <= len; b = b + 1) begin
+                repeat (beat_gap) @(negedge clk);
                 f_rready = 1'b1;
                 @(posedge clk);
                 while (!f_rvalid) @(posedge clk);
@@ -352,6 +362,7 @@ module soc_tb_full2lite_err;
         wbeat_cnt        = 0;
         rbeat_cnt        = 0;
         wbeats_seen      = 0;
+        beat_gap         = 0;
         last_bresp       = RESP_OKAY;
         for (i = 0; i < 16; i = i + 1) beat_rresp[i] = RESP_OKAY;
 
@@ -449,7 +460,7 @@ module soc_tb_full2lite_err;
         for (i = 0; i < 8; i = i + 1) if (beat_rresp[i] !== RESP_OKAY) bad = bad + 1;
         check(32'd0, bad[31:0], "every beat of the clean read is OKAY");
 
-        $display("\n-- mixed write responses: DECERR has priority --");
+        $display("\n-- 10. mixed write responses: DECERR has priority --");
         pattern_enable   = 1;
         response_pattern = 16'h000B;  // beat 0 DECERR, beat 1 SLVERR, then OKAY
         arm_write_err(NO_ERR, NO_ERR);
@@ -460,6 +471,46 @@ module soc_tb_full2lite_err;
         do_write(32'h120, 8'd7);
         check(32'd3, {30'b0, last_bresp}, "SLVERR then DECERR becomes DECERR");
         pattern_enable = 0;
+
+        $display("\n-- 11. the same cases with the master accepting late --");
+        // Every beat and every response now sits on the wire for three cycles
+        // before the master takes it. The fold and the per-beat RRESP are the
+        // same properties as above; what changes is that the bridge has to hold
+        // them across the wait instead of passing them straight through.
+        beat_gap = 3;
+
+        arm_write_err(0, NO_ERR);
+        do_write(32'h0000_0140, 8'd7);
+        check({30'd0, RESP_SLVERR}, {30'd0, last_bresp},
+              "first beat failed -> burst still answers SLVERR");
+        check(32'd8, wbeats_seen[31:0], "all eight beats were still issued");
+
+        arm_write_err(4, NO_ERR);
+        do_write(32'h0000_0160, 8'd7);
+        check({30'd0, RESP_SLVERR}, {30'd0, last_bresp},
+              "middle beat failed -> burst still answers SLVERR");
+
+        arm_write_err(NO_ERR, NO_ERR);
+        do_write(32'h0000_0180, 8'd7);
+        check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "a clean burst still answers OKAY");
+
+        pattern_enable   = 1;
+        response_pattern = 16'h000B;  // beat 0 DECERR, beat 1 SLVERR, then OKAY
+        arm_write_err(NO_ERR, NO_ERR);
+        do_write(32'h0000_01A0, 8'd7);
+        check(32'd3, {30'b0, last_bresp}, "the response priority survives the wait");
+        pattern_enable = 0;
+
+        arm_read_err(5);
+        do_read(32'h0000_0000, 8'd7);
+        check(32'd8, rbeats_taken[31:0], "all eight read beats were delivered");
+        check({30'd0, RESP_SLVERR}, {30'd0, beat_rresp[5]}, "beat 5 reports SLVERR");
+        bad = 0;
+        for (i = 0; i < 8; i = i + 1) if (i != 5 && beat_rresp[i] !== RESP_OKAY) bad = bad + 1;
+        check(32'd0, bad[31:0], "no other beat was contaminated by the wait");
+        check(32'd1, rlast_count[31:0], "exactly one RLAST in the burst");
+        check(32'd1, rlast_on_last[31:0], "RLAST landed on the final beat");
+        beat_gap = 0;
 
         repeat (4) @(posedge clk);
         if (errors == 0) $display("== BRIDGE ERROR TESTBENCH: ALL TESTS PASSED ==");

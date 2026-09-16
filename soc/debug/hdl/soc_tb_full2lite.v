@@ -15,7 +15,9 @@
 //   5  WRAP burst - unsupported, must come back SLVERR and must NOT touch
 //      memory
 //   6  narrow transfer (SIZE=2 bytes) - unsupported, same treatment
-//   7  RLAST placement: exactly one, on the final beat
+//   7  unaligned start address - unsupported, same treatment
+//   8  back-to-back bursts after a rejected one
+//   RLAST placement is checked throughout: exactly one, on the final beat
 //
 // The read path is checked against what the write path put there, so a bridge
 // that consistently mistranslated addresses in both directions could in
@@ -326,8 +328,37 @@ module soc_tb_full2lite;
         check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "narrow write answers SLVERR");
         check(32'hCAFE_F00D, ram.mem[96], "narrow write left memory untouched");
 
-        // -- 7: back-to-back bursts, no state left behind
-        $display("\n-- 7: back-to-back bursts after a rejected one --");
+        // -- 7: a 32-bit beat that does not start on a word boundary
+        //
+        // The Lite slaves take a word address and ignore ADDR[1:0], so an
+        // unaligned burst that was let through would read and write the words
+        // containing the address instead of the bytes asked for - wrong data,
+        // reported OKAY. Both low address bits are exercised, so a check that
+        // only one of them is tested cannot pass by accident.
+        $display("\n-- 7: unaligned start address is rejected --");
+        ram.mem[104] = 32'h1234_ABCD;  // byte 0x1A0
+        do_write(32'h0000_01A2, 8'd1, SIZE_32, BURST_INCR, 32'h7777_0000, 4'hF);
+        check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "halfword-aligned write answers SLVERR");
+        do_write(32'h0000_01A1, 8'd0, SIZE_32, BURST_INCR, 32'h8888_0000, 4'hF);
+        check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "ADDR[0] set answers SLVERR");
+        do_write(32'h0000_01A3, 8'd0, SIZE_32, BURST_INCR, 32'h9999_0000, 4'hF);
+        check({30'd0, RESP_SLVERR}, {30'd0, last_bresp}, "both low address bits answer SLVERR");
+        check(32'h1234_ABCD, ram.mem[104], "no rejected write reached memory");
+
+        do_read(32'h0000_01A2, 8'd1, SIZE_32, BURST_INCR);
+        check({30'd0, RESP_SLVERR}, {30'd0, last_rresp}, "unaligned read answers SLVERR");
+        check(32'd1, rlast_count, "the rejected read still delivers one RLAST");
+        check(32'd1, rlast_on_last, "the rejected read delivers all its beats");
+        check(32'h1234_ABCD, ram.mem[104], "the rejected read did not disturb memory");
+
+        // the aligned burst over the same word still works, so the refusal is
+        // the address bits and not the address
+        do_read(32'h0000_01A0, 8'd0, SIZE_32, BURST_INCR);
+        check(32'h1234_ABCD, rd_word[0], "the aligned read of the same word succeeds");
+        check({30'd0, RESP_OKAY}, {30'd0, last_rresp}, "the aligned read answers OKAY");
+
+        // -- 8: back-to-back bursts, no state left behind
+        $display("\n-- 8: back-to-back bursts after a rejected one --");
         do_write(32'h0000_01C0, 8'd7, SIZE_32, BURST_INCR, 32'h5A5A_0000, 4'hF);
         check({30'd0, RESP_OKAY}, {30'd0, last_bresp}, "the bridge recovered from SLVERR");
         do_read(32'h0000_01C0, 8'd7, SIZE_32, BURST_INCR);
