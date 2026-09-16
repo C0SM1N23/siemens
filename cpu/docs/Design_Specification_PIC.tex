@@ -490,29 +490,33 @@ drives combinationally from its own state.
 \caption{Port summary}
 \label{tab:ports}
 \small
-\begin{tabular}{@{}L{0.15\linewidth}L{0.18\linewidth}C{0.075\linewidth}C{0.065\linewidth}L{0.36\linewidth}@{}}
+\begin{tabular}{@{}L{0.17\linewidth}L{0.19\linewidth}C{0.07\linewidth}C{0.06\linewidth}L{\dimexpr0.51\linewidth-8\tabcolsep\relax}@{}}
 \toprule
-\textbf{Interface} & \textbf{Signals} & \textbf{Width} & \textbf{Dir.} &
+\textbf{Interface} & \textbf{Signal} & \textbf{Width} & \textbf{Dir.} &
 \textbf{Purpose} \\
 \midrule
-Clock and reset & Clock\newline Reset & 1\newline 1 & in\newline in &
-  Single clock; asynchronous active-low reset \\
+Clock and reset & Clock & 1 & in &
+  One clock edge drives the whole block \\
+ & Reset & 1 & in &
+  Asynchronous, active low \\
 \addlinespace
 Interrupt sources & Source lines & 16 & in &
   One line per slot, level or edge according to its configuration \\
 \addlinespace
 Processor & Enable mask & 16 & in &
   The processor's own per-source mask, applied inside the resolution \\
- & Request\newline Source number & 1\newline 4 &
-   out\newline out &
-  The offer: one prioritised request and the slot it names \\
+ & Request & 1 & out &
+  The offer: one prioritised request \\
+ & Source number & 4 & out &
+  The slot that request names \\
  & Pending set & 16 & out &
   Every pending source, including those the enable mask holds back \\
- & Claim\newline End of interrupt & 1\newline 1 & in\newline in &
-  Single-cycle pulses that push and pop the nesting stack \\
+ & Claim & 1 & in &
+  Single-cycle pulse that pushes the nesting stack \\
+ & End of interrupt & 1 & in &
+  Single-cycle pulse that pops it \\
 \addlinespace
-Register port & Write address\newline Write data\newline Write response\newline
-  Read address\newline Read data & --- & --- &
+Register port & All five channels & --- & --- &
   A complete AXI4-Lite slave; see Table~\ref{tab:slave} \\
 \bottomrule
 \end{tabular}
