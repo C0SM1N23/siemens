@@ -11,6 +11,7 @@ debug/sim/CUM_RULEZ.md
 poze random/
 docs/diagrame/
 cpu/docs/diagrame/
+cpu/docs/REVISION_REPORT.md
 
 # Siemens-internal spec material (marked Restricted) — never push
 *.pdf
@@ -22,6 +23,15 @@ cpu/docs/diagrame/
 !cpu/docs/Verification_Specification_RV32I_CPU.pdf
 !cpu/docs/Design_Specification_PIC.pdf
 !cpu/docs/Verification_Specification_PIC.pdf
+!cpu/docs/figures/*.pdf
+!cpu/docs/waves/*.pdf
+!cpu/docs/presentations/output/*.pdf
+
+# Presentation runtime, QA renders and local probes are regenerated.
+cpu/docs/presentations/node_modules/
+cpu/docs/presentations/scratch/
+# refined_diagrams.py also writes byte copies of *_essential.* under this name
+cpu/docs/figures/*_architecture.*
 
 # ...except the faculty internship report, which is the student's own work
 !docs/practica/Raport_practica_Bunea_Cosmin-Andrei.pdf
