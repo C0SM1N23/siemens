@@ -10,8 +10,8 @@
 #   PULP_AXI_DIR=/path/to/axi PULP_CC_DIR=/path/to/common_cells ./run_pulp_compare.sh
 #
 # Upstream is Solderpad 0.51 licensed; see the LICENSE file in each checkout.
-# The only file here that touches it is ../hdl/pulp_lite_demux_wrap.sv, which is
-# ours and contains no upstream code.
+# The local wrapper and comparison benches instantiate upstream modules;
+# upstream RTL remains in the external checkout.
 #
 # Needs: verilator, git (unless both paths are supplied), network access for the
 # first run.
@@ -19,16 +19,23 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 WORK="${PULP_WORK_DIR:-./pulp_ref}"
-AXI_REV="${PULP_AXI_REV:-master}"
-CC_REV="${PULP_CC_REV:-v2.0.0-beta.2}"   # the revision axi's Bender.yml pins
+AXI_REV="${PULP_AXI_REV:-70b8e54fd460e3308e58be596ceb3566a6e3576e}"
+CC_REV="${PULP_CC_REV:-03d98106aa19952a10360d2230def85144a0008b}"
 
 fetch() { # fetch <url> <rev> <dir>
     if [ -d "$3/.git" ]; then
-        echo "using existing checkout: $3"
+        local actual expected
+        actual="$(git -C "$3" rev-parse HEAD)"
+        expected="$(git -C "$3" rev-parse "$2^{commit}" 2>/dev/null || true)"
+        [ "$actual" = "$expected" ] || { echo "FAIL: $3 is at $actual, expected $2"; exit 1; }
+        [ -z "$(git -C "$3" status --porcelain)" ] || { echo "FAIL: modified reference: $3"; exit 1; }
+        echo "using verified checkout: $3 ($actual)"
     else
         echo "fetching $1 ($2) into $3"
-        git clone --depth 1 --branch "$2" "$1" "$3" \
-            || { echo "FAIL: could not fetch $1 - no network access?"; exit 1; }
+        git init -q "$3"
+        git -C "$3" remote add origin "$1"
+        git -C "$3" fetch --depth 1 origin "$2"
+        git -C "$3" checkout -q --detach FETCH_HEAD
     fi
 }
 
@@ -50,26 +57,29 @@ done
 echo "upstream axi:          $(git -C "$AXI" rev-parse --short HEAD 2>/dev/null || echo '?')"
 echo "upstream common_cells: $(git -C "$CC"  rev-parse --short HEAD 2>/dev/null || echo '?')"
 
-TOP=soc_tb_pulp_compare
-mkdir -p "obj_dir/$TOP"
+for TOP in soc_tb_pulp_compare soc_tb_pulp_regs; do
+    mkdir -p "obj_dir/$TOP"
 
-# -Wno-fatal: upstream carries its own lint diagnostics and is not this
-# project's code to clean up. Our own files are linted by run_verilator.sh.
-verilator --binary --timing --timescale 1ns/1ps --assert -Wno-fatal -j 4 \
-    --top-module "$TOP" --Mdir "obj_dir/$TOP" -o "V$TOP" \
-    +incdir+../../../cpu/debug/hdl \
-    "+incdir+$AXI/include" "+incdir+$CC/include" \
-    -y "$AXI/src" -y "$CC/src" \
-    "$AXI/src/axi_pkg.sv" "$CC/src/cc_pkg.sv" \
-    ../../hdl/soc_axi_lite_dec.v \
-    ../hdl/soc_lite_slave_stub.v \
-    ../hdl/soc_lite_seq_master.v \
-    ../hdl/pulp_lite_demux_wrap.sv \
-    "../hdl/$TOP.sv" \
-    > "build_$TOP.log" 2>&1 || { tail -60 "build_$TOP.log"; exit 1; }
+    # -Wno-fatal: upstream carries its own lint diagnostics and is not this
+    # project's code to clean up. Our own files are linted by run_verilator.sh.
+    verilator --binary --timing --timescale 1ns/1ps --assert -Wno-fatal -j 4 \
+        --top-module "$TOP" --Mdir "obj_dir/$TOP" -o "V$TOP" \
+        +incdir+../../../cpu/debug/hdl \
+        "+incdir+$AXI/include" "+incdir+$CC/include" \
+        -y "$AXI/src" -y "$CC/src" \
+        "$AXI/src/axi_pkg.sv" "$CC/src/cc_pkg.sv" \
+        ../../hdl/soc_axi_lite_dec.v \
+        ../../../cpu/hdl/axi_lite_slave.v \
+        ../../../cpu/debug/sva/axi_lite_sva.sv \
+        ../hdl/soc_lite_slave_stub.v \
+        ../hdl/soc_lite_seq_master.v \
+        ../hdl/pulp_lite_demux_wrap.sv \
+        "../hdl/$TOP.sv" \
+        > "build_$TOP.log" 2>&1 || { tail -60 "build_$TOP.log"; exit 1; }
 
-"./obj_dir/$TOP/V$TOP" "$@" 2>&1 | tee "run_$TOP.log"
+    "./obj_dir/$TOP/V$TOP" "$@" 2>&1 | tee "run_$TOP.log"
 
-grep -q 'ALL TESTS PASSED' "run_$TOP.log" || { echo "FAIL: comparison did not pass"; exit 1; }
-grep -Eq '%Error|FAIL:' "run_$TOP.log" && { echo "FAIL: errors in the comparison run"; exit 1; }
-echo "PULP COMPARISON PASS"
+    grep -q 'ALL TESTS PASSED' "run_$TOP.log" || { echo "FAIL: comparison did not pass"; exit 1; }
+    grep -Eq '%Error|FAIL:' "run_$TOP.log" && { echo "FAIL: errors in the comparison run"; exit 1; }
+done
+echo "PULP COMPARISON PASS: decoder and register slave"

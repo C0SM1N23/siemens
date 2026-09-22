@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // The SoC address map, checked against the decoder that implements it
 // (soc/hdl/soc_axi_lite_dec.v driven from soc/hdl/soc_addr_map.vh).
 //
@@ -146,20 +147,21 @@ module soc_tb_addr_map;
 
     task do_read(input [31:0] a);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_araddr  = a;
             m_arvalid = 1;
             m_rready  = 0;
             @(posedge clk);
             while (!m_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             m_arvalid = 0;
             m_rready  = 1;
             @(posedge clk);
             while (!m_rvalid) @(posedge clk);
             rd        = m_rdata;
             rresp_got = m_rresp;
-            @(negedge clk);
+            #1;
             m_rready = 0;
         end
     endtask
@@ -167,7 +169,8 @@ module soc_tb_addr_map;
     task do_write(input [31:0] a);
         reg aw_seen, w_seen;
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_awaddr  = a;
             m_awvalid = 1;
             m_wdata   = 32'hA5A5_A5A5;
@@ -180,7 +183,7 @@ module soc_tb_addr_map;
                 @(posedge clk);
                 if (m_awvalid && m_awready) aw_seen = 1;
                 if (m_wvalid && m_wready) w_seen = 1;
-                @(negedge clk);
+                #1;
                 if (aw_seen) m_awvalid = 0;
                 if (w_seen) m_wvalid = 0;
             end
@@ -188,7 +191,7 @@ module soc_tb_addr_map;
             @(posedge clk);
             while (!m_bvalid) @(posedge clk);
             bresp_got = m_bresp;
-            @(negedge clk);
+            #1;
             m_bready = 0;
         end
     endtask
@@ -198,13 +201,14 @@ module soc_tb_addr_map;
     // arrives - the state the ordering checks below need.
     task read_pending(input [31:0] a, input integer slv, input [511:0] name);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_araddr  = a;
             m_arvalid = 1;
             m_rready  = 0;
             @(posedge clk);
             while (!m_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             m_arvalid = 0;
             @(posedge clk);
             while (!m_rvalid) @(posedge clk);
@@ -214,13 +218,14 @@ module soc_tb_addr_map;
 
     task read_pending_unmapped(input [31:0] a, input [511:0] name);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_araddr  = a;
             m_arvalid = 1;
             m_rready  = 0;
             @(posedge clk);
             while (!m_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             m_arvalid = 0;
             @(posedge clk);
             while (!m_rvalid) @(posedge clk);
@@ -231,7 +236,8 @@ module soc_tb_addr_map;
     // Present a second AR without waiting for it to be accepted.
     task offer_read(input [31:0] a);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_araddr  = a;
             m_arvalid = 1;
         end
@@ -240,11 +246,12 @@ module soc_tb_addr_map;
     // Accept the response that was left pending, then release RREADY.
     task take_read(input integer slv, input [511:0] name);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_rready = 1;
             @(posedge clk);
             check(32'h5000_0000 + slv, m_rdata, name);
-            @(negedge clk);
+            #1;
             m_rready = 0;
         end
     endtask
@@ -254,14 +261,14 @@ module soc_tb_addr_map;
         begin
             @(posedge clk);
             while (!m_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             m_arvalid = 0;
             m_rready  = 1;
             @(posedge clk);
             while (!m_rvalid) @(posedge clk);
             check({30'b0, resp}, {30'b0, m_rresp}, name);
             check(data, m_rdata, name);
-            @(negedge clk);
+            #1;
             m_rready = 0;
         end
     endtask
@@ -354,7 +361,7 @@ module soc_tb_addr_map;
 
         $display("-- W-before-AW ordering --");
         do_write(`SOC_DMEM_BASE);
-        @(negedge clk);
+        #1;
         m_wdata   = 32'h12345678;
         m_wstrb   = 4'hF;
         m_wvalid  = 1;
@@ -366,18 +373,18 @@ module soc_tb_addr_map;
             check(32'd0, {31'b0, m_wready}, "W-before-AW is not accepted on the previous route");
             check(32'd0, s_wvalid, "no stale slave sees WVALID");
         end
-        @(negedge clk);
+        #1;
         m_awvalid = 1;
         @(posedge clk);
         if (!(m_awready && m_wready)) $fatal(1, "addressed write did not handshake");
-        @(negedge clk);
+        #1;
         m_awvalid = 0;
         m_wvalid  = 0;
         m_bready  = 1;
         @(posedge clk);
         while (!m_bvalid) @(posedge clk);
         check(32'd0, {30'b0, m_bresp}, "W-before-AW completes on the new route");
-        @(negedge clk);
+        #1;
         m_bready = 0;
 
         $display("-- Read ordering: one outstanding read at a time --");
@@ -424,11 +431,11 @@ module soc_tb_addr_map;
             check(32'd1, {31'b0, m_rvalid}, "the DECERR stays valid");
             check(32'd3, {30'b0, m_rresp}, "the DECERR is not overwritten");
         end
-        @(negedge clk);
+        #1;
         m_rready = 1;
         @(posedge clk);
         check(32'd3, {30'b0, m_rresp}, "the DECERR is the response delivered");
-        @(negedge clk);
+        #1;
         m_rready = 0;
         finish_offered_read(RESP_OKAY, 32'h5000_0000 + SD_TMR, "the deferred read then reaches the timer");
 

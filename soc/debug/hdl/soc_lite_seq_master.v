@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // A fixed AXI4-Lite master sequence, as a module rather than a task.
 //
 // It exists so that two different interconnects can be driven by *the same*
@@ -65,31 +66,34 @@ module soc_lite_seq_master #(
     // Address phase only: leave the response on the port for the caller to take.
     task issue_read(input [31:0] a);
         begin
-            @(negedge clk_i);
+            @(posedge clk_i);
+            #1;
             araddr_o  = a;
             arvalid_o = 1'b1;
             @(posedge clk_i);
             while (!arready_i) @(posedge clk_i);
-            @(negedge clk_i);
+            #1;
             arvalid_o = 1'b0;
         end
     endtask
 
     task take_read;
         begin
-            @(negedge clk_i);
+            @(posedge clk_i);
+            #1;
             rready_o = 1'b1;
             @(posedge clk_i);
             while (!rvalid_i) @(posedge clk_i);
             record(KIND_READ, rdata_i, rresp_i);
-            @(negedge clk_i);
+            #1;
             rready_o = 1'b0;
         end
     endtask
 
     task issue_write(input [31:0] a, input [31:0] d, input w_first, input integer skew);
         begin
-            @(negedge clk_i);
+            @(posedge clk_i);
+            #1;
             awaddr_o = a;
             wdata_o  = d;
             wstrb_o  = 4'hF;
@@ -97,20 +101,23 @@ module soc_lite_seq_master #(
             else awvalid_o = 1'b1;
             fork
                 begin
-                    repeat (skew) @(negedge clk_i);
+                    repeat (skew) begin
+                        @(posedge clk_i);
+                        #1;
+                    end
                     if (w_first) awvalid_o = 1'b1;
                     else wvalid_o = 1'b1;
                 end
                 begin
                     @(posedge clk_i);
                     while (!(awvalid_o && awready_i)) @(posedge clk_i);
-                    @(negedge clk_i);
+                    #1;
                     awvalid_o = 1'b0;
                 end
                 begin
                     @(posedge clk_i);
                     while (!(wvalid_o && wready_i)) @(posedge clk_i);
-                    @(negedge clk_i);
+                    #1;
                     wvalid_o = 1'b0;
                 end
             join
@@ -119,12 +126,13 @@ module soc_lite_seq_master #(
 
     task take_write;
         begin
-            @(negedge clk_i);
+            @(posedge clk_i);
+            #1;
             bready_o = 1'b1;
             @(posedge clk_i);
             while (!bvalid_i) @(posedge clk_i);
             record(KIND_WRITE, 32'h0, bresp_i);
-            @(negedge clk_i);
+            #1;
             bready_o = 1'b0;
         end
     endtask
@@ -168,15 +176,22 @@ module soc_lite_seq_master #(
         //    response taken. A's data must still be A's.
         step("3: read A, then offer read B on top of it");
         issue_read(ADDR_A);
-        repeat (4) @(negedge clk_i);
-        @(negedge clk_i);
+        repeat (4) begin
+            @(posedge clk_i);
+            #1;
+        end
+        @(posedge clk_i);
+        #1;
         araddr_o  = ADDR_B;
         arvalid_o = 1'b1;
-        repeat (4) @(negedge clk_i);
+        repeat (4) begin
+            @(posedge clk_i);
+            #1;
+        end
         take_read;
         @(posedge clk_i);
         while (!arready_i) @(posedge clk_i);
-        @(negedge clk_i);
+        #1;
         arvalid_o = 1'b0;
         take_read;
 
@@ -195,10 +210,14 @@ module soc_lite_seq_master #(
         //    response is taken.
         step("6: read B, then offer write A on top of it");
         issue_read(ADDR_B);
-        repeat (3) @(negedge clk_i);
+        repeat (3) begin
+            @(posedge clk_i);
+            #1;
+        end
         fork
             begin
-                @(negedge clk_i);
+                @(posedge clk_i);
+                #1;
                 awaddr_o  = ADDR_A;
                 wdata_o   = 32'hC0C0_0003;
                 wstrb_o   = 4'hF;
@@ -208,17 +227,20 @@ module soc_lite_seq_master #(
             begin
                 @(posedge clk_i);
                 while (!(awvalid_o && awready_i)) @(posedge clk_i);
-                @(negedge clk_i);
+                #1;
                 awvalid_o = 1'b0;
             end
             begin
                 @(posedge clk_i);
                 while (!(wvalid_o && wready_i)) @(posedge clk_i);
-                @(negedge clk_i);
+                #1;
                 wvalid_o = 1'b0;
             end
             begin
-                repeat (3) @(negedge clk_i);
+                repeat (3) begin
+                    @(posedge clk_i);
+                    #1;
+                end
                 take_read;
             end
         join

@@ -40,13 +40,21 @@ behind identical slave stubs. It compares the data, response and order of every
 completed transaction, and how many address handshakes each slave saw. Timing is
 not compared: each side runs its own handshakes at its own pace.
 
-The upstream sources are not vendored here. `run_pulp_compare.sh` fetches them
-into `soc/debug/sim/pulp_ref/`, which is git-ignored, or uses an existing
-checkout given in `PULP_AXI_DIR` / `PULP_CC_DIR`. Measured against upstream
-`axi` `da8793b` with `common_cells` `v2.0.0-beta.2`: ten transactions, all
-matching. The only file in this repository that touches upstream is
-`soc/debug/hdl/pulp_lite_demux_wrap.sv`, which converts between packed vectors
-and upstream's request/response structs and contains no upstream code.
+The runner also instantiates the actual PULP `axi_lite_regs` beside the local
+`axi_lite_slave`, with a matched four-RW/one-RO-word register bank. It checks
+96 combinations (16 WSTRB masks × 3 AW/W orders × 2 response-stall settings),
+RO writes, unmapped accesses and asynchronous reset with B and R responses held.
+Each side has its own AXI SVA monitor and is checked against expected values.
+An unmapped read returns SLVERR on both sides; local RDATA is zero, whereas the
+pinned PULP module returns `0xBA5E1E55`.
+
+The sources are fetched into ignored `soc/debug/sim/pulp_ref/`. The completed
+comparison uses axi `70b8e54fd460e3308e58be596ceb3566a6e3576e` and common_cells
+`03d98106aa19952a10360d2230def85144a0008b`. Existing default checkouts must match
+the requested revision and be clean. Explicit `PULP_AXI_DIR` / `PULP_CC_DIR`
+are supported; their actual revisions are logged and must be recorded when
+reporting a different run. Local wrappers and benches contain no copied
+upstream implementation.
 
 Two behaviours are outside the comparison because they are structural
 differences rather than disagreements: upstream takes the routing decision as an

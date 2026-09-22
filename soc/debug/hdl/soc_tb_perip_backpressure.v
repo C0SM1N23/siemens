@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // The peripheral slaves under a master that does not accept responses at once.
 //
 // The regression's timing sweep varies the two memory models, because those are
@@ -232,13 +233,14 @@ module soc_tb_perip_backpressure;
             unstable     = 0;
             extra_accept = 0;
 
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_araddr  = addr;
             m_arvalid = 1'b1;
             m_rready  = 1'b0;
             @(posedge clk);
             while (!m_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             m_arvalid = 1'b0;
 
             // wait for the response to appear with RREADY still low
@@ -254,7 +256,7 @@ module soc_tb_perip_backpressure;
             // response is outstanding shows the same thing without driving
             // anything.
             for (k = 0; k < stall; k = k + 1) begin
-                @(negedge clk);
+                #1;
                 @(posedge clk);
                 if (!m_rvalid)  // the response must not go away
                     unstable = unstable + 1;
@@ -264,12 +266,12 @@ module soc_tb_perip_backpressure;
                     extra_accept = extra_accept + 1;
             end
 
-            @(negedge clk);
+            #1;
             m_rready = 1'b1;
             @(posedge clk);
             held_last = m_rdata;
             rd        = m_rdata;
-            @(negedge clk);
+            #1;
             m_rready = 1'b0;
         end
     endtask
@@ -284,7 +286,8 @@ module soc_tb_perip_backpressure;
             unstable     = 0;
             extra_accept = 0;
 
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_awaddr  = addr;
             m_awvalid = 1'b1;
             m_wdata   = data;
@@ -293,12 +296,12 @@ module soc_tb_perip_backpressure;
             m_bready  = 1'b0;
             @(posedge clk);
             while (!(m_awready && m_wready)) begin
-                @(negedge clk);
+                #1;
                 if (m_awready) m_awvalid = 1'b0;
                 if (m_wready) m_wvalid = 1'b0;
                 @(posedge clk);
             end
-            @(negedge clk);
+            #1;
             m_awvalid = 1'b0;
             m_wvalid  = 1'b0;
 
@@ -308,17 +311,17 @@ module soc_tb_perip_backpressure;
 
             // AWVALID stays low here for the same reason as ARVALID above.
             for (k = 0; k < stall; k = k + 1) begin
-                @(negedge clk);
+                #1;
                 @(posedge clk);
                 if (!m_bvalid) unstable = unstable + 1;
                 if (m_bresp !== held_resp) unstable = unstable + 1;
                 if (m_awready) extra_accept = extra_accept + 1;
             end
 
-            @(negedge clk);
+            #1;
             m_bready = 1'b1;
             @(posedge clk);
-            @(negedge clk);
+            #1;
             m_bready = 1'b0;
         end
     endtask
@@ -326,18 +329,19 @@ module soc_tb_perip_backpressure;
     task read_plain;
         input [31:0] addr;
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             m_araddr  = addr;
             m_arvalid = 1'b1;
             m_rready  = 1'b1;
             @(posedge clk);
             while (!m_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             m_arvalid = 1'b0;
             @(posedge clk);
             while (!m_rvalid) @(posedge clk);
             rd = m_rdata;
-            @(negedge clk);
+            #1;
             m_rready = 1'b0;
         end
     endtask

@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // Arbitration: concurrent directions, contention, and response backpressure.
 //
 // The second half of this bench runs against a deliberately permissive slave -
@@ -169,12 +170,16 @@ module soc_tb_arb;
         begin
             @(posedge clk);
             while (!bvalid[m]) @(posedge clk);
-            repeat (hold) @(negedge clk);
-            @(negedge clk);
+            repeat (hold) begin
+                @(posedge clk);
+                #1;
+            end
+            @(posedge clk);
+            #1;
             bready[m] = 1'b1;
             @(posedge clk);
             while (!(bvalid[m] && bready[m])) @(posedge clk);
-            @(negedge clk);
+            #1;
             bready[m] = 1'b0;
         end
     endtask
@@ -183,12 +188,16 @@ module soc_tb_arb;
         begin
             @(posedge clk);
             while (!rvalid[m]) @(posedge clk);
-            repeat (hold) @(negedge clk);
-            @(negedge clk);
+            repeat (hold) begin
+                @(posedge clk);
+                #1;
+            end
+            @(posedge clk);
+            #1;
             rready[m] = 1'b1;
             @(posedge clk);
             while (!(rvalid[m] && rready[m])) @(posedge clk);
-            @(negedge clk);
+            #1;
             rready[m] = 1'b0;
         end
     endtask
@@ -200,25 +209,29 @@ module soc_tb_arb;
     // because the first half can be accepted while the second is still waiting.
     task do_write(input integer m, input w_first, input integer skew, input integer hold);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             if (w_first) wvalid[m] = 1'b1;
             else awvalid[m] = 1'b1;
             fork
                 begin
-                    repeat (skew) @(negedge clk);
+                    repeat (skew) begin
+                        @(posedge clk);
+                        #1;
+                    end
                     if (w_first) awvalid[m] = 1'b1;
                     else wvalid[m] = 1'b1;
                 end
                 begin
                     @(posedge clk);
                     while (!(awvalid[m] && awready[m])) @(posedge clk);
-                    @(negedge clk);
+                    #1;
                     awvalid[m] = 1'b0;
                 end
                 begin
                     @(posedge clk);
                     while (!(wvalid[m] && wready[m])) @(posedge clk);
-                    @(negedge clk);
+                    #1;
                     wvalid[m] = 1'b0;
                 end
                 take_b(m, hold);
@@ -228,13 +241,14 @@ module soc_tb_arb;
 
     task do_read(input integer m, input integer hold);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             arvalid[m] = 1'b1;
             fork
                 begin
                     @(posedge clk);
                     while (!(arvalid[m] && arready[m])) @(posedge clk);
-                    @(negedge clk);
+                    #1;
                     arvalid[m] = 1'b0;
                 end
                 take_r(m, hold);
@@ -245,7 +259,10 @@ module soc_tb_arb;
     integer writes_at_start, reads_at_start;
 
     initial begin
-        repeat (3) @(negedge clk);
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+        end
         rst_n   = 1;
 
         $display("-- 1. both directions requested at once, responses held back --");
@@ -256,36 +273,45 @@ module soc_tb_arb;
             begin
                 @(posedge clk);
                 while (!awready[0]) @(posedge clk);
-                @(negedge clk);
+                #1;
                 awvalid[0] = 0;
             end
             begin
                 @(posedge clk);
                 while (!wready[0]) @(posedge clk);
-                @(negedge clk);
+                #1;
                 wvalid[0] = 0;
             end
             begin
                 @(posedge clk);
                 while (!arready[0]) @(posedge clk);
-                @(negedge clk);
+                #1;
                 arvalid[0] = 0;
             end
             begin
                 @(posedge clk);
                 while (!arready[1]) @(posedge clk);
-                @(negedge clk);
+                #1;
                 arvalid[1] = 0;
             end
             begin
-                repeat (5) @(negedge clk);
+                repeat (5) begin
+                    @(posedge clk);
+                    #1;
+                end
                 rready = 3;
-                repeat (15) @(negedge clk);
+                repeat (15) begin
+                    @(posedge clk);
+                    #1;
+                end
                 bready = 3;
             end
         join
         wait (reads == 2 && writes == 1);
-        repeat (3) @(negedge clk);
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+        end
         bready = 0;
         rready = 0;
         check(2, reads, "two reads completed");
@@ -299,7 +325,8 @@ module soc_tb_arb;
         // the first grant is held the arbiter is being offered a second write
         // it must not forward.
         writes_at_start = writes;
-        @(negedge clk);
+        @(posedge clk);
+        #1;
         awvalid = 2'b01;
         wvalid  = 2'b01;
         fork
@@ -309,7 +336,7 @@ module soc_tb_arb;
                     @(posedge clk);
                     while (!(awvalid[0] && awready[0])) @(posedge clk);
                 end
-                @(negedge clk);
+                #1;
                 awvalid[0] = 1'b0;
             end
             begin : hold_w
@@ -318,7 +345,7 @@ module soc_tb_arb;
                     @(posedge clk);
                     while (!(wvalid[0] && wready[0])) @(posedge clk);
                 end
-                @(negedge clk);
+                #1;
                 wvalid[0] = 1'b0;
             end
             begin
@@ -326,15 +353,24 @@ module soc_tb_arb;
                 take_b(0, 2);
             end
         join
-        repeat (4) @(negedge clk);
+        repeat (4) begin
+            @(posedge clk);
+            #1;
+        end
         check(writes_at_start + 2, writes, "exactly two writes completed");
 
         $display("-- 3. write data before its address, and after it --");
         writes_at_start = writes;
         do_write(0, 1'b1, 4, 3);  // W offered first
-        repeat (3) @(negedge clk);
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+        end
         do_write(0, 1'b0, 4, 0);  // AW offered first
-        repeat (3) @(negedge clk);
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+        end
         check(writes_at_start + 2, writes, "both orderings completed once each");
 
         $display("-- 4. the other master's write, and its read, under contention --");
@@ -347,7 +383,10 @@ module soc_tb_arb;
             do_write(1, 1'b0, 0, 5);
             do_read(0, 3);
         join
-        repeat (4) @(negedge clk);
+        repeat (4) begin
+            @(posedge clk);
+            #1;
+        end
         check(writes_at_start + 1, writes, "master 1's write completed once");
         check(reads_at_start + 1, reads, "master 0's read completed once");
 

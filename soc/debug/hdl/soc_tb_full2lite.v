@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // Block bench for axi_full2lite, the AXI4-Full to AXI4-Lite burst bridge.
 //
 // The bridge is the one piece of new RTL the whole SoC data path runs through,
@@ -173,7 +174,8 @@ module soc_tb_full2lite;
         input [3:0] strb;
         integer b;
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             f_awaddr  = addr;
             f_awlen   = len;
             f_awsize  = size;
@@ -181,7 +183,7 @@ module soc_tb_full2lite;
             f_awvalid = 1'b1;
             @(posedge clk);
             while (!f_awready) @(posedge clk);
-            @(negedge clk);
+            #1;
             f_awvalid = 1'b0;
 
             for (b = 0; b <= len; b = b + 1) begin
@@ -191,7 +193,7 @@ module soc_tb_full2lite;
                 f_wvalid = 1'b1;
                 @(posedge clk);
                 while (!f_wready) @(posedge clk);
-                @(negedge clk);
+                #1;
                 f_wvalid = 1'b0;
                 f_wlast  = 1'b0;
             end
@@ -200,7 +202,7 @@ module soc_tb_full2lite;
             @(posedge clk);
             while (!f_bvalid) @(posedge clk);
             last_bresp = f_bresp;
-            @(negedge clk);
+            #1;
             f_bready = 1'b0;
         end
     endtask
@@ -214,7 +216,8 @@ module soc_tb_full2lite;
         begin
             rlast_count   = 0;
             rlast_on_last = 0;
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             f_araddr  = addr;
             f_arlen   = len;
             f_arsize  = size;
@@ -222,7 +225,7 @@ module soc_tb_full2lite;
             f_arvalid = 1'b1;
             @(posedge clk);
             while (!f_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             f_arvalid = 1'b0;
 
             for (b = 0; b <= len; b = b + 1) begin
@@ -235,7 +238,7 @@ module soc_tb_full2lite;
                     rlast_count = rlast_count + 1;
                     if (b == {24'd0, len}) rlast_on_last = 1;
                 end
-                @(negedge clk);
+                #1;
                 f_rready = 1'b0;
             end
         end

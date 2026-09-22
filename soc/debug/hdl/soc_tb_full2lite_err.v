@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // The burst bridge under a slave error on one beat inside a burst.
 //
 // tb_full2lite covers the requests the bridge itself refuses - a wrapping
@@ -263,7 +264,8 @@ module soc_tb_full2lite_err;
         input [7:0] len;  // AXI encoding: beats - 1
         integer b;
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             f_awaddr  = addr;
             f_awlen   = len;
             f_awsize  = SIZE_32;
@@ -271,28 +273,34 @@ module soc_tb_full2lite_err;
             f_awvalid = 1'b1;
             @(posedge clk);
             while (!f_awready) @(posedge clk);
-            @(negedge clk);
+            #1;
             f_awvalid = 1'b0;
 
             for (b = 0; b <= len; b = b + 1) begin
-                repeat (beat_gap) @(negedge clk);
+                repeat (beat_gap) begin
+                    @(posedge clk);
+                    #1;
+                end
                 f_wdata  = 32'hA5A5_0000 + b;
                 f_wstrb  = 4'hF;
                 f_wlast  = (b == {24'd0, len});
                 f_wvalid = 1'b1;
                 @(posedge clk);
                 while (!f_wready) @(posedge clk);
-                @(negedge clk);
+                #1;
                 f_wvalid = 1'b0;
                 f_wlast  = 1'b0;
             end
 
-            repeat (beat_gap) @(negedge clk);
+            repeat (beat_gap) begin
+                @(posedge clk);
+                #1;
+            end
             f_bready = 1'b1;
             @(posedge clk);
             while (!f_bvalid) @(posedge clk);
             last_bresp = f_bresp;
-            @(negedge clk);
+            #1;
             f_bready = 1'b0;
         end
     endtask
@@ -305,7 +313,8 @@ module soc_tb_full2lite_err;
             rlast_count   = 0;
             rlast_on_last = 0;
             rbeats_taken  = 0;
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             f_araddr  = addr;
             f_arlen   = len;
             f_arsize  = SIZE_32;
@@ -313,11 +322,14 @@ module soc_tb_full2lite_err;
             f_arvalid = 1'b1;
             @(posedge clk);
             while (!f_arready) @(posedge clk);
-            @(negedge clk);
+            #1;
             f_arvalid = 1'b0;
 
             for (b = 0; b <= len; b = b + 1) begin
-                repeat (beat_gap) @(negedge clk);
+                repeat (beat_gap) begin
+                    @(posedge clk);
+                    #1;
+                end
                 f_rready = 1'b1;
                 @(posedge clk);
                 while (!f_rvalid) @(posedge clk);
@@ -327,7 +339,7 @@ module soc_tb_full2lite_err;
                     rlast_count = rlast_count + 1;
                     if (b == {24'd0, len}) rlast_on_last = 1;
                 end
-                @(negedge clk);
+                #1;
                 f_rready = 1'b0;
             end
         end

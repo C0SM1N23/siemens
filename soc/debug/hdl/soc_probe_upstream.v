@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // Diagnostic observations for TO_MODIFY.md; excluded from the passing regression.
 // Exercises upstream RTL through its ports without changing it.
 `timescale 1ns / 1ps
@@ -74,16 +75,22 @@ module soc_probe_upstream;
         lengths[4] = 5;
         lengths[5] = 22;
         for (length = 0; length < 6; length = length + 1) begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             rst_n   = 0;
             control = 0;
-            repeat (3) @(negedge clk);
+            repeat (3) begin
+                @(posedge clk);
+                #1;
+            end
             rst_n   = 1;
             control = 1;
             wait (request);
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             grant = 1;
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             grant = 0;
             for (word_index = 0; word_index < 8; word_index = word_index + 1) begin
                 fetch_valid = 1;
@@ -94,29 +101,45 @@ module soc_probe_upstream;
                     3:       fetch_data = 1;
                     default: fetch_data = 0;
                 endcase
-                @(negedge clk);
+                @(posedge clk);
+                #1;
             end
             fetch_valid = 0;
             done        = 1;
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             done = 0;
             wait (request);
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             $display("OBSERVE DMA bytes=%0d ARLEN=%0d transfer_bytes=%0d", lengths[length],
                      request_len, (int'(request_len) + 1) * 4);
         end
-        @(negedge clk);
+        @(posedge clk);
+        #1;
         rst_n     = 0;
         control   = 0;
         bandwidth = 32'hFFFF9C40;
-        repeat (3) @(negedge clk);
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+        end
         rst_n = 1;
-        repeat (100) @(negedge clk);
+        repeat (100) begin
+            @(posedge clk);
+            #1;
+        end
         $display("OBSERVE DMA tokens after refill 1=%0d", dma.token_bucket);
-        repeat (100) @(negedge clk);
+        repeat (100) begin
+            @(posedge clk);
+            #1;
+        end
         $display("OBSERVE DMA tokens after refill 2=%0d (saturating result: 65535)",
                  dma.token_bucket);
-        repeat (4000) @(negedge clk);
+        repeat (4000) begin
+            @(posedge clk);
+            #1;
+        end
         $display("OBSERVE SRAM window=2048 BANDWIDTH_A=%0d", bank.bandwidth_a_reg);
         $display("OBSERVE SRAM undefined word=7 read=%08h error=%b", bank_read, bank_error);
         $display("UPSTREAM PROBE COMPLETE");
