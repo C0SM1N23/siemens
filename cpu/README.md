@@ -208,7 +208,7 @@ debug/sim/
   tb_block.f           filelist for the block-level benches
   compile.do           the single canonical vlog compile both .do scripts use
   rv32i_soc_map.vh           TB address map (PIC / mtimer / dmem bases) in one place
-  sim.do               quick single run     regress.do  full 21-run regression
+  sim.do               quick single run     regress.do  full 22-run regression
   wave.do              AXI-grouped waveform set for the ModelSim GUI
   run_verilator.sh     SVA + functional coverage run (Verilator, free)
   run_verilator.ps1    same, one command from Windows (via WSL)
@@ -237,7 +237,7 @@ bash cpu/debug/sim/run_verilator.sh
 Windows launcher: `cpu/debug/sim/run_verilator.ps1`. GUI:
 `python cpu/debug/sim/verif_gui.py`.
 
-The functional regression has 15 distinct benches and 21 ModelSim timing
+The functional regression has 16 distinct benches and 22 ModelSim timing
 configurations. Every bench also executes on Verilator with applicable bound
 SVA; nominal CPU user coverage reaches all required bins. ModelSim compilation
 reports zero errors/warnings. CPU RTL lint is clean under the recorded options.

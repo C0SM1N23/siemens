@@ -16,6 +16,7 @@ branches retain their layout and content.
 - [INTEGRATION.md](INTEGRATION.md): upstream revisions, interfaces and integration decisions.
 - [TO_MODIFY.md](TO_MODIFY.md): current open items; the sole list of DMA/SRAM findings.
 - [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md): verification evidence and limits.
+- [AUDIT_CHANGES.md](AUDIT_CHANGES.md): findings of the CPU/SoC audit and their corrections.
 - [docs/](docs/): shared project material and faculty report.
 
 ## Run
@@ -23,9 +24,9 @@ branches retain their layout and content.
 From the repository root, with Python, ModelSim and/or Verilator installed:
 
 ```text
-make modelsim    # assemble and run 21 CPU/PIC configurations
+make modelsim    # assemble and run 22 CPU/PIC configurations
 make soc         # assemble and run 25 SoC configurations
-make test        # all 15 CPU/PIC benches, SVA and nominal functional coverage
+make test        # all 16 CPU/PIC benches, SVA and nominal functional coverage
 make soc-sva     # all 16 SoC benches with SVA
 ```
 
