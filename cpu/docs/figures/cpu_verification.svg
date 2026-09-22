@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="660" viewBox="0 0 1600 660">
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8" fill="#006B75"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<rect x="30" y="220" width="330" height="170" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="195.0" y="259" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Stimulus</text>
+<text x="195.0" y="299" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">program_axi.hex / ISA vectors</text>
+<text x="195.0" y="331" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">IRQ source events</text>
+<text x="195.0" y="363" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">clock + reset</text>
+<rect x="575" y="220" width="380" height="170" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="765.0" y="259" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">DUT · RV32I CPU</text>
+<text x="765.0" y="299" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">instruction AXI4-Lite</text>
+<text x="765.0" y="331" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">data AXI4-Lite · PIC interface</text>
+<rect x="1180" y="220" width="380" height="170" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1370.0" y="259" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Responders</text>
+<text x="1370.0" y="299" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">instruction / data memory</text>
+<text x="1370.0" y="331" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">PIC + timer · address decode</text>
+<text x="1370.0" y="363" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">latency / backpressure</text>
+<polyline points="360,270 575,270" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="360,270 575,270" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="575,270 562.0,264.0 562.0,276.0" fill="#006B75"/>
+<text x="466" y="252" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#173442">IRQ / reset</text>
+<polyline points="195,220 195,175 1360,175 1360,220" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="195,220 195,175 1360,175 1360,220" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1360,220 1366.0,207.0 1354.0,207.0" fill="#006B75"/>
+<text x="770" y="162" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#173442">program / initial memory image</text>
+<polyline points="955,268 1180,268" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="955,268 1180,268" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1180,268 1167.0,262.0 1167.0,274.0" fill="#006B75"/>
+<text x="1067" y="250" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">AXI requests</text>
+<polyline points="1180,348 955,348" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1180,348 955,348" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="955,348 968.0,354.0 968.0,342.0" fill="#006B75"/>
+<text x="1067" y="330" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">AXI responses</text>
+<rect x="555" y="492" width="430" height="130" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="770.0" y="531" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Checks</text>
+<text x="770.0" y="571" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">ISA reference · result scoreboard</text>
+<text x="770.0" y="603" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">protocol monitors · bound SVA</text>
+<polyline points="760,390 760,492" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="760,390 760,492" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="760,492 766.0,479.0 754.0,479.0" fill="#006B75"/>
+<text x="800" y="449" text-anchor="start" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#173442">observed state / transfers</text>
+<polyline points="160,390 160,556 555,556" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="160,390 160,556 555,556" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="555,556 542.0,550.0 542.0,562.0" fill="#006B75"/>
+<text x="351" y="538" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">expected values</text>
+<text x="800" y="78" text-anchor="middle" font-family="Arial, sans-serif" font-size="31" font-weight="700" fill="#173442">One verdict: expected result + legal protocol + completed test</text>
+<text x="800" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">Widths: address/data 32 · IRQ mask 16 · IRQ ID 4</text>
+</svg>

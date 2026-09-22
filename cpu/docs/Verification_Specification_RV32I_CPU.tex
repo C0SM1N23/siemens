@@ -1,927 +1,340 @@
-% ===========================================================================
-% Verification Environment Specification - RV32I processor core
-% Compile: lualatex (three passes, for the table of contents)
-% ===========================================================================
 \documentclass[11pt]{article}
-
-\newcommand{\doctitle}{Verification Specification --- RV32I Processor Core}
-\newcommand{\docrev}{1.2}
-\newcommand{\docdate}{16 September 2026}
-
-\newcommand{\docsubject}{RV32I processor core (three-stage pipeline)}
+\newcommand{\doctitle}{RV32I CPU — Verification Specification}
+\newcommand{\docsubject}{Reproducible stimuli, checks and waveform evidence}
+\newcommand{\docrev}{2.1}
+\newcommand{\docdate}{21 September 2026}
 \input{preamble_spec}
-
 \begin{document}
-
-\begin{titlepage}
-\centering
-\vspace*{28mm}
-{\color{accent}\rule{\linewidth}{1.2pt}}\\[6mm]
-{\Huge\bfseries Verification Specification}\\[6mm]
-{\LARGE Processor Core for the RV32I\\[2mm]
-(RISC-V 32-Bit Integer Base) Instruction Set}\\[4mm]
-{\large Verification environment, methodology and plan}\\[5mm]
-{\color{accent}\rule{\linewidth}{1.2pt}}
-\vfill
-\identblock{Verification environment specification}
-\vspace{16mm}
-\end{titlepage}
-
+\begin{titlepage}\vspace*{24mm}
+{\Huge\bfseries\color{accent}RV32I CPU\par}\vspace{4mm}{\LARGE Verification Specification\par}\vspace{12mm}
+{\Large Reproducible stimuli, checks and waveform evidence\par}\vfill
+\identblock{Verification specification}\end{titlepage}
 \tableofcontents
-\newpage
-
-% ===========================================================================
+\clearpage
 \section{Introduction}
 
+\needspace{7\baselineskip}
 \subsection{Purpose of the document}
+\noindent This specification describes the simulation strategy, stimulus, reference models and acceptance checks of the RV32I three-stage CPU. It is intended for hardware designers, verification engineers and software developers integrating the block.\par\medskip
+\noindent It defines the behaviour that the RTL must show at its interfaces.\par\medskip
 
-This document specifies the verification environment applied to the RV32I
-processor core, the methodology behind it, and what that environment
-establishes about the design.
-
-The verification plan in the annex lists what is checked, and where each
-check is applied.
-
+\needspace{7\baselineskip}
 \subsection{Validity of the document}
+\noindent The documented configuration is the RTL in cpu/hdl and the associated CPU/PIC and SoC simulation environments. Interface adaptations from the supplied briefs are identified in the integration section.\par\medskip
+\noindent Revision 2.1 of 21 September 2026 describes the delivered state of that RTL.\par\medskip
 
-The document is valid for the verification environment that targets the
-processor core described in the Design Specification. Results reported here were
-measured on the current revision, on both simulators.
-
-The regression contains further runs that target other blocks. Every figure
-reported here is measured over the runs that exercise the core, and excludes
-those other runs.
-
-\subsection{Definitions of terms and abbreviations}
-
-\begin{longtable}{@{}L{0.15\linewidth}L{0.77\linewidth}@{}}
+\needspace{7\baselineskip}
+\subsection{Terms and abbreviations}
+{\small
+\begin{longtable}{@{}L{0.2300\dimexpr\linewidth-12pt\relax}L{0.7700\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
-\textbf{Term} & \textbf{Definition} \\
-\midrule
+\textbf{Term} & \textbf{Meaning} \\ \midrule
 \endfirsthead
 \toprule
-\textbf{Term} & \textbf{Definition} \\
-\midrule
+\textbf{Term} & \textbf{Meaning} \\ \midrule
 \endhead
-AMBA & Advanced Microcontroller Bus Architecture. The ARM bus interface
-       family that AXI4-Lite belongs to.  \\
-Assertion & A property stated in a temporal language and evaluated on every
-       clock cycle of every simulation in which it is active.  \\
-AXI4-Lite & The register-access subset of the AMBA Advanced eXtensible
-       Interface, revision 4.  \\
-Backpressure & Withholding a ready signal to delay a transfer, used here to
-       vary bus timing.  \\
-Block-level test & A test that drives one design block on its own ports,
-       independently of any program running on the core.  \\
-Checker & Logic that compares observed behaviour against expected behaviour and
-       records a mismatch.  \\
-CSR & Control and Status Register.  \\
-Directed test & A test with hand-chosen stimulus aimed at a specific behaviour,
-       as opposed to randomly generated stimulus.  \\
-Functional coverage & A set of named scenarios, each counted when it occurs, used
-       to show which planned situations a run actually reached.  \\
-ISA & Instruction Set Architecture.  \\
-Monitor & A passive observer of an interface that reports protocol violations
-       without driving anything.  \\
-Reference model & An independent implementation of the expected behaviour,
-       against which the design's output is compared automatically.  \\
-Regression & The complete set of runs, executed together from one compilation
-       to confirm that previously working behaviour still works.  \\
-RV32I & The 32-bit integer base instruction set of the RISC-V ISA.  \\
-Scoreboard & A record of expected results accumulated during a run and compared
-       at its end.  \\
-Self-checking test & A test that contains its own expected results and reports a
-       verdict, rather than producing output for a human to inspect.  \\
-System-level test & A test in which real software executes on the core against
-       behavioural memories.  \\
-WARL & Write Any Values, Reads Legal Values.  \\
-WFI & Wait For Interrupt.  \\
-\bottomrule
-\end{longtable}
-
-\subsection{Requirements and implementation decisions}
-
-The original Siemens briefs are kept in \texttt{cpu/docs/brief/}:
-\emph{RV32I 3-Stage Pipeline CPU} and
-\emph{Programmable Interrupt Controller with Advanced Scheduling}.
-They define the project scope. Instruction and CSR semantics are checked
-against the cited RISC-V manuals, and bus handshakes against the AXI specification.
-These authored specifications describe the implementation; they are not
-independent evidence that the implementation is correct.
-
-Details absent from the briefs, including the register map, bus error policy
-and the sixteen-source claim/EOI interface, are project decisions. The CPU
-brief's eight-source interface and the PIC brief's sixteen-source interface
-still require a common interface agreement; the implemented contract is stated
-explicitly in the design specifications.
-
-\subsection{Relationship with other documents}
-
-\begin{table}[H]
-\centering
-\begin{tabular}{@{}L{0.30\linewidth}L{0.60\linewidth}@{}}
-\toprule
-\textbf{Document} & \textbf{Relationship} \\
-\midrule
-Design Specification\newline --- RV32I Processor Core &
-  Specifies the design this environment verifies. Every behaviour referred to
-  here is defined there; this document does not restate architectural detail.
-  Section numbers of that document are cited where a verification item maps
-  directly onto a specified behaviour. \\
-\addlinespace
-The RISC-V Instruction Set Manual, Volume I: Unprivileged ISA, version
-20191213 &
-  Source of the expected instruction behaviour used to derive directed
-  stimulus. \\
-\addlinespace
-The RISC-V Instruction Set Manual, Volume II: Privileged Architecture, version
-20211203 &
-  Source of the expected trap, CSR and interrupt behaviour used to derive
-  directed stimulus. \\
-\addlinespace
-AMBA AXI and ACE Protocol Specification, ARM IHI 0022E &
-  Source of the protocol rules checked by the bus monitors and the bus
-  assertions. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Notes on the notation used}
-
-\begin{itemize}[itemsep=2pt,topsep=3pt]
-\item Fixed-width type denotes a signal, a register or a literal value.
-\item Italic type marks emphasis; bold type marks a run-in heading.
-\item Verification plan items are identified as \texttt{VP-nn} and are listed in
-      the annex.
-\item ``The core'' is the design under verification; ``the controller'' is the
-      interrupt controller instantiated with it.
-\end{itemize}
-
-% ===========================================================================
-\section{Verification methodology}
-
-\subsection{Overview}
-
-Directed tests, independent reference models, protocol monitors, assertions
-and functional coverage check complementary aspects of the design.
-
-\begin{table}[H]
-\centering
-\caption{Verification mechanisms and their reach}
-\label{tab:mechanisms}
-\small
-\begin{tabular}{@{}L{0.22\linewidth}L{0.68\linewidth}@{}}
-\toprule
-\textbf{Mechanism} & \textbf{What it establishes, and what it cannot} \\
-\midrule
-Directed self-checking tests &
-  Establish that a specific scenario produces a specific result. Each test
-  carries its own expected values and prints a verdict, and the runner requires explicit
-  completion with zero mismatches. They see only the
-  scenarios someone thought to write. \\
-\addlinespace
-Protocol monitors &
-  Establish that both bus interfaces obey the protocol, continuously and
-  independently of what the design and the memory models believe is happening.
-  They see protocol violations, not wrong results. \\
-\addlinespace
-Assertions &
-  Establish invariants that must hold in every cycle of every run in which they
-  are active, including cycles no test was written for. They see rule
-  violations, not wrong values. \\
-\addlinespace
-Functional coverage &
-  Establishes which planned scenarios a run actually reached. It proves nothing
-  about correctness; it shows where the directed tests are silent. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Implementation strategy}
-
-Verification is applied at system and block level.
-
-\textbf{System level.} The core executes a real program, assembled from source
-into an instruction image, against behavioural memory models. The program is
-the checker: it computes results, stores them where the environment can read
-them, and drives the sequence of events. This is the closest approximation to
-how the core is used, and it is the level at which the interaction between
-fetch, execution, the memory interface and the trap mechanism is exercised as a
-whole. A second system-level test instantiates two cores against one shared
-memory through an arbiter.
-
-\textbf{Block level.} Individual design blocks are driven directly on their own
-ports. This level exists for properties a running program cannot isolate:
-
-\begin{itemize}[itemsep=2pt,topsep=3pt]
-\item reset values, which a program-driven test has already destroyed by the
-      time it observes anything;
-\item behaviour at operand boundaries that a hand-written program does not
-      naturally produce;
-\item each trap cause on its own, so that a single wrong cause is a failing
-      test rather than one line among many;
-\item structural properties such as full index coverage of the predictor
-      arrays, and the boundaries of the return address stack;
-\item parameter settings that no core-level run instantiates.
-\end{itemize}
-
-\textbf{Bus timing variation.} The single-core system test is repeated under four
-memory timing configurations: nominal, high fixed latency, and two seeds of
-randomised ready-signal backpressure. A design that only works when every slave
-answers immediately has not been verified. The mechanisms that hold state
-across a response --- the outstanding-transaction tracking in the fetch stage
-and the per-channel handshake tracking in the load/store unit --- are precisely
-the ones that fail only when a slave takes its time.
-
-\textbf{Two simulators.} The regression runs on the primary simulator. A second,
-independent simulator additionally compiles and runs the assertion layer and the
-functional coverage model, which the primary simulator's available edition
-cannot. Both flows are run for every revision, so an assertion is live evidence
-rather than a description. Compiling the same sources with two front ends is
-itself a check, since each tolerates different oversights.
-
-\textbf{Pass criteria.} A run passes only if all of the following hold: every
-self-check matched, no protocol monitor recorded a violation, no assertion
-fired, and every required functional coverage bin was reached. A missed required
-coverage bin fails the run in the same way a mismatched value does, because a
-scenario the plan claims and the stimulus never reaches is a hole in the plan,
-not a detail.
-
-\subsection{Verification plans}
-
-The verification plan is organised by design area rather than by test, so that
-a plan item can be traced to the behaviour it covers regardless of which test
-happens to implement it. Each item names the behaviour, how it is stimulated,
-how the expected result is determined, and where the check is applied. The items
-are listed in the annex.
-
-Items are grouped into six areas:
-
-\begin{table}[H]
-\centering
-\caption{Verification plan areas}
-\label{tab:areas}
-\small
-\begin{tabular}{@{}L{0.24\linewidth}L{0.66\linewidth}@{}}
-\toprule
-\textbf{Area} & \textbf{Covers} \\
-\midrule
-Instruction execution & Instruction decode, the arithmetic path, operand
-  forwarding, control transfers and branch prediction. \\
-Memory interface & The two bus ports, byte lanes, alignment and error
-  responses. \\
-Traps and exceptions & Cause selection, recorded state, precision, and the
-  vector mode. \\
-Interrupts & Acceptance conditions, the claim and end-of-interrupt handshake,
-  nesting, masking, and wait-for-interrupt. \\
-Control and status registers & Access classes, field behaviour, reset values
-  and the counters. \\
-System properties & Operation of more than one instance, and sustained
-  throughput. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Reference model}
-
-\texttt{isa\_reference.py} encodes instructions and interprets their architectural
-effects independently of both the RTL and \texttt{asm.py}. It produces an
-instruction image, an expected PC/destination/value trace and a final data-memory
-image. \texttt{rv32i\_tb\_isa} compares each completed instruction against the
-trace and then compares all 256 data words. Expected results do not depend on
-the decoder outputs or the RTL ALU function.
-
-The deterministic program executes 1\,287 instructions and reaches 50 named
-generator categories. It includes arithmetic boundaries, all shift amounts,
-signed and unsigned comparisons, each branch condition taken and not taken,
-backward branches, JAL/JALR, LUI/AUIPC, FENCE, all load/store widths and byte
-lanes, and CSR register/immediate forms. Loads after each partial store check
-untouched lanes before another store can overwrite the evidence. The model
-also checks \reg{minstret} ordering around CSR reads and writes. Four ModelSim
-configurations vary latency and ready-signal backpressure.
-
-\texttt{rv32i\_tb\_counters} drives the CSR interface directly. It checks all
-seven implemented 64-bit counters, both writable halves, increment carry,
-write priority, CSRRS/CSRRC masks, pure reads and the five fixed event identifiers.
-The expected arithmetic follows Zicsr and the RV32 counter-half access rules.
-
-Existing directed tests retain precomputed architectural constants and
-protocol checks. Their results complement the trace; they do not replace it.
-The reference program is finite and does not model every trap interleaving or
-all possible operands. No formal proof or external ISA compliance certification
-is claimed.
-
-\paragraph{Testing the checks.} The mutation script copies sources into a temporary
-workspace, runs passing baselines, injects one defect
-at a time and requires a behavioural failure in the selected test. A compile
-error does not count as detection. All 16 injected defects were detected
-across CPU, PIC and SoC. CPU mutations cover subtraction, arithmetic shift,
-load sign extension, byte/halfword strobes and counter write/carry priority.
-A surviving byte-strobe mutation exposed a missing untouched-lane check;
-the trace was strengthened and both partial-store mutations then failed.
-
-% ===========================================================================
-\section{Verification environment}
-
-\subsection{Overview}
-
-\begin{figure}[H]
-\centering
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[x=1mm,y=1mm,font=\small]
-  \begin{scope}[on background layer]
-    \fill[boxbg]    (-6,-42) rectangle (52,26);
-    \fill[boxbg!50] (62,-42) rectangle (118,26);
-    \fill[boxbg]    (126,-42) rectangle (188,26);
-  \end{scope}
-  \node[font=\small\bfseries,color=accent,anchor=west] at (-4,23) {STIMULUS};
-  \node[font=\small\bfseries,color=accent,anchor=west] at (64,23) {DESIGN UNDER TEST};
-  \node[font=\small\bfseries,color=accent,anchor=west] at (128,23) {CHECKING};
-
-  \node[blk,minimum width=44,minimum height=12] (prog) at (23,14)
-        {test program image\\\scriptsize assembled from source};
-  \node[blk,minimum width=44,minimum height=14] (mem) at (23,0)
-        {behavioural memory models\\\scriptsize latency and backpressure knobs};
-  \node[blk,minimum width=44,minimum height=12] (irq) at (23,-18)
-        {interrupt source driver\\\scriptsize plus real interrupt controller};
-
-  \node[blk,minimum width=40,minimum height=30] (dut) at (90,2)
-        {\textbf{processor core}\\[3pt]\scriptsize instruction port
-         \\\scriptsize data port\\\scriptsize interrupt interface};
-  \node[blkf,minimum width=40,minimum height=11] (clk) at (90,-26)
-        {clock and reset generator};
-
-  \node[blkf,minimum width=54,minimum height=10] (mon) at (156,16)
-        {bus protocol monitors};
-  \node[blkf,minimum width=54,minimum height=10] (sva) at (156,4)
-        {assertion layer, bound};
-  \node[blkf,minimum width=54,minimum height=10] (cov) at (156,-8)
-        {functional coverage counters};
-  \node[blk,minimum width=54,minimum height=12]  (sb)  at (156,-24)
-        {end-of-run scoreboard\\\scriptsize verdict and error count};
-
-  % stimulus into the core, one path each
-  \draw[flow] (45,14) -- (70,14) node[lbl,midway,above]{instructions};
-  \draw[flow] (45,0)  -- (70,0)  node[lbl,midway,above]{bus responses};
-  \draw[flow] (45,-18) -- (58,-18) -- (58,-8) -- (70,-8)
-        node[lbl,pos=0.12,above]{requests};
-  \draw[flow] (clk.north) -- (dut.south);
-
-  % core observed by the three passive observers
-  \draw[flow] (110,12) -- (120,12) -- (120,16) -- (129,16);
-  \draw[flow] (110,4)  -- (129,4);
-  \draw[flow] (110,-4) -- (120,-4) -- (120,-8) -- (129,-8);
-
-  % end-of-run evidence: architectural state from the core, contents from memory
-  \draw[flow] (110,-10) -- (114,-10) -- (114,-21) -- (129,-21)
-        node[lbl,pos=0.62,above]{register state};
-  \draw[flow] (23,-7) -- (23,-36) -- (156,-36) -- (sb.south)
-        node[lbl,pos=0.55,above]{memory contents, read back at the end of the run};
-\end{tikzpicture}}
-\caption{System-level verification environment. Stimulus enters from the left:
-the assembled program supplies instructions, the behavioural memories answer
-both bus ports with configurable timing, and the interrupt path is driven
-through a real interrupt controller so the core sees realistic request
-sequencing. On the right, three independent observers watch the core --- passive
-protocol monitors on each bus, an assertion layer bound into the design, and
-functional coverage counters --- while the end-of-run scoreboard compares the
-memory contents and the register state left behind by the program against
-precomputed values. A run fails if any observer or the scoreboard reports a
-mismatch.}
-\label{fig:env}
-\end{figure}
-
-At block level the structure is simpler: the block is instantiated on its own,
-a directed driver applies stimulus to its ports, and the same self-checking
-comparison mechanism records the verdicts. Register-port tests also use the
-shared bus monitor. The Verilator flow binds applicable assertions into both
-block-level and system-level tests; user functional coverage is collected in
-the nominal CPU system test.
-
-\subsection{Control and drivers}
-
-\subsubsection{Clock and reset generation}
-
-A single generator produces the clock and the asynchronous, active-low reset for
-every run. Reset release is the starting point of every test, which is what
-allows the block-level tests to check reset values before any other activity.
-
-\subsubsection{Instruction supply}
-
-The system-level stimulus is a program written in assembly and translated into
-an instruction image loaded by the instruction memory model. The translation
-step also emits the address of every label in the program, and the environment
-uses those addresses in its checks. This matters for maintainability: a change
-to the program that shifts a label updates the corresponding expected value
-automatically, instead of silently invalidating a hand-written address constant.
-
-The program is written to exercise every instruction group, every synchronous
-trap cause, the CSR access rules and the interrupt sequence, and to leave its
-results in architectural registers and in a region of data memory that the
-environment reads at the end of the run.
-
-\subsubsection{Bus slave models}
-
-Both bus ports are answered by a behavioural AXI4-Lite slave model with internal
-memory. Each model decodes its own address range and answers an access outside
-that range with a decode error, which is how access-fault behaviour is
-stimulated without an interconnect.
-
-The models carry the timing knobs that make the bus timing sweep possible:
-
-\begin{table}[H]
-\centering
-\caption{Bus model configuration}
-\label{tab:memcfg}
-\small
-\begin{tabular}{@{}L{0.24\linewidth}L{0.66\linewidth}@{}}
-\toprule
-\textbf{Knob} & \textbf{Effect} \\
-\midrule
-Fixed read latency &
-  Wait cycles inserted before read data is presented. \\
-Fixed write latency &
-  Wait cycles inserted before the write response is presented. \\
-Backpressure rate &
-  Probability per cycle that a ready signal is withheld, plus a random number of
-  extra response wait states. \\
-Seed &
-  Makes a randomised configuration reproducible; the same seed replays the same
-  run exactly. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsubsection{Interrupt stimulus}
-
-The core's interrupt interface is not driven directly with hand-made request
-patterns. Instead the real interrupt controller is instantiated between the
-environment and the core, and the environment plays the peripheral sources the
-way real peripherals would: a source is raised on an event and held until the
-handler clears it. This gives the core realistic request sequencing, including
-requests that remain asserted through their own handler.
-
-The source movements are chosen to create specific situations rather than to be
-plausible: one source is enabled in the controller but never in the core, so
-that it must never be accepted; two sources rise together so that priority order
-is observable; and one source rises while a data transaction is in flight, so
-that the acceptance boundary is exercised.
-
-At block level, interrupts are applied directly to the core's interface, which
-is what allows individual source numbers to be selected deterministically.
-
-\subsection{Monitors and checkers}
-
-\subsubsection{Bus protocol monitors}
-
-One passive monitor instance observes each bus. Monitors drive nothing; they
-observe the same signals the design and the slave models exchange and flag a
-violation in the cycle it occurs. Checked rules:
-
-\begin{itemize}[itemsep=2pt,topsep=3pt]
-\item \textbf{Stability.} Once a valid signal is asserted it remains asserted,
-      and its payload remains unchanged, until the handshake completes. Applied
-      to all five channels.
-\item \textbf{Ordering.} Read data appears only with a read outstanding; a write
-      response appears only after both the address and the data handshakes have
-      completed; a second request on a channel before the response of the first
-      violates the single-outstanding rule.
-\item \textbf{Defined values.} No undefined value on a valid or ready signal out
-      of reset, and none on a payload while its valid signal is asserted.
-\item \textbf{Response legality.} The exclusive-access response encoding is not
-      legal on AXI4-Lite and is flagged.
-\end{itemize}
-
-Each monitor exposes an error count that must be zero at the end of the run, and
-read and write transaction counts. The counts are checked to be non-zero, which
-prevents a silent bus from being mistaken for a clean one.
-
-\subsubsection{Assertion layer}
-
-Assertions are bound into the design rather than written into it, so no design
-source is modified for verification. Two groups exist.
-
-\begin{table}[H]
-\centering
-\caption{Assertion groups}
-\label{tab:sva}
-\small
-\begin{tabular}{@{}L{0.24\linewidth}L{0.66\linewidth}@{}}
-\toprule
-\textbf{Group} & \textbf{Properties} \\
-\midrule
-Bus protocol &
-  The same stability, ordering, outstanding-transaction and response-legality
-  rules the monitors apply, expressed as temporal properties and bound to each
-  port. The instruction port additionally asserts that every address is word
-  aligned, and that no request is issued while reset is asserted. \\
-\addlinespace
-Core invariants &
-  The claim and end-of-interrupt outputs are each exactly one cycle wide; a
-  claim never occurs without the trap-active output; an end-of-interrupt only
-  follows a return instruction; an interrupt is never accepted while a data
-  transaction is active; trap entry always raises the trap-active output, a
-  return at the last open level always drops it and a return at an inner level
-  always leaves it raised; a trapping instruction never
-  reaches writeback; a stalled execute stage always feeds a bubble to writeback;
-  register zero reads zero on both read ports; the byte strobe pattern is always
-  one of the seven legal shapes; a read and a write are never issued together on
-  the data port; and no new instruction fetch is issued while the core is
-  sleeping in wait-for-interrupt. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-ModelSim runs all functional tests and ordinary protocol monitors. Verilator
-runs all fifteen distinct CPU/PIC testbenches with the applicable bound
-assertions; it also evaluates functional coverage in the nominal system test.
-An assertion contributes evidence only in instances and scenarios actually
-executed by that flow.
-
-One property in this group was wrong until the trap-active output was exercised
-under nesting. It required every return to drop the output, which holds only
-when a single trap level is open; a return closing an inner level has to leave
-it raised. The behaviour stated above --- a return at the last open level drops
-it --- is what the core has always done, and the property now says so, split
-into the two cases so that both directions are checked.
-
-\subsubsection{Self-checking comparison}
-
-The shared comparison treats undefined values as mismatches. Failures are
-always printed; successful individual checks are printed only with
-\texttt{+verbose}. Each test calls \texttt{finish\_test}, which requires zero
-errors and sets \texttt{test\_done} before completing. Watchdogs fail rather
-than ending silently.
-
-The ModelSim runner checks completion, zero errors and each requested
-parameter value after elaboration. It returns a nonzero exit code on failure.
-The GUI additionally requires the exact set of completion banners and the
-regression completion marker. The Verilator runner rejects nonzero process
-status, failure messages and missing completion or required coverage markers.
-Banner counts alone are insufficient evidence.
-
-\subsubsection{Functional coverage}
-\label{sec:fcov}
-
-The coverage model counts named scenarios in the cycle they occur, sampled at
-four points: instruction commit, trap entry, control transfer resolution, and
-bus response handshakes. Counted scenarios include the instruction classes, the
-load and store widths, each branch condition in both directions, the four
-combinations of prediction against outcome, each trap cause, the CSR operation
-forms, the forwarding combinations, the wait-for-interrupt scenarios, the return
-stack push and pop cases, the interrupt claims per source, and the bus response
-codes including error responses and backpressure.
-
-Each bin is marked required or optional. A required bin that is never reached
-fails the run. The optional bins are those that a nominal run legitimately does
-not reach: the negative cases that must never occur, and the bins that only the
-randomised-backpressure configurations produce.
-
-The coverage report is produced by the secondary simulator flow. On the run
-measured for this revision, 88 of 92 bins were reached. The four that were not
-are all optional and all of them are bins the nominal configuration cannot
-produce: two bins for source 5 (trap and claim), deliberately masked throughout
-the run, and the instruction/data AR backpressure bins. Backpressure is checked
-in the ModelSim timing sweeps; this nominal coverage total does not measure
-those additional runs. No required bin was missed, so the coverage gate
-passed.
-
-\subsection{Simulation environment setup}
-
-\subsubsection{Structure}
-
-The environment is organised in four layers, compiled bottom-up in dependency
-order:
-
-\begin{enumerate}[itemsep=2pt,topsep=3pt]
-\item the design, ordered from leaf blocks up to the core;
-\item the shared verification models --- clock and reset generation, the bus
-      slave model, the protocol monitor, and a minimal address decoder and
-      arbiter used to build small bus topologies;
-\item the system-level tests, which instantiate the core together with those
-      models;
-\item the block-level tests, each of which instantiates one design block.
-\end{enumerate}
-
-Interface wiring for the bus bundles is factored into shared definitions so that
-a port list appears once rather than once per test, and the self-checking
-comparison is likewise shared.
-
-The compile order is not strictly required by the simulator, which resolves
-module instances at elaboration. It is maintained because macro and include
-visibility does depend on order, because a missing block is then reported at the
-level that needed it, and because downstream tools do require definition before
-use.
-
-\subsubsection{Scripts}
-
-Three entry points exist, each doing one thing:
-
-\begin{table}[H]
-\centering
-\caption{Environment entry points}
-\label{tab:scripts}
-\small
-\begin{tabular}{@{}L{0.26\linewidth}L{0.64\linewidth}@{}}
-\toprule
-\textbf{Entry point} & \textbf{Function} \\
-\midrule
-Program assembly &
-  Translates the test program sources into instruction images and emits the
-  label address definitions used by the checks. Must run before any
-  system-level test. \\
-\addlinespace
-Regression &
-  One compilation followed by every run in sequence, each configured through
-  elaboration-time parameter overrides and each ending in its own verdict
-  banner. \\
-\addlinespace
-Assertion and coverage run &
-  Builds the same tests on the secondary simulator with the assertion layer and
-  applicable assertions included, runs all fifteen benches and the nominal
-  system coverage model, and applies the pass
-  criteria of Section~2.2, including the coverage gate. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsubsection{Setup and configuration}
-
-Per-run configuration is applied at elaboration through parameter overrides on
-the bus models --- read latency, write latency, backpressure rate and seed. Each
-configured run echoes the values read back from the elaborated design before it
-starts, so the log itself is evidence that the intended configuration was
-applied rather than silently ignored.
-
-The prerequisites for running the environment are the two simulators, and a
-Python interpreter for the program assembly step. No other tool is required and
-no license-managed tool is needed for the assertion flow, which is why the
-assertion and coverage layer can also run unattended.
-
-% ===========================================================================
-\section{Annex}
-
-\subsection{Verification plan}
-
-Every item below is checked, and passed in the regression measured for this
-revision.
-
-\begin{longtable}{@{}lL{0.16\linewidth}L{0.38\linewidth}L{0.085\linewidth}L{0.165\linewidth}@{}}
-\caption{Verification plan}\label{tab:vplan}\\
-\toprule
-\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test, checker} \\
-\midrule
-\endfirsthead
-\toprule
-\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test, checker} \\
-\midrule
-\endhead
-
-\multicolumn{5}{@{}l}{\textbf{Instruction execution}}\\
-\midrule
-VP-01 & Instruction group execution &
-  Every implemented instruction group executes and produces the architectural
-  result. Results are chained so a lost value propagates. &
-  Passing & System test, register and memory scoreboard \\
-VP-02 & Arithmetic operation decode &
-  The mapping from operation class and function fields to the concrete
-  operation, exhaustive over the encodings the decoder can produce. &
-  Passing & Arithmetic block test, per-case comparison \\
-VP-03 & Arithmetic boundary values &
-  Add and subtract at the sign boundary, all shift amounts for all three
-  shifts, signed against unsigned comparison, and the bitwise operations over a
-  boundary-pattern matrix. &
-  Passing & Arithmetic block test, per-case comparison \\
-VP-04 & Operand forwarding &
-  A result produced in writeback is used by the immediately following
-  instruction, for each source operand and for both together. &
-  Passing & System test, chained results; coverage counters \\
-VP-05 & Branch direction and target &
-  Each branch condition taken and not taken, and both jump forms including the
-  link value. &
-  Passing & System test, register and memory scoreboard \\
-VP-06 & Predictor learning &
-  A control transfer records its outcome and target and predicts accordingly on
-  the next encounter, in both directions. &
-  Passing & Predictor block test, port-level comparison \\
-VP-07 & Predictor indexing and tagging &
-  All entries individually addressable; two addresses sharing an index evict
-  each other rather than producing a false hit. &
-  Passing & Predictor block test, exhaustive over the index \\
-VP-08 & Return stack behaviour &
-  Push and pop ordering, routing of a return-tagged entry, fall-back when the
-  stack is empty, overflow beyond the configured depth, and the call-and-return
-  instruction that replaces the top of stack. &
-  Passing & Predictor block test, port-level comparison \\
-VP-09 & Return stack disabled &
-  With the stack depth parameter set to zero, a return-tagged entry predicts
-  from the stored target and no output is undefined. &
-  Passing & Predictor block test, second instance \\
-VP-10 & Predictor reset &
-  All entries invalid after reset, no undefined value on any output, and return
-  to that state from a fully trained predictor. &
-  Passing & Predictor block test, port and array inspection \\
-VP-11 & Illegal instruction has no effect &
-  An illegal encoding writes no register and issues no bus transaction. &
-  Passing & System test and trap test, memory scoreboard \\
-
-\midrule
-\multicolumn{5}{@{}l}{\textbf{Memory interface}}\\
-\midrule
-VP-12 & Load and store widths &
-  All five load forms and all three store forms, including sign and zero
-  extension and byte lane selection. &
-  Passing & System test, register and memory scoreboard \\
-VP-13 & Byte strobe shapes &
-  Byte and half-word stores drive only the lanes they are supposed to, and every
-  write presents one of the seven legal strobe patterns. &
-  Passing & System test, memory scoreboard per lane; assertion in the secondary
-  flow \\
-VP-14 & Store-to-load ordering &
-  A value stored and immediately reloaded returns what was stored. &
-  Passing & System test, memory scoreboard \\
-VP-15 & Bus protocol compliance &
-  Handshake stability, channel ordering, single outstanding transaction, and
-  response legality on both ports. &
-  Passing & Protocol monitors, every run; assertions in the secondary flow \\
-VP-16 & Bus timing variation &
-  All system-level behaviour repeated under high fixed latency and under two
-  seeds of randomised backpressure. &
-  Passing & System test, four configurations \\
-VP-17 & Single outstanding transaction &
-  Neither port issues a second request before the response of the first, and the
-  data port never issues a read and a write together. &
-  Passing & Protocol monitors; assertion in the secondary flow \\
-VP-18 & Instruction bus quiet during sleep &
-  No new fetch is issued while the core sleeps in wait-for-interrupt. &
-  Passing & System test measurement; assertion in the secondary flow \\
-
-\midrule
-\multicolumn{5}{@{}l}{\textbf{Traps and exceptions}}\\
-\midrule
-VP-19 & Each synchronous cause &
-  One isolated test per cause, checking the recorded cause, return address,
-  associated value and the handler address actually entered. &
-  Passing & Trap test, one case per cause \\
-VP-20 & Cause reachability and count &
-  All nine synchronous causes reached within one program, with the number of
-  handler entries counted exactly so a missing or duplicated trap cannot cancel
-  out. &
-  Passing & System test, counter in memory \\
-VP-21 & Trap precision &
-  A trapping instruction never reaches writeback. &
-  Passing & Assertion (secondary flow); negative checks in the trap test \\
-VP-22 & Misaligned access issues nothing &
-  A misaligned load or store produces no bus transaction. &
-  Passing & Trap test, bus observation \\
-VP-23 & Vectored trap entry &
-  In vectored mode an interrupt enters at the base plus four times its cause,
-  while an exception still enters at the base. &
-  Passing & Trap test and system test \\
-VP-24 & Return address by trap kind &
-  An exception records the offending instruction; an interrupt records the
-  instruction to resume from; an interrupt that ends a sleep records the
-  following instruction. &
-  Passing & System test and trap test, recorded value compared \\
-
-\midrule
-\multicolumn{5}{@{}l}{\textbf{Interrupts}}\\
-\midrule
-VP-25 & Acceptance at an instruction boundary &
-  No interrupt is accepted while a data transaction is in flight; a request
-  raised during a transaction is held and accepted afterwards, with the
-  transaction result intact. &
-  Passing & System test, event ordering; assertion in the secondary flow \\
-VP-26 & Claim and end-of-interrupt shape &
-  Both pulses are exactly one cycle wide, the claim is accompanied by the
-  trap-active output, and an end-of-interrupt only follows a return. &
-  Passing & System test invariants; assertions in the secondary flow \\
-VP-27 & Return from exception emits no end-of-interrupt &
-  A synchronous exception taken inside an interrupt handler returns without
-  releasing the interrupt level, and the trap-active output stays asserted
-  across it. &
-  Passing & Trap test, end-of-interrupt counter sampled inside the handler \\
-VP-28 & Two masks compose &
-  A source enabled in the controller but masked in the core is never accepted,
-  and does not prevent other sources from being served. &
-  Passing & System test, claim counters per source \\
-VP-29 & Individual source numbers &
-  Interrupts on the lowest, a middle and the highest source number are accepted
-  and report the correct cause. &
-  Passing & Trap test, three isolated cases \\
-VP-30 & Wait-for-interrupt &
-  Sleep entry, wake by an enabled pending interrupt, and fall-through when the
-  global enable is clear. &
-  Passing & System test, recorded values and sleep duration \\
-VP-31 & Two nested interrupt handlers &
-  A second interrupt preempts a handler that has re-enabled interrupts; each
-  level is claimed once and each return releases exactly its own level. &
-  Passing & Trap test, claim and end-of-interrupt counters \\
-
-\midrule
-\multicolumn{5}{@{}l}{\textbf{Control and status registers}}\\
-\midrule
-VP-32 & Reset values &
-  The reset value of every implemented register. &
-  Passing & CSR block test, read after reset \\
-VP-33 & Read-only enforcement &
-  A write to each read-only register traps and leaves the value unchanged, for
-  all three CSR operations. &
-  Passing & CSR block test, per-register \\
-VP-34 & Read-only fields &
-  Reserved fields inside writable registers read zero and ignore writes. &
-  Passing & CSR block test, per-field \\
-VP-35 & WARL behaviour &
-  Writes to the identification register and to the trap vector mode are accepted
-  without trapping, and only a legal value is read back. &
-  Passing & CSR block test \\
-VP-36 & Tied-off registers &
-  The unimplemented counters and event selectors read zero and swallow writes
-  without trapping, across all their addresses. &
-  Passing & CSR block test, all addresses \\
-VP-37 & Absent registers &
-  A read or write of an unimplemented address raises an illegal instruction
-  exception. &
-  Passing & CSR block test \\
-VP-38 & Pure read exemption &
-  A set or clear operation with a zero source does not count as a write and does
-  not trap on a read-only register. &
-  Passing & CSR block test \\
-VP-39 & Hart identifier &
-  The identifier register follows its parameter, so two instances are
-  distinguishable. &
-  Passing & CSR block test with a non-zero parameter; dual-instance test \\
-VP-40 & Counter increment &
-  Each counted event increments its counter. Architecturally exact where the
-  count is deterministic; non-zero where it depends on bus timing. &
-  Passing & System test, values read by the program \\
-VP-41 & Counter write behaviour &
-  An explicit write uses the old addressed half, preserves the other half and
-  suppresses the implicit increment. Pure reads still count. &
-  Passing & Counter block test and independent instruction trace \\
-
-\midrule
-\multicolumn{5}{@{}l}{\textbf{System properties}}\\
-\midrule
-VP-42 & Multi-instance operation &
-  Two instances with distinct identifiers make progress through one arbitrated
-  shared memory and complete a handshake through it. &
-  Passing & Dual-instance test, result and flag comparison \\
-VP-43 & Sustained throughput &
-  One instruction per cycle on straight-line code with an instruction memory
-  that answers immediately. Measured as 33 cycles for a window of 33
-  instructions. &
-  Passing & System test, cycle window measured by the program itself \\
-VP-44 & Independent instruction trace &
-  Completed PC, destination, result and final memory match an independent ISA
-  model under four bus timing configurations. Partial stores preserve other lanes. &
-  Passing & ISA reference bench \\
-VP-45 & Checker sensitivity &
-  Passing baselines are followed by isolated behavioural mutations. Arithmetic,
-  load/store and counter faults must be rejected by the selected tests. &
-  Passing & Mutation script and detecting benches \\
-\bottomrule
-\end{longtable}
+AXI4-Lite & Single-beat AXI read/write channels. \\ \addlinespace[3pt]
+BHT / BTB & Branch direction / target tables. \\ \addlinespace[3pt]
+CSR & Control and status register. \\ \addlinespace[3pt]
+DUT & Device under test. \\ \addlinespace[3pt]
+EOI & End of interrupt; completes one service level. \\ \addlinespace[3pt]
+IRQ & Interrupt request. \\ \addlinespace[3pt]
+LSU & Load/store unit. \\ \addlinespace[3pt]
+NBA & Nonblocking-assignment update region in simulation. \\ \addlinespace[3pt]
+PIC & Programmable interrupt controller. \\ \addlinespace[3pt]
+RAS & Return-address stack. \\ \addlinespace[3pt]
+S1 / S2 / S3 & Fetch / decode-execute / writeback. \\ \addlinespace[3pt]
+SVA & SystemVerilog Assertions. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
 
 \clearpage
-\subsection{Measured results}
-
-The values below were measured on a regression run of the design revision this
-document describes.
-
-\begin{table}[H]
-\centering
-\caption{Regression result for the runs that exercise the core}
-\label{tab:results}
-\small
-\begin{tabular}{@{}L{0.42\linewidth}ccc@{}}
+\subsection{Relationship with other documents}
+\noindent The documents below are the ones this specification is derived from or read with.\par\medskip
+{\small
+\begin{longtable}{@{}L{0.5000\dimexpr\linewidth-12pt\relax}L{0.5000\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
-\textbf{Run} & \textbf{Configurations} & \textbf{Checks} & \textbf{Result} \\
-\midrule
-System test, nominal timing            & 1 & 97 & pass \\
-System test, high fixed latency        & 1 & 95 & pass \\
-System test, randomised backpressure   & 2 & 190 & pass \\
-Dual-instance test                     & 1 & 5 & pass \\
-CSR access, fields and reset           & 1 & 293 & pass \\
-Trap causes, one case each             & 1 & 120 & pass \\
-Branch predictor                       & 1 & 68 & pass \\
-Arithmetic path                        & 1 & 57 & pass \\
-Counter writes and carry               & 1 & 159 & pass \\
-\midrule
-\textbf{Total, directed checks}        & \textbf{10} & \textbf{1\,084} & \textbf{0 failures} \\
-\bottomrule
-\end{tabular}
-\end{table}
+\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\endhead
+RV32I 3-Stage Pipeline CPU.pdf & Supplied project draft; functional requirements and implementation decisions. \\ \addlinespace[3pt]
+Spec table of contents and templates.pdf & Supplied document structure and verification-plan template. \\ \addlinespace[3pt]
+Design Specification — CPU & Companion specification, revision 2.1, 21 September 2026. \\ \addlinespace[3pt]
+RISC-V Unprivileged ISA / Privileged Architecture & v20191213 / v20211203, machine mode \\ \addlinespace[3pt]
+ARM IHI0022E / IEEE 1364-2005 & AXI4-Lite / Verilog RTL. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
 
-Four additional ISA trace runs each compare 1\,287 completed instructions
-and 256 data words. They are reported separately from the labelled directed
-checks in the table.
+\needspace{7\baselineskip}
+\subsection{Notes on the notation used}
+\noindent Signal and register names follow the RTL. Addresses and waveform bus values are hexadecimal; time is in ns and widths are in bits. Register offsets are byte offsets; CSR addresses are instruction-encoded indices.\par\medskip
+{\small
+\begin{longtable}{@{}L{0.2600\dimexpr\linewidth-12pt\relax}L{0.7400\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Notation} & \textbf{Meaning} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Notation} & \textbf{Meaning} \\ \midrule
+\endhead
+Fixed-width name & A Verilog module, port, file or script name, spelled as in the source. \\ \addlinespace[3pt]
+Signal suffix \_i / \_o & Module input / output, seen from inside that module. \\ \addlinespace[3pt]
+[a:b] & Bit range, most significant bit first. \\ \addlinespace[3pt]
+S1 / S2 / S3 & Pipeline stage names used throughout the document. \\ \addlinespace[3pt]
+posedge +1 ns & A testbench stimulus time, one nanosecond after the sampling edge. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
 
-The complete ModelSim CPU/PIC regression comprises 21 runs and 8\,473 labelled
-checks, plus those four traces and memory comparisons, with no failures.
-Compilation reports zero errors and zero warnings. The Verilator flow executes
-all fifteen distinct benches, with no assertion failure; the nominal system
-coverage result is 88/92 bins, with every required bin reached. These finite
-results establish the scenarios exercised, not exhaustive correctness.
+\clearpage
+\section{Verification methodology}
+\subsection{Overview and acceptance}
+\noindent A run either passes or fails; this section states what that verdict covers. The first table gives the acceptance conditions applied to every test and the limits of what simulation shows; the second gives the runs behind the results quoted in this document.\par\medskip
+{\small
+\begin{longtable}{@{}L{0.2900\dimexpr\linewidth-12pt\relax}L{0.7100\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Item} & \textbf{Contract} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Item} & \textbf{Contract} \\ \midrule
+\endhead
+Requirement source & RV32I 3-Stage Pipeline CPU.pdf \\ \addlinespace[3pt]
+Device under test & rv32i\_cpu\_top and its RTL modules. \\ \addlinespace[3pt]
+Functional verdict & Every expected value and response must match; errors=0 and test\_done=1 are required. \\ \addlinespace[3pt]
+Protocol verdict & VALID/payload stability, response ordering and outstanding transaction limits; clocked at posedge. \\ \addlinespace[3pt]
+Failure handling & Mismatch, timeout, incomplete test, assertion failure or coverage-gate failure returns a failing run. \\ \addlinespace[3pt]
+Limits of evidence & Directed simulation and reference-model checks, not a formal proof or a synthesis/timing result. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+{\small
+\begin{longtable}{@{}L{0.2900\dimexpr\linewidth-12pt\relax}L{0.7100\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Simulator / flow} & \textbf{Recorded evidence (18–21 September 2026)} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Simulator / flow} & \textbf{Recorded evidence (18–21 September 2026)} \\ \midrule
+\endhead
+ModelSim & 22 CPU/PIC configurations; zero mismatches. \\ \addlinespace[3pt]
+Verilator --assert & 16 CPU/PIC benches and the CPU functional-coverage gate. \\ \addlinespace[3pt]
+Integrated SoC & 25 ModelSim configurations and 16 assertion-enabled benches. \\ \addlinespace[3pt]
+PULP comparison & Decoder sequence plus 96 register-slave strobe/order/stall cases and RO/unmapped/reset cases. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\clearpage
+\subsection{Implementation strategy and reference model}
+\noindent Directed tests exercise individual features and simultaneous events. Program/reference tests check end-to-end results. Protocol checks observe accepted transfers; state checks sample after nonblocking updates.\par\medskip
+\noindent The ISA reference generates an instruction-by-instruction expected trace and memory state. The CPU runs the same sequence with nominal and delayed responders.\par\medskip
+\noindent The verification plan records an ID, scenario, expected result, status and test/checker. Its detailed cases appear in the annex; the environment below identifies the components that execute and check them.\par\medskip
+
+\clearpage
+\section{Verification environment}
+\subsection{Overview}
+
+\noindent The program image supplies instructions and initial data to the responders. Checks compare observed architectural state with expected results, while protocol monitors and assertions inspect the bus and pipeline independently.\par
+\begin{figure}[H]\centering\includegraphics[width=\linewidth,height=105mm,keepaspectratio]{figures/cpu_verification.pdf}\caption{Test stimuli, DUT and independent checking paths.}\end{figure}
+{\small
+\begin{longtable}{@{}L{0.2400\dimexpr\linewidth-12pt\relax}L{0.7600\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Component} & \textbf{File / role} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{File / role} \\ \midrule
+\endhead
+Clock / reset & ck\_rst\_tb.v: shared generator; dedicated reset benches can drive a reset pulse between edges. \\ \addlinespace[3pt]
+Bus stimulus & tb\_axil\_master.vh: register-access tasks; CPU programs supply real load/store requests at system level. \\ \addlinespace[3pt]
+Memory model & axi\_lite\_mem\_model.v: configurable response delay and repeatable backpressure. \\ \addlinespace[3pt]
+Reference & isa\_reference.py: instruction trace. \\ \addlinespace[3pt]
+Verdict & tb\_check.vh: explicit mismatch count, completion and fatal failure. \\ \addlinespace[3pt]
+Protocol & axi\_lite\_monitor.v for ModelSim; axi\_lite\_sva.sv under Verilator. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\clearpage
+\subsection{Control and drivers}
+\noindent Stimulus is driven one nanosecond after the sampling edge, so that a test never races the design it is checking. The table gives the timing rule for each driven event and the reason for it; the waveform shows the reset case, the one event placed off the clock grid.\par\medskip
+{\small
+\begin{longtable}{@{}L{0.2400\dimexpr\linewidth-24pt\relax}L{0.4200\dimexpr\linewidth-24pt\relax}L{0.3400\dimexpr\linewidth-24pt\relax}@{}}
+\toprule
+\textbf{Signal / event} & \textbf{Timing rule} & \textbf{Reason} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Signal / event} & \textbf{Timing rule} & \textbf{Reason} \\ \midrule
+\endhead
+clk & 10 ns period in these traces; rising edges are 5, 15, 25… ns. & Defines the handshake observation points. \\ \addlinespace[3pt]
+Shared bus / claim tasks & Drive 1 ns after posedge, in a separate statement. Hold until the sampling edge. & Avoid blocking-assignment races with DUT active/NBA evaluation. \\ \addlinespace[3pt]
+Handshake observation & Sample VALID \&\& READY at posedge before changing stimulus. & Records the transfer that the DUT accepted. \\ \addlinespace[3pt]
+Reset assertion & Dedicated reset tests assert at posedge +2 ns, check at +3 ns. & The check occurs before either the next falling or rising edge. \\ \addlinespace[3pt]
+Reset release & Explicit nanosecond delays, off the clock grid; shared generator releases at 123 ns. & Exercises asynchronous stimulus without a coincident clock event. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\noindent Reset is asserted while an instruction request is waiting. ARVALID clears at the reset event, before the next rising edge; after release the fetch request resumes from RESET\_PC.\par
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{waves/cpu_reset.pdf}\caption{Reset from active state at posedge +2 ns; cleared state is checked at +3 ns.}\end{figure}
+{\small
+\begin{longtable}{@{}L{0.3000\dimexpr\linewidth-12pt\relax}L{0.7000\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Formatting convention} & \textbf{Code} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Formatting convention} & \textbf{Code} \\ \midrule
+\endhead
+Separate statements & @(posedge clk); followed on the next line by \#1; and then the signal assignments. \\ \addlinespace[3pt]
+Scope of \#1 & Applies to testbench scheduling only. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\clearpage
+\subsection{Monitors and checkers}
+\noindent Checking is split between bus protocol and functional result, so that a failure points at one of the two. The first table lists each checker and what it observes; the second shows how each one is kept from passing without having seen traffic.\par\medskip
+{\small
+\begin{longtable}{@{}L{0.3600\dimexpr\linewidth-12pt\relax}L{0.6400\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{File / mechanism} & \textbf{What it checks} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{File / mechanism} & \textbf{What it checks} \\ \midrule
+\endhead
+axi\_lite\_monitor.v & Passive ModelSim protocol checks and transaction counts; valid traffic must occur. \\ \addlinespace[3pt]
+axi\_lite\_sva.sv & Channel stability, legal response codes, request/response ordering, one outstanding transaction per direction. \\ \addlinespace[3pt]
+rv32i\_cpu\_core\_sva.sv & Pipeline/trap/forwarding invariants. \\ \addlinespace[3pt]
+rv32i\_bind\_core\_sva.sv & bind attaches checker instances to RTL module types. The checkers read DUT signals; they drive nothing and add no port. \\ \addlinespace[3pt]
+rv32i\_bind\_sva.sv & Attaches the nominal CPU functional-coverage model; coverage is separate from the shared assertion bind. \\ \addlinespace[3pt]
+run\_verilator.sh & Compiles assertions with --assert and fails the run on an assertion failure. ModelSim ASE runs the procedural monitors instead; the SVA execute under Verilator. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+{\small
+\begin{longtable}{@{}L{0.3200\dimexpr\linewidth-12pt\relax}L{0.6800\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Non-vacuous check} & \textbf{Evidence} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Non-vacuous check} & \textbf{Evidence} \\ \midrule
+\endhead
+Valid traffic & Read/write counts and exercised tests prevent a disconnected monitor from being counted as coverage. \\ \addlinespace[3pt]
+Preconditions & RO-write test first creates nonzero state; async-reset test first creates pending/nonzero state. \\ \addlinespace[3pt]
+Negative scenarios & Watch an interval for forbidden offers/claims; do not infer absence from one sample. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\clearpage
+\subsection{Simulation environment setup}
+\noindent The environment is a fixed folder layout plus a small number of named scripts. The tables give that layout, the exact command for each step in the order it is run, and the tools each step needs.\par\medskip
+\needspace{7\baselineskip}\subsubsection{Structure}
+{\small
+\begin{longtable}{@{}L{0.2200\dimexpr\linewidth-12pt\relax}L{0.7800\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Folder} & \textbf{Contents} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Folder} & \textbf{Contents} \\ \midrule
+\endhead
+cpu/hdl & Synthesizable RTL: the CPU modules, the PIC, the timer and the AXI4-Lite register front-end. \\ \addlinespace[3pt]
+cpu/debug/hdl & Testbenches, bus masters and the configurable memory and responder models. \\ \addlinespace[3pt]
+cpu/debug/sva & Assertion modules and the bind files that attach them to RTL module types. \\ \addlinespace[3pt]
+cpu/debug/sim & Run scripts, file lists, reference models, generated programs and run logs. \\ \addlinespace[3pt]
+soc/hdl & Integration fabric: address decode, arbitration, AXI4-Full to Lite conversion and RAM. \\ \addlinespace[3pt]
+soc/debug/hdl, sva, sim & The same split as above, applied to the integrated SoC. \\ \addlinespace[3pt]
+cpu/docs & Specification sources, generated figures and the waveform windows. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+\needspace{7\baselineskip}\subsubsection{Scripts}
+{\small
+\begin{longtable}{@{}L{0.0600\dimexpr\linewidth-36pt\relax}L{0.2200\dimexpr\linewidth-36pt\relax}L{0.4300\dimexpr\linewidth-36pt\relax}L{0.2900\dimexpr\linewidth-36pt\relax}@{}}
+\toprule
+\textbf{Step} & \textbf{Working directory} & \textbf{Command / script} & \textbf{Result} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Step} & \textbf{Working directory} & \textbf{Command / script} & \textbf{Result} \\ \midrule
+\endhead
+1 & Repository root & make asm & Regenerate programs and independent reference vectors. \\ \addlinespace[3pt]
+2 & cpu/debug/sim & vsim -c -do "do regress.do; quit -f" & Compile and run 22 CPU/PIC configurations. \\ \addlinespace[3pt]
+3 & cpu/debug/sim (Bash / WSL) & bash run\_verilator.sh & Lint, functional coverage and 16 benches with SVA. \\ \addlinespace[3pt]
+4 & soc/debug/sim & vsim -c -do "do regress.do; quit -f" & 25 integration configurations. \\ \addlinespace[3pt]
+5 & Repository root (Bash / WSL) & bash soc/debug/sim/run\_verilator.sh & SoC lint and 16 assertion-enabled benches. \\ \addlinespace[3pt]
+6 & soc/debug/sim (Bash / WSL) & bash run\_pulp\_compare.sh & Pinned external decoder/register comparison. \\ \addlinespace[3pt]
+7 & cpu/debug/sim & vsim -c -do "do waves.do" & Run 8 checked benches and export VCD traces. \\ \addlinespace[3pt]
+8 & Repository root & python cpu/docs/tools/waveforms.py & SVG/PDF/PNG figures and source-window manifest. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+\needspace{7\baselineskip}\subsubsection{Setup and configuration}
+{\small
+\begin{longtable}{@{}L{0.2600\dimexpr\linewidth-12pt\relax}L{0.7400\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Tool / setup} & \textbf{Requirement} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Tool / setup} & \textbf{Requirement} \\ \midrule
+\endhead
+ModelSim & vsim/vlog on PATH; run from the named simulation directory so file lists resolve. \\ \addlinespace[3pt]
+Verilator & Verilator 5.050 used for the recorded run; C++ build tools, Bash and Python 3 are required. \\ \addlinespace[3pt]
+PULP & Git and network only for the initial checkout; explicit revision pins recorded in the runner. \\ \addlinespace[3pt]
+Wave rendering & Python with matplotlib; raw VCD files produced by waves.do. \\ \addlinespace[3pt]
+Configuration & Latency/stall overrides are read back after elaboration; seeds are fixed for repeatability. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\clearpage
+\section{Annex}
+\subsection{Verification plan}
+\noindent PASS indicates the recorded regression completed with its expected results and zero checker errors. Each row identifies the test that exercises the listed behavior.\par\medskip
+{\small
+\begin{longtable}{@{}L{0.0800\dimexpr\linewidth-48pt\relax}L{0.1600\dimexpr\linewidth-48pt\relax}L{0.3700\dimexpr\linewidth-48pt\relax}L{0.1000\dimexpr\linewidth-48pt\relax}L{0.2900\dimexpr\linewidth-48pt\relax}@{}}
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{Expected result / scope} & \textbf{Status} & \textbf{Test / checker} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Title} & \textbf{Expected result / scope} & \textbf{Status} & \textbf{Test / checker} \\ \midrule
+\endhead
+CPU-01 & CPU integration & Arithmetic, logic, load/store, trap/IRQ/WFI programs; memory/register results and protocol monitors. & PASS & rv32i\_tb\_cpu\_axi \\ \addlinespace[3pt]
+CPU-02 & ISA reference & 1287-instruction independently generated reference trace; nominal, delayed and stalled memories. & PASS & rv32i\_tb\_isa \\ \addlinespace[3pt]
+CPU-03 & ALU & ALU operations, signed/unsigned boundaries and shifts. & PASS & rv32i\_tb\_alu \\ \addlinespace[3pt]
+CPU-04 & Predictor / RAS & Tagged lookup, direction update, collisions, RAS push/pop/overflow/disabled setting and reset. & PASS & rv32i\_tb\_bp \\ \addlinespace[3pt]
+CPU-05 & Exceptions / traps & All implemented synchronous causes; precedence, wrong-path errors and precise architectural state. & PASS & rv32i\_tb\_traps \\ \addlinespace[3pt]
+CPU-06 & CSR access & CSR legality, fixed fields, write suppression, reserved modes and reset values. & PASS & rv32i\_tb\_csr\_ro \\ \addlinespace[3pt]
+CPU-07 & Counters & Explicit write versus increment; half preservation, carry, CSRRS/CSRRC and fixed event IDs. & PASS & rv32i\_tb\_counters \\ \addlinespace[3pt]
+CPU-08 & Two harts & Two distinct HART\_IDs on shared memory arbitration; no result corruption. & PASS & rv32i\_tb\_dual\_core \\ \addlinespace[3pt]
+CPU-09 & Asynchronous reset & Reset between edges during fetch/load stall, nonzero GPR state, clock stopped, and resumed execution. & PASS & rv32i\_tb\_reset \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\clearpage
+\subsection{Critical sequences}
+
+\noindent The load holds S2 while its request or response is pending. At the RVALID/RREADY handshake, the data is available and s2\_advance permits the instruction to enter writeback.\par
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{waves/cpu_load.pdf}\caption{Load completion and pipeline advance.}\end{figure}
+
+\noindent The resolved branch differs from the prediction, causing redirect. IF/DX is invalidated so younger work cannot commit; an outstanding fetch response still completes its AXI transaction.\par
+\begin{figure}[H]\centering\includegraphics[width=\linewidth]{waves/cpu_redirect.pdf}\caption{Branch correction after a mispredicted branch.}\end{figure}
+{\small
+\begin{longtable}{@{}L{0.3000\dimexpr\linewidth-12pt\relax}L{0.7000\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Scenario} & \textbf{Check} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Scenario} & \textbf{Check} \\ \midrule
+\endhead
+IRQ during load & No accepted IRQ until active LSU transaction is complete. \\ \addlinespace[3pt]
+Wrong-path response error & Response is drained; wrong-path instruction cannot write GPR/CSR or trap. \\ \addlinespace[3pt]
+Store channel skew & AW and W can complete in either order; one B response completes the store. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+
+\clearpage
+\subsection{External AXI reference}
+\noindent The AXI4-Lite front-end is compared against a published implementation to check the interpretation of the protocol. The first table states what was compared and on what evidence; the second names every difference found and what it means.\par\medskip
+{\small
+\begin{longtable}{@{}L{0.3200\dimexpr\linewidth-24pt\relax}L{0.3500\dimexpr\linewidth-24pt\relax}L{0.3300\dimexpr\linewidth-24pt\relax}@{}}
+\toprule
+\textbf{Compared block} & \textbf{Shared contract} & \textbf{Evidence} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Compared block} & \textbf{Shared contract} & \textbf{Evidence} \\ \midrule
+\endhead
+soc\_axi\_lite\_dec vs axi\_lite\_demux & Two mapped targets, MaxTrans=1; independent progress and response timing. & Compare ordered data/response records and per-target address counts. \\ \addlinespace[3pt]
+axi\_lite\_slave vs axi\_lite\_regs & 32-bit words; four RW words and one RO word; same byte strobes. & 96 cases = 16 WSTRB masks × 3 AW/W orders × 2 response-stall settings. \\ \addlinespace[3pt]
+Additional register cases & RO write, unmapped access, reset and post-reset access. & Same access-class response and no forbidden state update; each side checked against expected data. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+{\small
+\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-12pt\relax}L{0.7500\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Difference / boundary} & \textbf{Interpretation} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Difference / boundary} & \textbf{Interpretation} \\ \midrule
+\endhead
+Latency & Not cycle-identical; compare completed transactions and protocol compliance. \\ \addlinespace[3pt]
+Unmapped read data & Our front-end returns zero; pinned PULP axi\_lite\_regs returns 0xBA5E1E55. Both return SLVERR; error-data policy is documented separately. \\ \addlinespace[3pt]
+Address aliases & Different register-bank sizing; equality claimed only for the explicit compared address profile. \\ \addlinespace[3pt]
+AXI4-Full & The PULP run does not establish equivalence of the DMA or soc\_axi\_full2lite to every upstream AXI4 module. \\ \addlinespace[3pt]
+Converter & Local soc\_tb\_full2lite and soc\_tb\_full2lite\_err check supported burst handling and errors. Local write error aggregation preserves DECERR over SLVERR; PULP is not a cycle-exact reference for that policy. \\ \addlinespace[3pt]
+Versions & axi: 70b8e54fd460e3308e58be596ceb3566a6e3576e; common\_cells: 03d98106aa19952a10360d2230def85144a0008b. \\ \addlinespace[3pt]
+\bottomrule\end{longtable}}
+\noindent Reference: \url{https://github.com/pulp-platform/axi}.
 
 \end{document}

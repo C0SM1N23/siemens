@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="660" viewBox="0 0 1600 660">
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8" fill="#006B75"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<rect x="30" y="220" width="355" height="180" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="207.5" y="259" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Stimulus</text>
+<text x="207.5" y="299" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">AXI register-access tasks</text>
+<text x="207.5" y="331" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">irq_src_i 16 · cpu_mask_i 16</text>
+<text x="207.5" y="363" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">claim / EOI 1 · reset</text>
+<rect x="610" y="220" width="350" height="180" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="785.0" y="259" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">DUT · PIC</text>
+<text x="785.0" y="299" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">pic + axi_lite_slave</text>
+<text x="785.0" y="331" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">16 sources · 4 bands</text>
+<rect x="1180" y="220" width="385" height="180" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1372.5" y="259" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Checks</text>
+<text x="1372.5" y="299" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">irq 1 · vector 4 · pending 16</text>
+<text x="1372.5" y="331" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">register values + responses</text>
+<text x="1372.5" y="363" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">nesting / deadline / reset</text>
+<polyline points="385,286 610,286" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="385,286 610,286" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="610,286 597.0,280.0 597.0,292.0" fill="#006B75"/>
+<text x="496" y="260" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="400" fill="#173442">stimulus at posedge +1 ns</text>
+<polyline points="960,286 1180,286" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="960,286 1180,286" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1180,286 1167.0,280.0 1167.0,292.0" fill="#006B75"/>
+<text x="1070" y="244" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="400" fill="#173442">protocol: posedge</text>
+<text x="1070" y="271" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="400" fill="#173442">state: after NBA</text>
+<rect x="520" y="492" width="490" height="130" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="765.0" y="531" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Independent reference</text>
+<text x="765.0" y="571" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">pic_reference.py → expected winner</text>
+<text x="765.0" y="603" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">24 band permutations + masks</text>
+<polyline points="1010,553 1370,553 1370,400" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1010,553 1370,553 1370,400" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1370,400 1364.0,413.0 1376.0,413.0" fill="#006B75"/>
+<text x="1220" y="537" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#173442">expected source / pending</text>
+<polyline points="520,553 210,553 210,400" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="520,553 210,553 210,400" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="210,400 204.0,413.0 216.0,413.0" fill="#006B75"/>
+<text x="355" y="537" text-anchor="middle" font-family="Arial, sans-serif" font-size="21" font-weight="400" fill="#173442">input vectors</text>
+<text x="800" y="78" text-anchor="middle" font-family="Arial, sans-serif" font-size="31" font-weight="700" fill="#173442">Directed scenarios plus an independent priority model</text>
+<text x="800" y="130" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">Protocol and PIC invariants are checked by assertions attached through bind.</text>
+</svg>

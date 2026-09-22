@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1330" viewBox="0 0 2400 1330">
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8" fill="#006B75"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<rect x="40" y="275" width="470" height="950" rx="6" fill="#F4F7F8" stroke="#CEDADD" stroke-width="2"/>
+<text x="275.0" y="327" text-anchor="middle" font-family="Arial, sans-serif" font-size="35" font-weight="700" fill="#173442">S1 · FETCH</text>
+<rect x="770" y="275" width="1100" height="950" rx="6" fill="#F4F7F8" stroke="#CEDADD" stroke-width="2"/>
+<text x="1180" y="327" text-anchor="middle" font-family="Arial, sans-serif" font-size="35" font-weight="700" fill="#173442">S2 · DECODE + EXECUTE</text>
+<rect x="2140" y="275" width="220" height="610" rx="6" fill="#F4F7F8" stroke="#CEDADD" stroke-width="2"/>
+<text x="2250.0" y="327" text-anchor="middle" font-family="Arial, sans-serif" font-size="35" font-weight="700" fill="#173442">S3 · WB</text>
+<rect x="80" y="25" width="370" height="130" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="265.0" y="64" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Instruction memory</text>
+<text x="265.0" y="104" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">AXI4-Lite · read only</text>
+<rect x="1450" y="25" width="420" height="130" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1660.0" y="64" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Data memory / peripherals</text>
+<text x="1660.0" y="104" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">AXI4-Lite · read + write</text>
+<rect x="80" y="470" width="370" height="220" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="265.0" y="509" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Fetch unit</text>
+<text x="265.0" y="549" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">PC / instruction fetch</text>
+<text x="265.0" y="581" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">AXI handshake + redirect</text>
+<text x="265.0" y="613" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">outstanding-read tracking</text>
+<rect x="80" y="970" width="370" height="150" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="265.0" y="1009" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Branch predictor</text>
+<text x="265.0" y="1049" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">1-bit BHT + tagged BTB</text>
+<text x="265.0" y="1081" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">return-address stack</text>
+<rect x="800" y="470" width="450" height="220" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1025.0" y="509" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Decode + operands</text>
+<text x="1025.0" y="549" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">decode · immediate · control</text>
+<text x="1025.0" y="581" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">32 × 32-bit GPRs; x0 = 0</text>
+<text x="1025.0" y="613" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">two reads + S3 forwarding</text>
+<rect x="1480" y="470" width="350" height="220" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1655.0" y="509" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Execution</text>
+<text x="1655.0" y="549" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">ALU · branch · LSU</text>
+<text x="1655.0" y="581" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">CSR result selection</text>
+<text x="1655.0" y="613" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">load/store waits for R / B</text>
+<rect x="800" y="1040" width="1030" height="130" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1315.0" y="1079" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">CSR / traps / pipeline control</text>
+<text x="1315.0" y="1119" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">CSR commit · exception / IRQ · redirect · stall / flush · predictor update</text>
+<rect x="2160" y="470" width="180" height="220" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="2250.0" y="509" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">WB mux</text>
+<text x="2250.0" y="549" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">ALU/CSR</text>
+<text x="2250.0" y="581" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">load</text>
+<text x="2250.0" y="613" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">PC + 4</text>
+<rect x="620" y="470" width="20" height="220" fill="#D4E3E5" stroke="#006B75" stroke-width="2"/>
+<text x="630" y="800" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#173442">IF / DX</text>
+<rect x="2010" y="470" width="20" height="220" fill="#D4E3E5" stroke="#006B75" stroke-width="2"/>
+<text x="2020" y="800" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#173442">DX / WB</text>
+<polyline points="135,470 135,155" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="135,470 135,155" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="135,155 129.0,168.0 141.0,168.0" fill="#006B75"/>
+<polyline points="410,155 410,470" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="410,155 410,470" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="410,470 416.0,457.0 404.0,457.0" fill="#006B75"/>
+<text x="270" y="205" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">AR address 32</text>
+<text x="270" y="241" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">R data 32</text>
+<polyline points="1530,470 1530,155" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1530,470 1530,155" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1530,155 1524.0,168.0 1536.0,168.0" fill="#006B75"/>
+<polyline points="1790,155 1790,470" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1790,155 1790,470" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1790,470 1796.0,457.0 1784.0,457.0" fill="#006B75"/>
+<text x="1660" y="192" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">AW / AR address 32</text>
+<text x="1660" y="224" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">W / R data 32</text>
+<text x="1660" y="256" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">B / R response 2</text>
+<polyline points="450,540 800,540" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="450,540 800,540" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="800,540 787.0,534.0 787.0,546.0" fill="#006B75"/>
+<text x="625" y="411" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="400" fill="#173442">instruction + PC</text>
+<text x="625" y="448" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="400" fill="#173442">32 each</text>
+<text x="625" y="729" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">pred. target 32 · taken 1</text>
+<text x="625" y="761" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">fault / valid: 1 each</text>
+<polyline points="1250,540 1480,540" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1250,540 1480,540" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1480,540 1467.0,534.0 1467.0,546.0" fill="#006B75"/>
+<text x="1365" y="411" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#173442">operands / immediate</text>
+<text x="1365" y="446" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#173442">32 each</text>
+<polyline points="1830,540 2160,540" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1830,540 2160,540" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="2160,540 2147.0,534.0 2147.0,546.0" fill="#006B75"/>
+<text x="1995" y="411" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#173442">ALU/CSR · load · PC+4</text>
+<text x="1995" y="446" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#173442">32 each</text>
+<text x="2000" y="729" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">rd 5 · select 2</text>
+<text x="2000" y="761" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">write / valid: 1 each</text>
+<polyline points="185,690 185,970" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="185,690 185,970" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="185,970 191.0,957.0 179.0,957.0" fill="#006B75"/>
+<text x="165" y="862" text-anchor="end" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">PC</text>
+<text x="165" y="895" text-anchor="end" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">32</text>
+<polyline points="350,970 350,690" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="350,970 350,690" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="350,690 344.0,703.0 356.0,703.0" fill="#006B75"/>
+<text x="377" y="862" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">target 32</text>
+<text x="377" y="895" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">taken 1</text>
+<polyline points="2250,690 2250,775 1180,775 1180,690" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="2250,690 2250,775 1180,775 1180,690" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1180,690 1174.0,703.0 1186.0,703.0" fill="#006B75"/>
+<text x="1590" y="727" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">WB data 32 · rd 5</text>
+<text x="1590" y="761" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">write / forward</text>
+<polyline points="800,1135 710,1135 710,1180 270,1180 270,1120" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="800,1135 710,1135 710,1180 270,1180 270,1120" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="270,1120 264.0,1133.0 276.0,1133.0" fill="#006B75"/>
+<text x="435" y="1209" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">predictor update</text>
+<text x="520" y="1239" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">PC / target / link: 32 each</text>
+<polyline points="1010,690 1010,1040" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1010,690 1010,1040" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1010,1040 1016.0,1027.0 1004.0,1027.0" fill="#006B75"/>
+<text x="1040" y="874" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">decoded operation</text>
+<text x="1040" y="907" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">CSR address 12 / data 32</text>
+<polyline points="1485,1040 1485,690" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1485,1040 1485,690" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1485,690 1479.0,703.0 1491.0,703.0" fill="#006B75"/>
+<text x="1510" y="864" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">CSR value</text>
+<text x="1510" y="897" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">32</text>
+<polyline points="1740,690 1740,1040" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1740,690 1740,1040" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1740,1040 1746.0,1027.0 1734.0,1027.0" fill="#006B75"/>
+<text x="1765" y="868" text-anchor="start" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">branch result</text>
+<text x="1765" y="900" text-anchor="start" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">LSU busy / done / error</text>
+<polyline points="1125,1170 1125,1280 60,1280 60,615 80,615" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1125,1170 1125,1280 60,1280 60,615 80,615" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="80,615 67.0,609.0 67.0,621.0" fill="#006B75"/>
+<text x="790" y="1265" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">redirect · target PC 32</text>
+<polyline points="800,1090 755,1090 755,650 640,650" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="800,1090 755,1090 755,650 640,650" fill="none" stroke="#006B75" stroke-width="3" stroke-dasharray="7 6"/>
+<polygon points="640,650 653.0,656.0 653.0,644.0" fill="#006B75"/>
+<text x="775" y="852" text-anchor="start" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">hold /</text>
+<text x="775" y="884" text-anchor="start" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">flush</text>
+<polyline points="1800,1170 1800,1210 1905,1210 1905,955 2110,955 2110,650 2030,650" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1800,1170 1800,1210 1905,1210 1905,955 2110,955 2110,650 2030,650" fill="none" stroke="#006B75" stroke-width="3" stroke-dasharray="7 6"/>
+<polygon points="2030,650 2043.0,656.0 2043.0,644.0" fill="#006B75"/>
+<text x="2085" y="840" text-anchor="end" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">advance /</text>
+<text x="2085" y="872" text-anchor="end" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">squash</text>
+<rect x="1930" y="990" width="430" height="200" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="2145.0" y="1029" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">PIC (external)</text>
+<text x="2145.0" y="1069" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">in: IRQ 1 · vector 4 · pending 16</text>
+<text x="2145.0" y="1101" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">out: mask 16</text>
+<text x="2145.0" y="1133" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">claim / EOI: 1 each</text>
+<polyline points="1930,1080 1830,1080" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1930,1080 1830,1080" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1830,1080 1843.0,1086.0 1843.0,1074.0" fill="#006B75"/>
+<polyline points="1830,1115 1930,1115" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1830,1115 1930,1115" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1930,1115 1917.0,1109.0 1917.0,1121.0" fill="#006B75"/>
+<text x="1720" y="1304" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#526772">AXI4-Lite: VALID / READY 1 · PROT 3 · WSTRB 4.</text>
+</svg>

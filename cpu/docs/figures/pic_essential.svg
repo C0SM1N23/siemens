@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2250" height="1310" viewBox="0 0 2250 1310">
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8" fill="#006B75"/></marker></defs>
+<rect width="100%" height="100%" fill="white"/>
+<rect x="50" y="280" width="510" height="220" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="305.0" y="319" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Source conditioning</text>
+<text x="305.0" y="359" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">16 slots: HW level / edge OR software</text>
+<text x="305.0" y="391" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">enable mask · edge-pending latch</text>
+<text x="305.0" y="423" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">pending output excludes active sources</text>
+<rect x="850" y="280" width="570" height="220" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1135.0" y="319" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Priority / deadline / eligibility</text>
+<text x="1135.0" y="359" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">4 bands · intra-band priority · ID tie-break</text>
+<text x="1135.0" y="391" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">16 timers × 16 bits; escalation policy</text>
+<text x="1135.0" y="423" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">CPU mask + active / preemption filter</text>
+<rect x="1700" y="280" width="440" height="220" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1920.0" y="319" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Resolver + registered offer</text>
+<text x="1920.0" y="359" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">maximum eligible key</text>
+<text x="1920.0" y="391" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">IRQ + source ID; saved claim ID</text>
+<rect x="50" y="840" width="510" height="200" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="305.0" y="879" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">AXI4-Lite + register map</text>
+<text x="305.0" y="919" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">32-bit address / data · WSTRB 4</text>
+<text x="305.0" y="951" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">configuration · keyed SW injection</text>
+<text x="305.0" y="983" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">per-source / global status</text>
+<rect x="1000" y="840" width="520" height="200" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1260.0" y="879" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Nesting / service context</text>
+<text x="1260.0" y="919" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">16-entry stack; reset limit 8</text>
+<text x="1260.0" y="951" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">claim: push ID + key · EOI: pop</text>
+<text x="1260.0" y="983" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">active mask · spurious detection</text>
+<rect x="1730" y="840" width="430" height="200" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1945.0" y="879" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">CPU (external)</text>
+<text x="1945.0" y="919" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">mask / claim / EOI</text>
+<text x="1945.0" y="951" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">IRQ / vector / pending</text>
+<text x="195" y="100" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#173442">irq_src_i</text>
+<text x="195" y="139" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="400" fill="#173442">16 synchronous inputs</text>
+<polyline points="200,160 200,280" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="200,160 200,280" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="200,280 206.0,267.0 194.0,267.0" fill="#006B75"/>
+<text x="760" y="110" text-anchor="start" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#526772">PIC functional groups: source → arbitration → service</text>
+<text x="760" y="145" text-anchor="start" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#526772">AXI4-Lite front-end: axi_lite_slave</text>
+<polyline points="560,390 850,390" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="560,390 850,390" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="850,390 837.0,384.0 837.0,396.0" fill="#006B75"/>
+<text x="705" y="364" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="400" fill="#173442">requests · 16</text>
+<polyline points="1420,390 1700,390" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1420,390 1700,390" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1700,390 1687.0,384.0 1687.0,396.0" fill="#006B75"/>
+<text x="1560" y="334" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">eligible 16</text>
+<text x="1560" y="370" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">keys 16 × 10</text>
+<polyline points="1910,500 1910,840" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1910,500 1910,840" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1910,840 1916.0,827.0 1904.0,827.0" fill="#006B75"/>
+<text x="1940" y="687" text-anchor="start" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">IRQ 1</text>
+<text x="1940" y="723" text-anchor="start" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">source ID 4</text>
+<polyline points="1800,840 1800,650 1380,650 1380,500" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1800,840 1800,650 1380,650 1380,500" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1380,500 1374.0,513.0 1386.0,513.0" fill="#006B75"/>
+<text x="1690" y="594" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">CPU mask</text>
+<text x="1690" y="630" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">16</text>
+<polyline points="1200,840 1200,500" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1200,840 1200,500" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1200,500 1194.0,513.0 1206.0,513.0" fill="#006B75"/>
+<text x="1100" y="584" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">active 16</text>
+<text x="1100" y="618" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">top key 10</text>
+<polyline points="1300,500 1300,840" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1300,500 1300,840" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1300,840 1306.0,827.0 1294.0,827.0" fill="#006B75"/>
+<text x="1320" y="729" text-anchor="start" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">source keys</text>
+<text x="1320" y="761" text-anchor="start" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">16 × 10</text>
+<polyline points="1450,840 1450,550 1740,550 1740,500" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1450,840 1450,550 1740,550 1740,500" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1740,500 1734.0,513.0 1746.0,513.0" fill="#006B75"/>
+<text x="1525" y="587" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">depth &lt; limit</text>
+<text x="1525" y="618" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">1</text>
+<polyline points="1730,930 1520,930" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1730,930 1520,930" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1520,930 1533.0,936.0 1533.0,924.0" fill="#006B75"/>
+<text x="1670" y="869" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">claim 1</text>
+<text x="1670" y="903" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">EOI 1</text>
+<polyline points="1700,440 1600,440 1600,1010 1520,1010" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1700,440 1600,440 1600,1010 1520,1010" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1520,1010 1533.0,1016.0 1533.0,1004.0" fill="#006B75"/>
+<text x="1625" y="784" text-anchor="start" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">claim ID 4</text>
+<polyline points="300,840 300,500" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="300,840 300,500" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="300,500 294.0,513.0 306.0,513.0" fill="#006B75"/>
+<text x="330" y="650" text-anchor="start" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">enable 16</text>
+<text x="330" y="684" text-anchor="start" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">SW requests 16</text>
+<text x="330" y="718" text-anchor="start" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">trigger mode 16</text>
+<polyline points="120,500 120,840" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="120,500 120,840" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="120,840 126.0,827.0 114.0,827.0" fill="#006B75"/>
+<text x="145" y="615" text-anchor="start" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">SRC status</text>
+<text x="145" y="646" text-anchor="start" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">PEND 16</text>
+<polyline points="480,840 480,740 1000,740 1000,500" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="480,840 480,740 1000,740 1000,500" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1000,500 994.0,513.0 1006.0,513.0" fill="#006B75"/>
+<text x="860" y="632" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">band: 4 × 2</text>
+<text x="860" y="663" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">intra: 16 × 4</text>
+<text x="860" y="694" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">deadline: 16 × 16</text>
+<polyline points="560,900 1000,900" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="560,900 1000,900" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1000,900 987.0,894.0 987.0,906.0" fill="#006B75"/>
+<text x="815" y="881" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">NEST_MAX · 5</text>
+<polyline points="1000,980 560,980" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1000,980 560,980" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="560,980 573.0,986.0 573.0,974.0" fill="#006B75"/>
+<text x="855" y="963" text-anchor="middle" font-family="Arial, sans-serif" font-size="25" font-weight="400" fill="#173442">status / events</text>
+<polyline points="850,450 730,450 730,980" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="850,450 730,450 730,980" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="730,980 736.0,967.0 724.0,967.0" fill="#006B75"/>
+<text x="760" y="813" text-anchor="start" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#173442">deadline events</text>
+<circle cx="730" cy="980" r="6" fill="#006B75"/>
+<polyline points="560,465 650,465 650,1140 2020,1140 2020,1040" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="560,465 650,465 650,1140 2020,1140 2020,1040" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="2020,1040 2014.0,1053.0 2026.0,1053.0" fill="#006B75"/>
+<text x="1810" y="1122" text-anchor="middle" font-family="Arial, sans-serif" font-size="27" font-weight="400" fill="#173442">pending mask · 16</text>
+<polyline points="560,430 680,430 680,1100 1110,1100 1110,1040" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="560,430 680,430 680,1100 1110,1100 1110,1040" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1110,1040 1104.0,1053.0 1116.0,1053.0" fill="#006B75"/>
+<text x="885" y="1084" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">requests 16 · spurious check</text>
+<polyline points="1200,1040 1200,1210 600,1210 600,565 500,565 500,500" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="1200,1040 1200,1210 600,1210 600,565 500,565 500,500" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="500,500 494.0,513.0 506.0,513.0" fill="#006B75"/>
+<text x="915" y="1193" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="400" fill="#173442">active 16 · claimed ID 4 · clear 1</text>
+<polyline points="130,1170 130,1040" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="130,1170 130,1040" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="130,1040 124.0,1053.0 136.0,1053.0" fill="#006B75"/>
+<polyline points="440,1040 440,1170" fill="none" stroke="white" stroke-width="10"/>
+<polyline points="440,1040 440,1170" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="440,1170 446.0,1157.0 434.0,1157.0" fill="#006B75"/>
+<text x="285" y="1227" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">CPU register accesses</text>
+<text x="285" y="1260" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="400" fill="#173442">AW / W / AR requests; B / R responses</text>
+<text x="1380" y="1280" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" font-weight="400" fill="#526772">Priority key: urgency 2 + intra-band priority 4 + inverted ID 4.</text>
+</svg>

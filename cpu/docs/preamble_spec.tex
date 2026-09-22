@@ -22,7 +22,10 @@
 \usepackage{titlesec}
 \usepackage{caption}
 \usepackage{float}
+\usepackage{needspace}
+\usepackage{xurl}
 \usepackage{graphicx}
+\usepackage{pdflscape}
 \usepackage{tikz}
 \usepackage{tikz-timing}
 \usetikzlibrary{arrows.meta,positioning,automata,calc,fit,backgrounds,
@@ -55,10 +58,23 @@
 \titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{0.7em}{}
 \titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{\thesubsubsection}{0.7em}{}
 \titlespacing*{\section}{0pt}{16pt}{8pt}
+\renewcommand{\arraystretch}{1.22}
+\setlength{\tabcolsep}{6pt}
+\setlength{\LTpre}{5pt}
+\setlength{\LTpost}{5pt}
+\setlength{\emergencystretch}{2em}
+\widowpenalty=10000
+\clubpenalty=10000
+\raggedbottom
 
 \captionsetup{font=small,labelfont={bf,color=accent},skip=5pt}
 \setcounter{secnumdepth}{3}
 \setcounter{tocdepth}{3}
+% Tighter gap before section entries keeps each table of contents on one page.
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd{\l@section}{\addvspace{1.0em \@plus\p@}}{\addvspace{0.45em \@plus\p@}}{}{\PackageWarning{spec}{TOC spacing patch failed}}
+\makeatother
 
 % --- macros ----------------------------------------------------------------
 \newcommand{\sig}[1]{\texttt{#1}}
