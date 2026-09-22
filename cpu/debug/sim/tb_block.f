@@ -14,3 +14,4 @@
 ../hdl/rv32i_tb_alu.v
 
 ../hdl/rv32i_tb_counters.v
+../hdl/rv32i_tb_reset.v

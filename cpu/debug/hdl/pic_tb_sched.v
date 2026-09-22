@@ -130,18 +130,22 @@ pic dut (
 
     task pulse_ack;
         begin
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_ack = 1'b1;
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_ack = 1'b0;
         end
     endtask
 
     task pulse_eoi;
         begin
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_eoi = 1'b1;
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_eoi = 1'b0;
         end
     endtask
@@ -149,6 +153,9 @@ pic dut (
     // bring the PIC back to reset between the independent cases
     task reset_dut;
         begin
+            // Assert between clock edges; reset remains independent of clk.
+            @(posedge clk);
+            #2;
             rst_n       = 1'b0;
             irq_src     = 16'b0;
             cpu_mask    = 16'hFFFF;
@@ -156,8 +163,10 @@ pic dut (
             cpu_irq_eoi = 1'b0;
             axil_idle;
             repeat (3) @(posedge clk);
-            #1 rst_n = 1'b1;
+            #3;
+            rst_n = 1'b1;
             repeat (2) @(posedge clk);
+            #1;
         end
     endtask
 
@@ -179,8 +188,10 @@ pic dut (
         axil_write(CFG0 + 4 * 9, 32'h0000_0000, RESP_OKAY);  // src9: level, band 0
         axil_write(INT_ENABLE, 32'h0000_0204, RESP_OKAY);  // enable src2 + src9
 
+        @(posedge clk);
+        #1;
         cpu_mask = 16'hFFFF & ~16'h0004;  // mie masks src2 only
-        #1 irq_src[2] = 1'b1;
+        irq_src[2] = 1'b1;
         irq_src[9] = 1'b1;
 
         expect_offer(4'd9, 20, "the unmasked source behind the masked one is offered");
@@ -189,7 +200,8 @@ pic dut (
         check(32'h0000_0204, {16'b0, pending}, "pending_o shows both, masked included");
 
         // lifting the mask has to hand the higher-priority source straight over
-        #1 cpu_mask = 16'hFFFF;
+        #1;
+        cpu_mask = 16'hFFFF;
         expect_offer(4'd2, 20, "unmasking offers it on the next resolution");
 
         // 3: an edge that arrives in the claim cycle is not swallowed
@@ -203,15 +215,21 @@ pic dut (
         axil_write(CFG0 + 4 * 3, 32'h0000_0001, RESP_OKAY);  // src3: edge-triggered
         axil_write(INT_ENABLE, 32'h0000_0008, RESP_OKAY);
 
-        @(posedge clk) #1 irq_src[3] = 1'b1;  // first edge
-        @(posedge clk) #1 irq_src[3] = 1'b0;
+        @(posedge clk);
+        #1;
+        irq_src[3] = 1'b1;  // first edge
+        @(posedge clk);
+        #1;
+        irq_src[3] = 1'b0;
         expect_offer(4'd3, 20, "the first edge is latched and offered");
 
         // claim and a fresh rising edge on the same clock edge
-        @(posedge clk) #1;
+        @(posedge clk);
+        #1;
         cpu_irq_ack = 1'b1;
         irq_src[3]  = 1'b1;  // 0 -> 1 this cycle
-        @(posedge clk) #1;
+        @(posedge clk);
+        #1;
         cpu_irq_ack = 1'b0;
         irq_src[3]  = 1'b0;
 
@@ -234,7 +252,9 @@ pic dut (
         axil_write(CFG0 + 4 * 2, 32'h000A_0000, RESP_OKAY);  // src2: band 0, deadline 10
         axil_write(INT_ENABLE, 32'h0000_0006, RESP_OKAY);
 
-        #1 irq_src[1] = 1'b1;
+        @(posedge clk);
+        #1;
+        irq_src[1] = 1'b1;
         irq_src[2] = 1'b1;
 
         expect_offer(4'd1, 20, "before the deadline the lower index wins the band");

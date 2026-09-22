@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // ===========================================================================
 // tb_bp - block-level verification of the branch predictor
 //         (hdl/rv32i_branch_predictor.v): BTB/BHT, return-address stack, reset
@@ -160,7 +161,8 @@ rv32i_branch_predictor #(
     task upd(input [31:0] pc, input taken, input [31:0] target, input is_ret, input call, input ret,
              input [31:0] link);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             update_en     = 1'b1;
             update_pc     = pc;
             update_taken  = taken;
@@ -170,7 +172,7 @@ rv32i_branch_predictor #(
             update_ret    = ret;
             update_link   = link;
             @(posedge clk);
-            @(negedge clk);
+            #1;
             update_en   = 1'b0;
             update_call = 1'b0;
             update_ret  = 1'b0;
@@ -263,7 +265,8 @@ rv32i_branch_predictor #(
         check(32'd0, {27'b0, dut.g_ras.cnt_q}, "  RAS is empty");
         for (i = 0; i < RAS_DEPTH; i = i + 1) chk_defined(dut.g_ras.ras[i], "  RAS entry");
 
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1 rst_n = 1'b1;
         step(1);
 
         $display("\n[2] every index misses out of reset, and a miss is not-taken");
@@ -352,7 +355,7 @@ rv32i_branch_predictor #(
         look(pc_a);
         check(32'h1234_0000, pred_target, "  precondition: entry learned");
 
-        @(negedge clk);
+        #1;
         update_en     = 1'b0;  // deliberately left low
         update_pc     = pc_a;
         update_taken  = 1'b0;
@@ -499,7 +502,8 @@ rv32i_branch_predictor #(
         check(32'd0, {31'b0, pred_taken}, "  the prediction drops before the next edge");
 
         step(2);
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1 rst_n = 1'b1;
         step(1);
 
         for (i = 0; i < ENTRIES; i = i + 1) begin

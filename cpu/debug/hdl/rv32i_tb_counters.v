@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // Counter write priority, half preservation, carry and event identity.
 `timescale 1ns / 1ps
 
@@ -47,7 +48,7 @@ module rv32i_tb_counters;
     reg     [31:0] before_val;
     `include "tb_check.vh"
 
-rv32i_csr_file #(
+    rv32i_csr_file #(
         .HART_ID(THIS_HART)
     ) dut (
         .clk_i          (clk),
@@ -80,7 +81,8 @@ rv32i_csr_file #(
     // Bus-level CSR checks: expected values do not read internal counter state.
     task write_counter(input [11:0] address, input [31:0] data, input [1:0] operation);
         begin
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             csr_addr  = address;
             csr_wdata = data;
             csr_op    = operation;
@@ -130,7 +132,10 @@ rv32i_csr_file #(
         counters[4]   = 12'hB05;
         counters[5]   = 12'hB06;
         counters[6]   = 12'hB07;
-        repeat (3) @(negedge clk);
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+        end
         rst_n         = 1;
         retire        = 1;
         ev_mispredict = 1;
@@ -140,12 +145,14 @@ rv32i_csr_file #(
         trap_set      = 1;
         for (i = 0; i < 7; i = i + 1) begin
             write_counter(counters[i] + 12'h080, 32'h12345678, 2'b01);
-            write_counter(counters[i], 32'hFFFFFFFF, 2'b01);
-            check_counter(counters[i], 64'h12345678_FFFFFFFF);
-            // An explicit low-half write suppresses carry into the untouched half.
+            write_counter(counters[i], 32'hFFFFFFFE, 2'b01);
+            check_counter(counters[i], 64'h12345678_FFFFFFFE);
+            // One free cycle separates two writes, so the low half is FFFFFFFF
+            // on the edge that samples the next write. That low-half write must
+            // suppress the carry into the untouched high half.
             write_counter(counters[i], 32'h0, 2'b01);
             check_counter(counters[i], 64'h12345678_00000000);
-            write_counter(counters[i], 32'hFFFFFFFF, 2'b01);
+            write_counter(counters[i], 32'hFFFFFFFE, 2'b01);
             // An explicit high-half write must leave the low half unchanged.
             write_counter(counters[i] + 12'h080, 32'h23456780, 2'b01);
             check_counter(counters[i], 64'h23456780_FFFFFFFF);
@@ -154,11 +161,12 @@ rv32i_csr_file #(
             check_counter(counters[i], 64'h23456781_00000000);
             // Set/clear operate on the old CSR value, without an implicit increment.
             write_counter(counters[i], 32'h10, 2'b10);
-            check_counter(counters[i], 64'h23456781_00000010);
+            // The launch cycle increments 0 to 1; CSRRS then sets bit 4.
+            check_counter(counters[i], 64'h23456781_00000011);
             write_counter(counters[i], 32'h10, 2'b11);
-            check_counter(counters[i], 64'h23456781_00000000);
+            check_counter(counters[i], 64'h23456781_00000002);
             write_counter(counters[i], 32'h0, 2'b10);
-            check_counter(counters[i], 64'h23456781_00000000);
+            check_counter(counters[i], 64'h23456781_00000003);
         end
         // Event 0 means no event. Implemented fixed events have distinct nonzero IDs.
         trap_set = 0;

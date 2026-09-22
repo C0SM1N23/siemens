@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // AXI4-Lite master driver tasks, shared by the block-level testbenches
 // (pic_tb_feature, pic_tb_reset, pic_tb_ro, pic_tb_status, mtimer_tb_regs).
 //
@@ -27,14 +28,21 @@ always @(posedge clk) axil_cycle <= axil_cycle + 1;
 task axil_write_strb(input [31:0] a, input [31:0] d, input [3:0] strb, input [1:0] exp);
     reg aw_ok, w_ok;
     begin
-        @(negedge clk);
-        awaddr = a; awvalid = 1; wdata = d; wstrb = strb; wvalid = 1;
-        bready = 0; aw_ok = 0; w_ok = 0;
+        @(posedge clk);
+        #1;
+        awaddr  = a;
+        awvalid = 1;
+        wdata   = d;
+        wstrb   = strb;
+        wvalid  = 1;
+        bready  = 0;
+        aw_ok   = 0;
+        w_ok    = 0;
         while (!aw_ok || !w_ok) begin
             @(posedge clk);
             if (awvalid && awready) aw_ok = 1;
             if (wvalid && wready) w_ok = 1;
-            @(negedge clk);
+            #1;
             if (aw_ok) awvalid = 0;
             if (w_ok) wvalid = 0;
         end
@@ -42,7 +50,7 @@ task axil_write_strb(input [31:0] a, input [31:0] d, input [3:0] strb, input [1:
         @(posedge clk);
         while (!bvalid) @(posedge clk);
         check({30'b0, exp}, {30'b0, bresp}, "write response");
-        @(negedge clk);
+        #1;
         bready = 0;
     end
 endtask
@@ -57,18 +65,22 @@ endtask
 // Read; the data lands in `rd`. `exp` is the RRESP that must come back.
 task axil_read(input [31:0] a, input [1:0] exp);
     begin
-        @(negedge clk);
-        araddr = a; arvalid = 1; rready = 0;
+        @(posedge clk);
+        #1;
+        araddr  = a;
+        arvalid = 1;
+        rready  = 0;
         @(posedge clk);
         while (!arready) @(posedge clk);
         axil_read_cycle = axil_cycle;
-        @(negedge clk);
-        arvalid = 0; rready = 1;
+        #1;
+        arvalid = 0;
+        rready  = 1;
         @(posedge clk);
         while (!rvalid) @(posedge clk);
         rd = rdata;
         check({30'b0, exp}, {30'b0, rresp}, "read response");
-        @(negedge clk);
+        #1;
         rready = 0;
     end
 endtask
@@ -84,8 +96,15 @@ endtask
 // Park every master-side signal. Call before releasing reset.
 task axil_idle;
     begin
-        awaddr = 32'b0; wdata = 32'b0; wstrb = 4'b0; araddr = 32'b0;
-        awvalid = 1'b0; wvalid = 1'b0; bready = 1'b0; arvalid = 1'b0; rready = 1'b0;
+        awaddr  = 32'b0;
+        wdata   = 32'b0;
+        wstrb   = 4'b0;
+        araddr  = 32'b0;
+        awvalid = 1'b0;
+        wvalid  = 1'b0;
+        bready  = 1'b0;
+        arvalid = 1'b0;
+        rready  = 1'b0;
     end
 endtask
 

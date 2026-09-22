@@ -25,9 +25,9 @@ if grep -Eq '%Error|FAIL:|GATE FAILED' sim_run.log; then exit 1; fi
 verilator_coverage --annotate cov_annotated coverage.dat > /dev/null
 
 for top in rv32i_tb_dual_core pic_tb_feature pic_tb_reference pic_tb_sched \
-    pic_tb_reset pic_tb_ro pic_tb_status mtimer_tb_regs rv32i_tb_csr_ro \
+    pic_tb_reset rv32i_tb_reset pic_tb_ro pic_tb_status mtimer_tb_regs rv32i_tb_csr_ro \
     rv32i_tb_counters rv32i_tb_traps rv32i_tb_bp rv32i_tb_alu rv32i_tb_isa; do
     run_asserted "$top" -f rtl.f -f tb_cpu.f +incdir+. \
         ../hdl/axi_lite_arb2.v "../hdl/$top.v" "${SVA[@]}"
 done
-echo "SVA REGRESSION PASS: CPU, 15 benches; functional coverage gate passed"
+echo "SVA REGRESSION PASS: CPU, 16 benches; functional coverage gate passed"

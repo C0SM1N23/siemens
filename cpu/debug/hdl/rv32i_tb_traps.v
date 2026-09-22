@@ -394,7 +394,9 @@ rv32i_cpu_top #(
             cpu_irq_vec = 4'd0;
             repeat (4) @(posedge clk);
             for (i = 0; i < IWORDS; i = i + 1) imem.mem[i] = prog[i];
-            @(posedge clk) #1 rst_n = 1'b1;
+            @(posedge clk);
+            #1;
+            rst_n = 1'b1;
         end
     endtask
 

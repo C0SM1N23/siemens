@@ -202,7 +202,9 @@ module pic_tb_ro;
         axil_idle;
         rst_n = 1'b0;
         axil_step(4);
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1;
+        rst_n = 1'b1;
         axil_step(2);
 
         // 1. SRC0_STATUS .. SRC15_STATUS : 16 read-only registers
@@ -252,8 +254,12 @@ module pic_tb_ro;
         if ($test$plusargs("verbose"))
             $display("   step 1: claim one interrupt so DEPTH and TOP_ID are both non-zero");
         axil_step(2);
-        @(posedge clk) #1 cpu_irq_ack = 1'b1;
-        @(posedge clk) #1 cpu_irq_ack = 1'b0;
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b1;
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b0;
         axil_step(3);
         if ($test$plusargs("verbose"))
             $display("   step 2: attempt a write, require SLVERR and an unchanged value");
@@ -267,8 +273,12 @@ module pic_tb_ro;
 
         if ($test$plusargs("verbose"))
             $display("   step 2: return from the handler, clear the sources, reset the state");
-        @(posedge clk) #1 cpu_irq_eoi = 1'b1;
-        @(posedge clk) #1 cpu_irq_eoi = 1'b0;
+        @(posedge clk);
+        #1;
+        cpu_irq_eoi = 1'b1;
+        @(posedge clk);
+        #1;
+        cpu_irq_eoi = 1'b0;
         irq_src = 16'h0000;
         axil_step(4);
         axil_write(INT_ENABLE, 32'h0000_0000, RESP_OKAY);
@@ -375,9 +385,15 @@ module pic_tb_ro;
         axil_write(INT_ENABLE, 32'h0000_0040, RESP_OKAY);
         irq_src[6] = 1'b1;
         axil_step(4);
-        @(posedge clk) #1 irq_src[6] = 1'b0;  // drops before the claim
-        @(posedge clk) #1 cpu_irq_ack = 1'b1;
-        @(posedge clk) #1 cpu_irq_ack = 1'b0;
+        @(posedge clk);
+        #1;
+        irq_src[6] = 1'b0;  // drops before the claim
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b1;
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b0;
         axil_step(3);
         axil_read(SPURIOUS_LOG, RESP_OKAY);
         check(32'h0000_0040, rd, "  SPURIOUS_LOG[6] set by hardware");
@@ -404,8 +420,14 @@ module pic_tb_ro;
         axil_write(INT_STATUS, 32'h0000_0007, RESP_OKAY);
         axil_read_chk(INT_STATUS, 32'h0000_0000, "  INT_STATUS cleared by W1C");
 
-        @(posedge clk) #1 cpu_irq_eoi = 1'b1;
-        @(posedge clk) #1 cpu_irq_eoi = 1'b0;
+        @(posedge clk);
+
+        #1;
+
+        cpu_irq_eoi = 1'b1;
+        @(posedge clk);
+        #1;
+        cpu_irq_eoi = 1'b0;
         axil_step(3);
         axil_write(INT_ENABLE, 32'h0000_0000, RESP_OKAY);
 

@@ -1,6 +1,6 @@
 # CPU / PIC verification
 
-Measured on 15 September 2026. Register contracts and detailed verification
+ModelSim rerun on 21 September 2026; the complete SVA run and final PIC-feature SVA check passed on 19 September. Earlier mutation-check evidence is retained below. Register contracts and detailed verification
 plans are in the [four specifications](../docs/).
 
 ## Method
@@ -36,7 +36,8 @@ proof of every operand and event interleaving.
 | `pic_tb_feature` | 1 | 145: priority, nesting, empty EOI, spurious, escalation, triggers, responses |
 | `pic_tb_reference` | 1 | 5,741: 275 priority cases and register transactions |
 | `pic_tb_sched` | 1 | 26: mask, edge at claim, reordered bands, software key strobes |
-| `pic_tb_reset` | 1 | 350: reset fields, interfaces, asynchronous reset |
+| `pic_tb_reset` | 1 | Reset defaults; loaded-state assertion before the next edge; AW-only, W-only, B-held, R-held and recovery |
+| `rv32i_tb_reset` | 1 | Fetch/load stall, nonzero GPRs, clock stopped high, off-edge reset and restart |
 | `pic_tb_ro` | 1 | 478: access classes, reserved bits, W1C and WARL |
 | `pic_tb_status` | 1 | 424: pending, active, spurious, deadline and effective band |
 | `mtimer_tb_regs` | 1 | 225: reset, rate, byte writes, compare, invalid offsets |
@@ -46,14 +47,14 @@ proof of every operand and event interleaving.
 | `rv32i_tb_bp` | 1 | 68: predictor indexing, aliasing, RAS boundaries and reset |
 | `rv32i_tb_alu` | 1 | 57: operation decode, signed boundaries, all shift amounts |
 | `rv32i_tb_isa` | 4 | Per run: 1,287 completed instructions and 256 final data words |
-| **Total** | **21** | **8,473 labelled checks plus four ISA traces; zero failures** |
+| **Total** | **22** | **All configurations completed with zero errors; four 1,287-instruction ISA traces** |
 
 The system program runs at nominal latency, higher fixed latency and two seeded
 backpressure settings. The ISA trace runs at nominal timing, READ_LAT=2 and
 STALL_PROB=25/40. Requested parameters are checked after elaboration. Labelled
 counts include AXI response checks and are not coverage percentages.
 
-Verilator executes all 15 distinct benches at their default configurations with
+Verilator executes all 16 distinct benches at their default configurations with
 applicable bound SVA. It also measures user coverage in the nominal CPU system
 test. Every listed bench passed on both simulators.
 
@@ -136,3 +137,6 @@ with the nominal instruction memory.
 The dual-core run establishes shared-memory progress for two instances, not
 multicore interrupt routing. No synthesis/timing result or formal proof is
 claimed. Remaining work: [VERIFICATION_ROADMAP.md](VERIFICATION_ROADMAP.md).
+
+Waveform provenance is recorded in [waves/manifest.json](../docs/waves/manifest.json);
+the AXI reference comparison is in [soc/docs/VERIFICATION.md](../../soc/docs/VERIFICATION.md).

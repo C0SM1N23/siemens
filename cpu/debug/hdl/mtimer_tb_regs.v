@@ -138,7 +138,9 @@ mtimer dut (
         // 2. reset values
         $display("\n-- 2. reset values of all four registers --");
         if ($test$plusargs("verbose")) $display("   step 1: release rst_n between clock edges");
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1;
+        rst_n = 1'b1;
         axil_step(1);
         if ($test$plusargs("verbose"))
             $display("   step 2: mtime starts from 0 and is already counting, so it is");
@@ -336,7 +338,9 @@ mtimer dut (
         #7;
         check(32'd0, {31'b0, irq}, "  irq drops asynchronously with rst_n");
         axil_step(3);
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1;
+        rst_n = 1'b1;
         axil_step(1);
         if ($test$plusargs("verbose"))
             $display("   step 3: every register must be back at its reset value");

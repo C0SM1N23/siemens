@@ -134,7 +134,8 @@ rv32i_csr_file #(
     // Pure read. The result lands in `rd`; illegal is checked against exp_illegal.
     task csr_read(input [11:0] a, input exp_illegal, input [511:0] name);
         begin
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             csr_addr  = a;
             csr_wdata = 32'b0;
             csr_op    = 2'b00;
@@ -147,7 +148,8 @@ rv32i_csr_file #(
                          csr_illegal);
                 errors = errors + 1;
             end
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             csr_ren = 1'b0;
         end
     endtask
@@ -164,7 +166,8 @@ rv32i_csr_file #(
     task csr_write_op(input [11:0] a, input [31:0] d, input [1:0] op, input exp_illegal,
                       input [511:0] name);
         begin
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             csr_addr  = a;
             csr_wdata = d;
             csr_op    = op;
@@ -179,7 +182,8 @@ rv32i_csr_file #(
                 if ($test$plusargs("verbose"))
                     $display("PASS: %0s -> illegal=%b as required", name, csr_illegal);
             end
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             csr_ren = 1'b0;
             csr_wen = 1'b0;
         end
@@ -229,7 +233,9 @@ rv32i_csr_file #(
         ev_wfi_sleep  = 1'b0;
         rst_n         = 1'b0;
         repeat (4) @(posedge clk);
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1;
+        rst_n = 1'b1;
         repeat (2) @(posedge clk);
 
         // 1. reset values
@@ -451,7 +457,9 @@ rv32i_csr_file #(
         #3 rst_n = 1'b0;
         #7;
         repeat (3) @(posedge clk);
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1;
+        rst_n = 1'b1;
         repeat (2) @(posedge clk);
         if ($test$plusargs("verbose")) $display("   step 3: read them all back");
         csr_read_chk(MSTATUS, 32'h0000_1800, "  mstatus  back to MPP=11 only");

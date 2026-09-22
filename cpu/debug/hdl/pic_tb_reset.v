@@ -174,6 +174,26 @@ module pic_tb_reset;
         end
     endtask
 
+    task reset_bus;
+        begin
+            @(posedge clk);
+            #2;
+            rst_n = 1'b0;
+            axil_idle;
+            #1;
+            check(0, {31'b0, bvalid}, "  pending B response clears before next edge");
+            check(0, {31'b0, rvalid}, "  pending R response clears before next edge");
+            check(0, {31'b0, dut.pic_slv.aw_got_q}, "  captured AW clears before next edge");
+            check(0, {31'b0, dut.pic_slv.w_got_q}, "  captured W clears before next edge");
+            #11;
+            rst_n = 1'b1;
+            axil_step(3);
+            check(0, {31'b0, bvalid}, "  no stale B response after reset");
+            check(0, {31'b0, rvalid}, "  no stale R response after reset");
+            axil_read_chk(BAND_CONFIG, RST_BAND, "  register access recovers after reset");
+        end
+    endtask
+
     // stimulus
     initial begin
         $display("tb_pic_reset : reset verification for hdl/pic.v");
@@ -204,7 +224,9 @@ module pic_tb_reset;
         // 2. release reset, read the whole map
         $display("\n-- 2. every mapped register reads its documented reset value --");
         if ($test$plusargs("verbose")) $display("   step 1: release rst_n between clock edges");
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1;
+        rst_n = 1'b1;
         axil_step(2);
         if ($test$plusargs("verbose"))
             $display("   step 2: read all 16 SRCx_CONFIG, 16 SRCx_SW_TRIG, 16 SRCx_STATUS");
@@ -254,11 +276,19 @@ module pic_tb_reset;
         irq_src[2] = 1'b1;
         irq_src[9] = 1'b1;
         axil_step(4);
-        @(posedge clk) #1 cpu_irq_ack = 1'b1;
-        @(posedge clk) #1 cpu_irq_ack = 1'b0;
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b1;
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b0;
         axil_step(3);
-        @(posedge clk) #1 cpu_irq_ack = 1'b1;
-        @(posedge clk) #1 cpu_irq_ack = 1'b0;
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b1;
+        @(posedge clk);
+        #1;
+        cpu_irq_ack = 1'b0;
         axil_step(6);
         if ($test$plusargs("verbose"))
             $display("   step 4: confirm the block really is in a non-reset state first");
@@ -275,13 +305,21 @@ module pic_tb_reset;
 
         if ($test$plusargs("verbose"))
             $display("   step 5: assert rst_n asynchronously, off a clock edge");
-        #3 rst_n = 1'b0;  // deliberately not aligned to posedge clk
-        #7;
+        @(posedge clk);
+        #2;
+        rst_n = 1'b0;  // assert 2 ns after posedge (before the falling edge)
+        #1;               // check at +3 ns, before either next clock edge
+        check(32'd0, {27'b0, dut.depth}, "  depth clears before next clock edge");
+        check(32'd0, {31'b0, bvalid}, "  BVALID clears asynchronously");
+        check(32'd0, {31'b0, rvalid}, "  RVALID clears asynchronously");
+        check(32'd0, {16'b0, pic_pending}, "  pending clears asynchronously");
         check(32'd0, {31'b0, cpu_irq}, "  cpu_irq drops asynchronously with rst_n");
         if ($test$plusargs("verbose"))
             $display("   step 6: hold reset 3 cycles, then release it between edges");
         axil_step(3);
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1;
+        rst_n = 1'b1;
         irq_src = 16'b0;
         axil_step(2);
         if ($test$plusargs("verbose"))
@@ -315,6 +353,55 @@ module pic_tb_reset;
         axil_step(4);
         check(32'd1, {31'b0, cpu_irq}, "  request appears once software enables it");
         irq_src[4] = 1'b0;
+
+        $display("\n-- 7. reset aborts independent AXI phases and held responses --");
+        @(posedge clk);
+        #1;
+        awaddr = BAND_CONFIG;
+        awvalid = 1;
+        @(posedge clk);
+        while (!awready) @(posedge clk);
+        #1;
+        awvalid = 0;
+        check(1, {31'b0, dut.pic_slv.aw_got_q}, "  AW-only reset precondition");
+        reset_bus;
+
+        @(posedge clk);
+        #1;
+        wdata = 32'h27;
+        wstrb = 4'hF;
+        wvalid = 1;
+        @(posedge clk);
+        while (!wready) @(posedge clk);
+        #1;
+        wvalid = 0;
+        check(1, {31'b0, dut.pic_slv.w_got_q}, "  W-only reset precondition");
+        reset_bus;
+
+        @(posedge clk);
+        #1;
+        awaddr = BAND_CONFIG;
+        awvalid = 1;
+        wdata = 32'h27;
+        wstrb = 4'hF;
+        wvalid = 1;
+        @(posedge clk);
+        #1;
+        awvalid = 0;
+        wvalid = 0;
+        wait (bvalid);
+        reset_bus;
+
+        @(posedge clk);
+        #1;
+        araddr = BAND_CONFIG;
+        arvalid = 1;
+        @(posedge clk);
+        while (!arready) @(posedge clk);
+        #1;
+        arvalid = 0;
+        wait (rvalid);
+        reset_bus;
 
         // done
         axil_step(4);

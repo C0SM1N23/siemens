@@ -133,17 +133,21 @@ module pic_tb_feature;
 
     task pulse_ack;
         begin
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_ack = 1'b1;
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_ack = 1'b0;
         end
     endtask
     task pulse_eoi;
         begin
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_eoi = 1'b1;
-            @(posedge clk) #1;
+            @(posedge clk);
+            #1;
             cpu_irq_eoi = 1'b0;
         end
     endtask
@@ -162,6 +166,8 @@ module pic_tb_feature;
         integer k;
         begin
             for (k = 0; k < n; k = k + 1) @(posedge clk);
+            // Return after NBA updates; subsequent source changes cannot race the DUT.
+            #1;
         end
     endtask
 
@@ -429,8 +435,12 @@ module pic_tb_feature;
         $display("\n-- 8. edge-triggered source --");
         axi_write(CFG(0), 32'h0000_0001, RESP_OKAY);  // edge, band0
         axi_write(INT_ENABLE, 32'h0001, RESP_OKAY);
-        @(posedge clk) #1 irq_src[0] = 1'b1;  // one-cycle pulse
-        @(posedge clk) #1 irq_src[0] = 1'b0;
+        @(posedge clk);
+        #1;
+        irq_src[0] = 1'b1;  // one-cycle pulse
+        @(posedge clk);
+        #1;
+        irq_src[0] = 1'b0;
         wait_offer(4'd0);  // latched despite source low
         begin
             if ($test$plusargs("verbose"))

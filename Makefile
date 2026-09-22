@@ -2,10 +2,10 @@
 # this just wires them up for one-command runs and for CI.
 #
 #   make test       assemble + run the Verilator SVA/coverage flow (CI default)
-#   make modelsim   full 21-run ModelSim CPU regression (needs vsim; local)
+#   make modelsim   full 22-run ModelSim CPU regression (needs vsim; local)
 #   make soc        SoC regression: 25 runs over four bus timings (needs vsim)
 #   make soc-sva    SoC lint + SVA assertion run on Verilator
-#   make soc-pulp   compare the SoC decoder against pulp-platform/axi (network)
+#   make soc-pulp   compare decoder/register interfaces against pulp-platform/axi (network)
 #   make asm        regenerate program hex + the label-address include
 #   make clean      remove build artifacts
 
@@ -41,7 +41,7 @@ verilator: asm
 
 test: verilator
 
-# CPU: 15 benches, 21 timing configurations. See cpu/debug/VERIFICATION.md.
+# CPU/PIC: 16 benches, 22 timing configurations. See cpu/debug/VERIFICATION.md.
 modelsim: asm
 	cd $(SIM) && vsim -c -do "do regress.do; quit -f"
 

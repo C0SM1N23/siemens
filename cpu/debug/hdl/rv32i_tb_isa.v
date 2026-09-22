@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // Architectural retirement trace against isa_reference.py.
 `timescale 1ns / 1ps
 module rv32i_tb_isa #(
@@ -143,7 +144,10 @@ rv32i_cpu_top #(
         $readmemh("program_isa_trace.hex", expected);
         $readmemh("program_isa_mem.hex", expected_mem);
         for (i = 0; i < 256; i = i + 1) dmem.mem[i] = 0;
-        repeat (4) @(negedge clk);
+        repeat (4) begin
+            @(posedge clk);
+            #1;
+        end
         rst_n = 1;
     end
 

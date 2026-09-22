@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // ===========================================================================
 // tb_pic_status - field-by-field verification of SRCx_STATUS (hdl/pic.v)
 // ===========================================================================
@@ -159,16 +160,20 @@ module pic_tb_status;
         begin
             while (cpu_irq !== 1'b1) @(posedge clk);
             @(posedge clk);
-            @(posedge clk) #1 cpu_irq_ack = 1'b1;
-            @(posedge clk) #1 cpu_irq_ack = 1'b0;
+            @(posedge clk);
+            #1 cpu_irq_ack = 1'b1;
+            @(posedge clk);
+            #1 cpu_irq_ack = 1'b0;
             axil_step(2);
         end
     endtask
 
     task end_of_interrupt;
         begin
-            @(posedge clk) #1 cpu_irq_eoi = 1'b1;
-            @(posedge clk) #1 cpu_irq_eoi = 1'b0;
+            @(posedge clk);
+            #1 cpu_irq_eoi = 1'b1;
+            @(posedge clk);
+            #1 cpu_irq_eoi = 1'b0;
             axil_step(2);
         end
     endtask
@@ -203,7 +208,8 @@ module pic_tb_status;
         axil_idle;
         rst_n = 1'b0;
         axil_step(4);
-        @(posedge clk) #1 rst_n = 1'b1;
+        @(posedge clk);
+        #1 rst_n = 1'b1;
         axil_step(2);
 
         // 1. PEND, bit [0]
@@ -370,12 +376,13 @@ module pic_tb_status;
         axil_write(CFG(8), 32'h0004_0006, RESP_OKAY);  // deadline 4, band 3
         axil_write(INT_ENABLE, 32'h0000_0100, RESP_OKAY);
         axil_step(3);
-        @(negedge clk);
+        #1;
         check(32'd3, {30'b0, band_prev}, "  EFF_BAND starts at the configured band 3");
         watch_en   = 1'b1;
         irq_src[8] = 1'b1;
         axil_step(40);  // ample time for 3+ misses
-        @(negedge clk);
+        @(posedge clk);
+        #1;
         watch_en = 1'b0;
         check(32'd3, band_steps, "  exactly 3 band transitions were observed");
         check(32'd0, {31'b0, band_bad}, "  every transition moved exactly one band");
@@ -417,8 +424,10 @@ module pic_tb_status;
         while (cpu_irq !== 1'b1) @(posedge clk);
         @(posedge clk);
         #1 irq_src[11] = 1'b0;  // deasserts before the ack lands
-        @(posedge clk) #1 cpu_irq_ack = 1'b1;
-        @(posedge clk) #1 cpu_irq_ack = 1'b0;
+        @(posedge clk);
+        #1 cpu_irq_ack = 1'b1;
+        @(posedge clk);
+        #1 cpu_irq_ack = 1'b0;
         axil_step(3);
         if ($test$plusargs("verbose"))
             $display("   step 3: SPUR must be set, and the sticky log must record it");

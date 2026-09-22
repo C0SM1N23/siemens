@@ -1,3 +1,4 @@
+// Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // PIC register-port comparison with independently generated priority vectors.
 `timescale 1ns / 1ps
 
@@ -77,7 +78,10 @@ pic dut (
         cpu_irq_ack = 0;
         cpu_irq_eoi = 0;
         axil_idle;
-        repeat (3) @(negedge clk);
+        repeat (3) begin
+            @(posedge clk);
+            #1;
+        end
         rst_n = 1;
         for (test_index = 0; test_index < PIC_CASES; test_index = test_index + 1) begin
             base    = test_index * 22;
@@ -86,10 +90,14 @@ pic dut (
             axil_write(source * 4, vectors[base+source], RESP_OKAY);
             axil_write(BAND_CONFIG, vectors[base+16], RESP_OKAY);
             axil_write(INT_ENABLE, vectors[base+17], RESP_OKAY);
-            @(negedge clk);
+            @(posedge clk);
+            #1;
             cpu_mask = vectors[base+18][15:0];
             irq_src  = vectors[base+19][15:0];
-            repeat (4) @(negedge clk);
+            repeat (4) begin
+                @(posedge clk);
+                #1;
+            end
             check(vectors[base+20] >> 4, {31'b0, cpu_irq}, "reference offer valid");
             if (vectors[base+20][4])
                 check(vectors[base+20] & 15, {28'b0, cpu_irq_vec}, "reference priority winner");

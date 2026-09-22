@@ -1,5 +1,5 @@
 onerror {quit -code 1 -f}
-# 21 runs; parameters are checked after elaboration.
+# 22 runs; parameters are checked after elaboration.
 do run_common.do
 do compile.do
 
@@ -12,6 +12,7 @@ run_case pic_tb_feature "pic_tb_feature"
 run_case pic_tb_reference "PIC reference: band permutations and masks"
 run_case pic_tb_sched "pic_tb_sched"
 run_case pic_tb_reset "pic_tb_reset"
+run_case rv32i_tb_reset "CPU asynchronous reset and stopped clock"
 run_case pic_tb_ro "pic_tb_ro"
 run_case pic_tb_status "pic_tb_status"
 run_case mtimer_tb_regs "mtimer_tb_regs"
