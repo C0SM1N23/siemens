@@ -35,7 +35,17 @@
 // AXI4-Lite wiring macros, shared with tb_dual_core
 `include "axi_lite_macros.vh"
 
-module rv32i_tb_cpu_axi;
+// Memory timing. Verilator overrides these top-level parameters; ModelSim sets
+// the memory instances directly and reads the values back after elaboration.
+module rv32i_tb_cpu_axi #(
+    parameter IMEM_READ_LAT   = 0,
+    parameter IMEM_STALL_PROB = 0,
+    parameter IMEM_SEED       = 11,
+    parameter DMEM_READ_LAT   = 1,
+    parameter DMEM_WRITE_LAT  = 1,
+    parameter DMEM_STALL_PROB = 0,
+    parameter DMEM_SEED       = 23
+);
 
     wire clk, rst_n;
 
@@ -86,9 +96,10 @@ module rv32i_tb_cpu_axi;
     axi_lite_mem_model #(
         .WORDS    (1024),
         .BASE     (`IMEM_BASE),
-        .INIT_FILE("program_axi.hex"),
-        .READ_LAT (0),
-        .SEED     (11)
+        .INIT_FILE ("program_axi.hex"),
+        .READ_LAT  (IMEM_READ_LAT),
+        .STALL_PROB(IMEM_STALL_PROB),
+        .SEED      (IMEM_SEED)
     ) imem_inst (
         .clk_i  (clk),
         .rst_n_i(rst_n),
@@ -111,10 +122,11 @@ module rv32i_tb_cpu_axi;
     // data memory (dbus default leg, with latency -> multi-cycle stalls)
     axi_lite_mem_model #(
         .WORDS    (1024),
-        .BASE     (`DMEM_BASE),
-        .READ_LAT (1),
-        .WRITE_LAT(1),
-        .SEED     (23)
+        .BASE      (`DMEM_BASE),
+        .READ_LAT  (DMEM_READ_LAT),
+        .WRITE_LAT (DMEM_WRITE_LAT),
+        .STALL_PROB(DMEM_STALL_PROB),
+        .SEED      (DMEM_SEED)
     ) dmem_inst (
         .clk_i  (clk),
         .rst_n_i(rst_n),

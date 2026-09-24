@@ -710,7 +710,10 @@ module rv32i_cpu_func_cov (
         rep("dbus write DECERR", db_wr_decerr, REQ);
 
         $display("[FCOV] %0d/%0d bins hit (%0d%%)", hit_n, tot_n, (hit_n * 100) / tot_n);
-        if (gate_fail == 0) $display("[FCOV] == COVERAGE GATE PASSED ==");
+        // Timing variants and other programs reach different bins; their counts
+        // feed the merged gate (merge_fcov.py) instead of this per-run one.
+        if ($test$plusargs("fcov_merge_only")) $display("[FCOV] == counts for the merged gate ==");
+        else if (gate_fail == 0) $display("[FCOV] == COVERAGE GATE PASSED ==");
         else $display("[FCOV] == COVERAGE GATE FAILED: %0d required bin(s) missed ==", gate_fail);
     end
 
