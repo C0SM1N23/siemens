@@ -169,6 +169,9 @@ hdl/
   rv32i_decode.v  rv32i_imm_gen.v  rv32i_alu.v  rv32i_alu_top.v  rv32i_writeback_mux.v   (reused, combinational)
 debug/
   VERIFICATION.md      test plan: what is checked, why, and known gaps
+debug/formal/
+  pic_formal.sv  pic.sby  SymbiYosys harness: stack, limit, key and offer invariants
+  run_formal.sh        proofs, then the harness against injected defects
 debug/sva/
   axi_lite_sva.sv      AXI4-Lite contract as SVA (per port: ibus/dbus/PIC)
   rv32i_cpu_core_sva.sv      pipeline invariants as SVA (REQ4,10,11; D2,D3,D12)
@@ -196,6 +199,8 @@ debug/hdl/
   rv32i_tb_traps.v           one directed test per trap cause, at CPU level
   rv32i_tb_bp.v              branch predictor: tables, RAS boundaries, reset
   rv32i_tb_alu.v             ALU operation decode and operand boundaries
+  pic_tb_random.v      constrained-random PIC traffic, traced for pic_model.py
+  rv32i_tb_riscv_tests.v     runs one official riscv-test, verdict from tohost
   tb_check.vh          shared self-check task (=== compare, PASS/FAIL per check)
   tb_axil_master.vh    shared AXI4-Lite master driver tasks for the block benches
   axi_lite_macros.vh   bare AXI read/write helper macros shared by the benches
@@ -208,9 +213,15 @@ debug/sim/
   tb_block.f           filelist for the block-level benches
   compile.do           the single canonical vlog compile both .do scripts use
   rv32i_soc_map.vh           TB address map (PIC / mtimer / dmem bases) in one place
-  sim.do               quick single run     regress.do  full 22-run regression
+  sim.do               quick single run     regress.do  full 39-run regression
   wave.do              AXI-grouped waveform set for the ModelSim GUI
   run_verilator.sh     SVA + functional coverage run (Verilator, free)
+  isa_reference.py     ISA encoder/interpreter: directed and ten random programs
+  pic_model.py         cycle-accurate PIC model, replays pic_tb_random traces
+  merge_fcov.py        functional coverage merged over runs, with its gate
+  check_covers.py      cover properties merged over runs, with its gate
+  run_riscv_tests.sh   official rv32ui/rv32mi tests (riscv_tests.ld, riscv_tests_expected.json)
+  mutation_check.py    injects RTL defects one at a time; each must fail its bench
   run_verilator.ps1    same, one command from Windows (via WSL)
   verif_gui.py         tkinter front-end that launches the flows and shows
                        PASS/FAIL per job (no ModelSim/Verilator CLI needed)
@@ -237,23 +248,22 @@ bash cpu/debug/sim/run_verilator.sh
 Windows launcher: `cpu/debug/sim/run_verilator.ps1`. GUI:
 `python cpu/debug/sim/verif_gui.py`.
 
-The functional regression has 16 distinct benches and 22 ModelSim timing
-configurations. Every bench also executes on Verilator with applicable bound
-SVA; nominal CPU user coverage reaches all required bins. ModelSim compilation
-reports zero errors/warnings. CPU RTL lint is clean under the recorded options.
-RTL files have no `timescale`; verification supplies simulation time units.
+The ModelSim regression has 17 benches and 39 runs, timing variants and random
+seeds included. Verilator runs all of them with the bound SVA, merges the
+functional coverage over the runs and requires every cover property to be
+reached. The official riscv-tests, the PIC's formal proofs and the mutation
+check complete the evidence. ModelSim compilation reports zero errors/warnings;
+CPU RTL lint is clean under the recorded options. RTL files have no
+`timescale`; verification supplies simulation time units.
 
-Independent ISA and PIC reference models, counter boundary checks and mutation
-tests supplement the original directed tests. Test inventory, commands and
-limits: [debug/VERIFICATION.md](debug/VERIFICATION.md). Changes and bugs:
-[../TO_MODIFY.md](../TO_MODIFY.md).
+Test inventory, commands and limits: [debug/VERIFICATION.md](debug/VERIFICATION.md).
 
 ## Integration contract
 
 The SoC memory and interrupt maps are defined in
 [../soc/README.md](../soc/README.md). The sixteen-source claim/EOI interface is
-an explicit project decision that resolves differing CPU/PIC brief widths;
-formal agreement remains in [../TO_MODIFY.md](../TO_MODIFY.md).
+a project decision that resolves differing CPU/PIC brief widths; it is recorded
+in [../INTEGRATION.md](../INTEGRATION.md).
 
 The current PIC targets one CPU. The dual-core bench verifies two CPU instances
 sharing data memory; it does not implement multicore interrupt routing.

@@ -5,15 +5,10 @@ of the current verification, not claims of known RTL failure.
 
 | Area | Remaining work |
 |---|---|
-| External ISA validation | Run an architectural compliance suite or a second established ISA model. The current Python oracle is independent of the RTL but is part of this project. |
-| Operand and sequence space | Expand deterministic seeds and long dependency/control-flow sequences beyond the current 1,287-instruction trace. |
-| Trap interleavings | Extend nested synchronous/IRQ sequences and document software behaviour at the combined sixteen-level limit. |
-| PIC state combinations | Reference current scheduling cases against a sequential model covering deadlines, claims, EOI and dynamic reconfiguration together. |
-| Bus timing | Expand seeds and adversarial AXI schedules; current runs are bounded, not an exhaustive liveness proof. |
-| System spurious claim | Exercise the offer-withdrawal race with a real CPU and a controllable source. Block-level spurious behaviour is already tested. |
-| Coverage | Aggregate timing-variant functional coverage; currently the 92-bin gate measures only the nominal CPU system test. |
+| Pipeline proof | Prove the core against the ISA formally, for example with riscv-formal. Today the core is checked by simulation: the official tests, the independent ISA model and SVA. |
+| Features outside the ISA subset | If Zifencei, the Zicntr user aliases, misaligned access in hardware, PMP or a trigger module are added, their five riscv-tests become required passes. |
+| Seeds | Random ISA programs and PIC traffic run a fixed set of seeds; a nightly run with fresh seeds would keep widening the explored space. |
+| Multicore interrupts | The PIC serves one CPU. Routing interrupts to several harts is a design extension and would need its own tests. |
 
-No synthesis/timing result or formal proof is claimed. Those activities are
-outside the original behavioural CPU deliverable. The independent ISA/PIC
-models, counter tests, mutation checks, lint and all-bench Verilator execution
-are completed work, not backlog.
+No synthesis or timing result is claimed; those activities are outside the
+original behavioural CPU deliverable.

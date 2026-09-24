@@ -82,7 +82,7 @@ signals and every waveform of the first cycles after release.
 
 ### Timing of the common cases
 
-ALU op — 1 instruction per cycle, measured CPI = 1.00:
+ALU op — 1 instruction per cycle, CPI = 1.00:
 
 | cycle | S1 | S2 | S3 |
 |---|---|---|---|
@@ -386,13 +386,15 @@ fully-specified config). Reconfiguring a source's band while it is in service
 cannot corrupt nesting — the key is snapshotted onto the stack at claim time.
 
 ### Preemption + nesting (D-NEST)
-A hardware **nesting stack** (depth 0..`NEST_MAX`, `NEST_MAX` in [1,16], default
+A hardware **nesting stack** (depth 0..16, `NEST_MAX` in [1,16], default
 8) holds the key+id of every in-service source. Only a source *strictly more
 urgent* than the top of the stack is offered, so a higher source preempts a
 lower one. `cpu_irq_ack` pushes (claim, depth++), `cpu_irq_eoi` pops (return,
-depth--). At `depth == NEST_MAX` offers are masked so the CPU can never claim
+depth--). At `depth >= NEST_MAX` offers are masked so the CPU can never claim
 past the limit; a preemption blocked that way sets `INT_STATUS.OVF` /
-`NEST_STATUS.OVF` (visible, non-destructive).
+`NEST_STATUS.OVF` (visible, non-destructive). Writing a `NEST_MAX` below the
+current depth keeps the open levels; offers stay masked until EOIs bring the
+depth below the new limit.
 
 ### Spurious detection (D-SPUR)
 A source may deassert between being offered and the CPU's claim. Detected at the
@@ -460,7 +462,7 @@ some handler will service it.
 
 WFI (D23) is decoded in `control` and implemented as a third stall source:
 S2 freezes on the WFI, S1 parks its fetch, and the instruction bus goes
-idle (measured: at most the one already-issued fetch completes per sleep).
+idle (at most the one already-issued fetch completes per sleep).
 Wake condition is `cpu_irq && mie[16+cpu_irq_vec]` — `mstatus.MIE` is intentionally not
 part of it, per privileged spec 3.3.3:
 
@@ -520,6 +522,5 @@ contracts as assertions and runs under Verilator. Test plan, coverage results,
 and the bugs found along the way: `debug/VERIFICATION.md`.
 
 Clock and reset in both benches come from `debug/hdl/ck_rst_tb.v`: 10 ns period
-(`CK_SEMIPERIOD` = 5), reset asserted from time 0 and released at 123 ns —
-deliberately *not* aligned to a clock edge, so the asynchronous reset's removal
-is exercised off-edge rather than in a convenient spot.
+(`CK_SEMIPERIOD` = 5), reset asserted from time 0 and released at 123 ns, off
+the clock edge, so the asynchronous reset's removal is exercised between edges.
