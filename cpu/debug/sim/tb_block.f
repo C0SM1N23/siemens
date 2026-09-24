@@ -15,3 +15,4 @@
 
 ../hdl/rv32i_tb_counters.v
 ../hdl/rv32i_tb_reset.v
+../hdl/pic_tb_random.v
