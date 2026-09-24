@@ -78,16 +78,20 @@ for build in rv32i_tb_riscv_tests rv32i_tb_riscv_tests_bp40; do
 done
 
 python3 - "$OUT/tests.txt" riscv_tests_expected.json <<'PYEOF'
-import json, subprocess, sys
+import json, os, subprocess, sys
 tests = [line.split() for line in open(sys.argv[1]) if line.strip()]
 expected_fail = json.load(open(sys.argv[2]))
 passed, failed, unexpected, stale, pass_list = [], [], [], [], []
 for name, tohost in tests:
     verdicts = []
     for build in ("rv32i_tb_riscv_tests", "rv32i_tb_riscv_tests_bp40"):
-        run = subprocess.run([f"./obj_dir/{build}/Vrv32i_tb_riscv_tests", f"+test={name}", f"+tohost={tohost}",
-                              f"+verilator+coverage+file+cov/{build}_{name}.dat"],
+        run = subprocess.run([f"./obj_dir/{build}/Vrv32i_tb_riscv_tests", f"+test={name}", f"+tohost={tohost}"],
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)
+        # coverage.dat, or logs/coverage.dat in older Verilator releases
+        for written in ("coverage.dat", "logs/coverage.dat"):
+            if os.path.exists(written):
+                os.replace(written, f"cov/{build}_{name}.dat")
+                break
         open(f"run_{build}_{name}.log", "w").write(run.stdout)
         ok = run.returncode == 0 and "ALL TESTS PASSED" in run.stdout and "%Error" not in run.stdout
         verdicts.append(ok)
