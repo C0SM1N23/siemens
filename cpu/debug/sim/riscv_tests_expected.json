@@ -1,0 +1,7 @@
+{
+  "rv32ui-p-fence_i": "Zifencei (FENCE.I) is outside the implemented ISA: instruction memory is not written through the data port, so the test's self-modifying code cannot run.",
+  "rv32ui-p-ma_data": "The test requires misaligned loads and stores to complete in hardware. The core raises load/store address-misaligned traps (causes 4 and 6) instead, which rv32mi-p-ma_addr and the four rv32mi-p-*-misaligned tests check.",
+  "rv32mi-p-breakpoint": "The test requires the Sdtrig trigger module (tselect). The core implements no trigger CSRs; accessing tselect raises an illegal-instruction trap.",
+  "rv32mi-p-pmpaddr": "The test assumes physical memory protection (pmpcfg/pmpaddr). The core implements no PMP; the CSRs raise an illegal-instruction trap.",
+  "rv32mi-p-zicntr": "Zicntr's user-level aliases cycle, time and instret (CSRs 0xC00-0xC02) are not implemented; the machine counters mcycle and minstret and their high halves are."
+}
