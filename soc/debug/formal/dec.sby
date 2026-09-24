@@ -1,0 +1,29 @@
+# soc_axi_lite_dec: safety by induction (prove), bounded response time in a fair
+# environment (live), and reachability of the interesting states (cover).
+[tasks]
+prove
+live
+cover
+
+[options]
+prove: aigsmt z3
+live: aigsmt z3
+prove: mode prove
+live: mode prove
+cover: mode cover
+cover: depth 24
+
+[engines]
+prove: abc pdr
+live: abc pdr
+cover: smtbmc z3
+
+[script]
+live: read -define LIVE
+read -formal soc_axi_lite_dec.v
+read -formal dec_formal.sv
+prep -top dec_formal
+
+[files]
+../../hdl/soc_axi_lite_dec.v
+dec_formal.sv

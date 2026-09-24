@@ -1,0 +1,44 @@
+# soc_axi_full2lite: safety by induction (prove), bounded completion time in a fair
+# environment (live), and reachability of the interesting states (cover).
+[tasks]
+prove
+live
+cover
+
+[options]
+prove: aigsmt z3
+live: aigsmt z3
+prove: mode prove
+live: mode prove
+cover: mode cover
+cover: depth 24
+
+[engines]
+prove: abc pdr
+live: abc pdr
+cover: smtbmc z3
+
+[script]
+live: read -define LIVE
+read -formal soc_axi_full2lite.v
+read -formal bridge_formal.sv
+prep -top bridge_formal
+flatten
+connect -set h_r_state \dut.r_state
+connect -set h_r_ar_sent \dut.r_ar_sent
+connect -set h_r_len \dut.r_len
+connect -set h_r_fixed \dut.r_fixed
+connect -set h_r_beat \dut.r_beat
+connect -set h_r_addr \dut.r_addr
+connect -set h_w_state \dut.w_state
+connect -set h_w_len \dut.w_len
+connect -set h_w_fixed \dut.w_fixed
+connect -set h_w_beat \dut.w_beat
+connect -set h_w_addr \dut.w_addr
+connect -set h_w_aw_sent \dut.w_aw_sent
+connect -set h_w_w_sent \dut.w_w_sent
+connect -set h_w_resp \dut.w_resp
+
+[files]
+../../hdl/soc_axi_full2lite.v
+bridge_formal.sv
