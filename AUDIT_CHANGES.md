@@ -1,7 +1,59 @@
-# CPU / SoC audit — 15 September 2026, fabric ordering review 16 September 2026
+# CPU / SoC audit — 15 September 2026, fabric ordering review 16 September 2026, verification extension 23 September 2026
 
 Scope: CPU, PIC, timer, SoC fabric and their verification. DMA/SRAM findings are
 recorded only in [TO_MODIFY.md](TO_MODIFY.md).
+
+## Verification extension, 23 September 2026
+
+The CPU, PIC, timer and fabric RTL is unchanged in this round; every new test
+passed against it. What changed is the depth of the evidence.
+
+### Findings
+
+| Area | Finding | How it was found | Correction |
+|---|---|---|---|
+| PIC SVA | `depth_within_max` asserted depth ≤ NEST_MAX. Software may lower NEST_MAX below the current depth; the RTL keeps the open levels and masks offers until the stack drains, which is the intended behaviour. | Random PIC traffic under Verilator fired the assertion; the cycle model agreed with the RTL. | Replaced by depth ≤ 16 and "a claim pushes only below NEST_MAX". `ARCHITECTURE.md` states the lowering behaviour. |
+| Regression script | ModelSim's Tcl `exec` cannot start the Windows `python` app alias, so the PIC model step stopped the regression. | Full ModelSim regression. | `regress.do` uses `$PYTHON` when set, otherwise `python` through `cmd` on Windows and `python3` elsewhere. |
+| Mutation list | An arbiter that sends read responses to both masters was not caught. The decoders accept a response only after their own address handshake, so the stray RVALID never reaches a master: the defect is invisible from outside. | Mutation run. | Replaced with an arbiter that releases the grant before the write response is taken, which the random fabric bench detects. |
+| Timer bench | The interrupt was checked only once mtime had passed mtimecmp, so a compare that fired one cycle late (mtime > mtimecmp) still passed. | New timer mutation. | `mtimer_tb_regs` checks that the interrupt rises in the cycle mtime equals mtimecmp. |
+| Random fabric bench | One Verilator seed produced no refused burst, so its "every kind of traffic occurred" check failed. | Verilator seeds 1–20. | One burst in ten is now refused, and refused reads are counted as well as writes. |
+
+The DMA/SRAM items found in this round (a control word that never finishes, an
+eight-word descriptor fetch, resume restarting the transfer, collisions failing
+the losing access, the owner benches not elaborating) are in
+[TO_MODIFY.md](TO_MODIFY.md).
+
+### Added
+
+- Bench inputs change 1 ns after the rising edge; handshakes are sampled at the
+  rising edge. This replaces the falling-edge drivers described below.
+- Verilator runs every timing variant and random seed with the bound SVA.
+  Functional coverage is merged over runs (90/90 bins) and every cover property
+  must be reached (`merge_fcov.py`, `check_covers.py`).
+- CPU: ten seeded random programs from `isa_reference.py` (47,862 instructions);
+  interrupt/exception races in `rv32i_tb_traps`; the official riscv-tests
+  (`run_riscv_tests.sh`, 53/58 with five features outside the ISA).
+- PIC: `pic_tb_random` with the cycle model `pic_model.py`; SymbiYosys harness
+  `pic_formal.sv` with five injected defects.
+- SoC: `soc_tb_isolation`, `soc_tb_dma_fault`, `soc_tb_reset_traffic`,
+  `soc_tb_pic_spurious`, `soc_tb_pic_deep_nest`, `soc_tb_same_addr`,
+  `soc_tb_fabric_random`; the PULP decoder comparison over 10 random seeds;
+  SymbiYosys harnesses for the decoder, arbiter and bridge with ten injected
+  defects.
+- Mutations in simulation: 25, up from 16.
+- `soc_probe_upstream` observes the DMA control word, descriptor fetch and
+  resume.
+
+### Results
+
+| Check | Result |
+|---|---|
+| ModelSim ASE 2020.1 CPU/PIC | 39/39 runs |
+| ModelSim ASE 2020.1 SoC | 34/34 runs; 767 labelled checks |
+| Verilator 5.050 | 17 CPU/PIC and 23 SoC benches, every run with SVA; coverage and cover gates pass |
+| riscv-tests | 53/58; the five others outside the implemented ISA |
+| Formal | PIC 3 tasks, fabric 9 tasks; 15/15 injected defects detected |
+| Mutations | 25/25 detected |
 
 ## Bugs and verification gaps
 
@@ -40,9 +92,9 @@ in this project.
 
 The decoder defect is the one that mattered. The others are recorded so the
 difference is a decision rather than an oversight: the arbiter's serialisation is
-a throughput trade-off to revisit if measurement shows the CPU and DMA blocking
-each other, and this project's DECERR > SLVERR > OKAY is kept deliberately, so a
-decode error inside a burst is still reported as a decode error.
+a throughput trade-off to revisit if the CPU and DMA are shown to block each
+other, and this project's DECERR > SLVERR > OKAY is kept, so a decode error
+inside a burst is still reported as a decode error.
 
 Ordering is not free in general, but it is here: every slave in this SoC already
 withholds its own READY while it owes a response, so the cycle the decoder now
@@ -95,7 +147,7 @@ watchers before offering the request.
 - Add mutation testing in a temporary copy, strict RTL lint checks and shared
   ModelSim/Verilator result handling. Every new functional bench ran on both tools.
 
-## Measured results
+## Results, 15 September 2026
 
 | Check | Result |
 |---|---|
@@ -117,7 +169,7 @@ verification limits are in [cpu/debug/VERIFICATION_ROADMAP.md](cpu/debug/VERIFIC
 - Place CPU briefs, technical notes and diagrams under `cpu/docs/`; keep SoC
   architecture and verification under `soc/`.
 - Correct the four design/verification specifications to revision 1.1, including
-  counter semantics, test methods, measured results and implementation limits.
+  counter semantics, test methods, results and implementation limits.
   Correct the `mstatus` reset readback (0x1800), exclude absent CSR 0xB81 from the
   upper-counter map, and remove duplicate PDF page anchors.
   Rebuild and inspect the PDFs; retain their detailed structure.

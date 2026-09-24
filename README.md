@@ -24,12 +24,17 @@ branches retain their layout and content.
 From the repository root, with Python, ModelSim and/or Verilator installed:
 
 ```text
-make modelsim    # assemble and run 22 CPU/PIC configurations
-make soc         # assemble and run 25 SoC configurations
-make test        # all 16 CPU/PIC benches, SVA and nominal functional coverage
-make soc-sva     # all 16 SoC benches with SVA
+make modelsim      # CPU/PIC ModelSim regression, 39 runs
+make soc           # SoC ModelSim regression, 34 runs
+make test          # 17 CPU/PIC benches on Verilator: SVA, merged coverage, covers
+make soc-sva       # 23 SoC benches on Verilator: SVA and covers
+make riscv-tests   # official rv32ui/rv32mi tests (needs a RISC-V GCC)
+make formal        # SymbiYosys: PIC, decoder, arbiter, bridge
+make mutations     # injected RTL defects, each must fail its bench
+make soc-pulp      # comparison with pulp-platform/axi
 ```
 
-ModelSim runs the functional tests and procedural monitors. Verilator runs all
-distinct functional benches with applicable SVA and the nominal CPU coverage
-model. Detailed commands are in each block's verification document.
+ModelSim runs the functional tests and procedural monitors. Verilator runs every
+bench and timing variant with the bound SVA, the functional coverage model and
+the cover properties. Detailed commands are in each block's verification
+document.
