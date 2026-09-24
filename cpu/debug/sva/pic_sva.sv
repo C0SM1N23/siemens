@@ -6,8 +6,10 @@
 //  - D-LAT : cpu_irq_i / cpu_irq_vec_i are the registered (offer_val_i, res_id_i) pair
 //  - D-BAND: the offered source is eligible (a pending request, not in service)
 //            and, under nesting, strictly more urgent than the in-service top
-//  - D-NEST: depth_i stays within [0, NEST_MAX], moves only by claim/eoi, and the
-//            depth_i limit masks further offers (enforcing the bound)
+//  - D-NEST: depth_i stays within the physical stack, grows only below NEST_MAX,
+//            moves only by claim/eoi, and the limit masks further offers.
+//            Software may lower NEST_MAX below the current depth; the stack
+//            then only drains until it is below the new limit.
 //
 // Bound from rv32i_bind_sva.sv — no RTL is touched.
 
@@ -93,9 +95,13 @@ module pic_sva #(
     assert property (@(posedge clk_i) disable iff (!rst_n_i) nest_max_i <= MAXNEST)
     else $error("[pic] NEST_MAX exceeds the physical stack");
 
-    depth_within_max :
-    assert property (@(posedge clk_i) disable iff (!rst_n_i) depth_i <= nest_max_i)
-    else $error("[pic] nesting depth_i exceeded NEST_MAX");
+    depth_within_hw :
+    assert property (@(posedge clk_i) disable iff (!rst_n_i) depth_i <= MAXNEST)
+    else $error("[pic] nesting depth_i exceeded the physical stack");
+
+    claim_only_below_max :
+    assert property (@(posedge clk_i) disable iff (!rst_n_i) claim_push_i |-> (depth_i < nest_max_i))
+    else $error("[pic] a claim pushed at or past NEST_MAX");
 
     claim_eoi_exclusive :
     assert property (@(posedge clk_i) disable iff (!rst_n_i) !(claim_push_i && eoi_pop_i))
