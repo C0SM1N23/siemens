@@ -26,7 +26,17 @@
 
 `timescale 1ns / 1ps
 
-module soc_tb_top;
+module soc_tb_top #(
+    // Memory timing. Verilator overrides these top-level parameters; ModelSim sets
+    // the SoC parameters directly and reads the values back after elaboration.
+    parameter IMEM_READ_LAT   = 0,
+    parameter IMEM_STALL_PROB = 0,
+    parameter IMEM_SEED       = 1,
+    parameter DMEM_READ_LAT   = 0,
+    parameter DMEM_WRITE_LAT  = 0,
+    parameter DMEM_STALL_PROB = 0,
+    parameter DMEM_SEED       = 2
+);
 
     integer errors;
     `include "tb_check.vh"
@@ -45,7 +55,14 @@ module soc_tb_top;
     soc_top #(
         .RESET_PC (32'h0000_0000),
         .IMEM_INIT("program_soc.hex"),
-        .DMEM_INIT("")
+        .DMEM_INIT(""),
+        .IMEM_READ_LAT  (IMEM_READ_LAT),
+        .IMEM_STALL_PROB(IMEM_STALL_PROB),
+        .IMEM_SEED      (IMEM_SEED),
+        .DMEM_READ_LAT  (DMEM_READ_LAT),
+        .DMEM_WRITE_LAT (DMEM_WRITE_LAT),
+        .DMEM_STALL_PROB(DMEM_STALL_PROB),
+        .DMEM_SEED      (DMEM_SEED)
     ) dut (
         .clk_i        (clk),
         .rst_n_i      (rst_n),
