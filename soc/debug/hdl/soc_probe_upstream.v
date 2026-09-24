@@ -16,6 +16,7 @@ module soc_probe_upstream;
     integer        length;
     integer        word_index;
     integer        lengths        [0:5];
+    reg     [ 7:0] fetch_len;
 
     mc_dma_channel dma (
         .clk_i             (clk),
@@ -67,25 +68,14 @@ module soc_probe_upstream;
         .irq_o                ()
     );
 
-    initial begin
-        lengths[0] = 0;
-        lengths[1] = 1;
-        lengths[2] = 2;
-        lengths[3] = 3;
-        lengths[4] = 5;
-        lengths[5] = 22;
-        for (length = 0; length < 6; length = length + 1) begin
-            @(posedge clk);
-            #1;
-            rst_n   = 0;
-            control = 0;
-            repeat (3) begin
-                @(posedge clk);
-                #1;
-            end
-            rst_n   = 1;
-            control = 1;
+    // Serve the channel's descriptor fetch: source 0x2100, destination 0x40000020,
+    // the given length and control word, then four unused words.
+    task serve_fetch;
+        input [31:0] len;
+        input [31:0] ctrl;
+        begin
             wait (request);
+            fetch_len = request_len;
             @(posedge clk);
             #1;
             grant = 1;
@@ -97,8 +87,8 @@ module soc_probe_upstream;
                 case (word_index)
                     0:       fetch_data = 32'h2100;
                     1:       fetch_data = 32'h40000020;
-                    2:       fetch_data = lengths[length];
-                    3:       fetch_data = 1;
+                    2:       fetch_data = len;
+                    3:       fetch_data = ctrl;
                     default: fetch_data = 0;
                 endcase
                 @(posedge clk);
@@ -109,12 +99,85 @@ module soc_probe_upstream;
             @(posedge clk);
             #1;
             done = 0;
+        end
+    endtask
+
+    // Reset the channel, enable it and serve its descriptor fetch.
+    task start_channel;
+        input [31:0] len;
+        input [31:0] ctrl;
+        begin
+            @(posedge clk);
+            #1;
+            rst_n   = 0;
+            control = 0;
+            repeat (3) begin
+                @(posedge clk);
+                #1;
+            end
+            rst_n   = 1;
+            control = 1;
+            serve_fetch(len, ctrl);
+        end
+    endtask
+
+    // Wait for the channel's next request, grant it and complete its burst at once.
+    task serve_burst;
+        begin
             wait (request);
             @(posedge clk);
             #1;
+            grant = 1;
+            @(posedge clk);
+            #1;
+            grant = 0;
+            done  = 1;
+            @(posedge clk);
+            #1;
+            done = 0;
+        end
+    endtask
+
+    initial begin
+        lengths[0] = 0;
+        lengths[1] = 1;
+        lengths[2] = 2;
+        lengths[3] = 3;
+        lengths[4] = 5;
+        lengths[5] = 22;
+        for (length = 0; length < 6; length = length + 1) begin
+            start_channel(lengths[length], 1);
             $display("OBSERVE DMA bytes=%0d ARLEN=%0d transfer_bytes=%0d", lengths[length],
                      request_len, (int'(request_len) + 1) * 4);
         end
+        $display("OBSERVE DMA descriptor fetch ARLEN=%0d: %0d words read, 4 used", fetch_len,
+                 int'(fetch_len) + 1);
+
+        // Descriptor control word 0: the 32 bytes are copied, then the channel
+        // stays ACTIVE and starts another block with the length at zero.
+        start_channel(32, 0);
+        serve_burst;  // read burst
+        serve_burst;  // write burst
+        $display("OBSERVE DMA control=0 bytes=32: state after the copy=%0d, next ARLEN=%0d at 0x%08h",
+                 dma.state, request_len, dma.req_addr_o);
+        serve_burst;  // 256-beat read
+        serve_burst;  // 256-beat write
+        $display("OBSERVE DMA control=0 bytes=32: after the next block state=%0d, write to 0x%08h, next ARLEN=%0d",
+                 dma.state, dma.desc_dst - 32'd32, request_len);
+
+        // Abort after the first 32 of 64 bytes, then resume: the channel fetches
+        // the descriptor again and restarts from the first source word.
+        start_channel(64, 1);
+        serve_burst;  // read of bytes 0..31
+        control = 32'h3;  // enable + abort, taken when the write burst completes
+        serve_burst;  // write of bytes 0..31
+        $display("OBSERVE DMA abort after 32 of 64 bytes: state=%0d", dma.state);
+        control = 32'h5;  // enable + resume
+        serve_fetch(64, 1);
+        $display("OBSERVE DMA resume: descriptor fetched again, next read from 0x%08h", dma.req_addr_o);
+        serve_burst;  // read
+        $display("OBSERVE DMA resume: next write to 0x%08h", dma.req_addr_o);
+
         @(posedge clk);
         #1;
         rst_n     = 0;
