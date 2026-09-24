@@ -936,6 +936,108 @@ rv32i_cpu_top #(
         check(32'd2, eoi_cnt[31:0], "  two EOIs came back, one per level");
         check(32'd0, {31'b0, cpu_in_trap}, "  cpu_in_trap released only at the end");
 
+        // an interrupt and an exception on the same instruction
+        //
+        // The request is already up when MIE turns on, so the first instruction
+        // to reach S2 afterwards - an ECALL - both raises an exception and meets a
+        // deliverable interrupt. The interrupt is taken first and the ECALL does
+        // not execute: mepc points at it. The handler returns to it, it executes
+        // once and traps as cause 11, and only the interrupt's MRET sends an EOI.
+        //
+        //   0x14  csrrsi mstatus, 8      MIE on, request already pending
+        //   0x18  ECALL                  interrupted, then executed after MRET
+        //   0x1C  SW marker              reached once both traps are done
+        //   0x80  exception handler: record mcause and mepc, mepc += 4, MRET
+        //   0xC0  interrupt handler: record mcause and mepc, MRET
+        prog_init;
+        prog[0]  = I_ADDI(5'd3, 5'd0, HANDLER[11:0] | 12'd1);  // vectored, BASE 0x80
+        prog[1]  = I_CSRRW(5'd0, CSR_MTVEC, 5'd3);
+        prog[2]  = I_LUI(5'd3, 20'h00010);  // mie bit 16 = vector 0
+        prog[3]  = I_CSRRW(5'd0, CSR_MIE, 5'd3);
+        prog[4]  = I_LUI(5'd5, MARK_ADDR[31:12]);  // x5 = marker base
+        prog[5]  = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);
+        prog[6]  = ECALL;  // 0x18
+        prog[7]  = I_SW(5'd0, 5'd5, 12'd0);  // 0x1C: marker
+        prog[8]  = I_JAL(5'd0, 21'd0);
+        prog[32] = I_CSRRS(5'd6, 12'h342, 5'd0);  // 0x80: mcause
+        prog[33] = I_SW(5'd6, 5'd5, 12'd12);
+        prog[34] = I_CSRRS(5'd4, CSR_MEPC, 5'd0);
+        prog[35] = I_SW(5'd4, 5'd5, 12'd16);
+        prog[36] = I_ADDI(5'd4, 5'd4, 12'd4);
+        prog[37] = I_CSRRW(5'd0, CSR_MEPC, 5'd4);
+        prog[38] = MRET;
+        prog[48] = I_CSRRS(5'd6, 12'h342, 5'd0);  // 0xC0: mcause
+        prog[49] = I_SW(5'd6, 5'd5, 12'd4);
+        prog[50] = I_CSRRS(5'd4, CSR_MEPC, 5'd0);
+        prog[51] = I_SW(5'd4, 5'd5, 12'd8);
+        prog[52] = MRET;
+        start_case("race - an interrupt and an exception on the same instruction");
+        cpu_irq_vec = 4'd0;
+        cpu_irq     = 1'b1;  // pending before MIE turns on
+        while (ack_cnt != 1) @(posedge clk);
+        cpu_irq = 1'b0;
+        while (!marker_seen) @(posedge clk);
+        repeat (4) @(posedge clk);
+        check(32'h8000_0010, dmem.mem[1], "  first trap: the interrupt");
+        check(32'h0000_0018, dmem.mem[2], "  its mepc is the ECALL, which has not executed");
+        check(32'd11, dmem.mem[3], "  second trap: the ECALL, after the interrupt returned");
+        check(32'h0000_0018, dmem.mem[4], "  its mepc is the same ECALL");
+        check(32'd1, eoi_at_marker[31:0], "  one EOI: the interrupt's MRET, not the exception's");
+        check(32'd1, ack_cnt[31:0], "  one claim");
+
+        // an interrupt that becomes pending while its predecessor's handler runs
+        //
+        // The main loop increments x8. Vector 0 is taken; while its handler runs
+        // with MIE off, vector 1 is raised. The handler's MRET turns MIE back on,
+        // and vector 1 must be taken at once: at the same resume address, and
+        // before a single instruction of the loop executes (x8 unchanged).
+        //
+        //   0x18  ADDI x8, x8, 1 ; 0x1C JAL -4      the interrupted loop
+        //   0xC0/0xC4  JAL h0 / JAL h1               vector 0 and vector 1 entries
+        //   0x100 h0: record x8 and mepc, NOP window, MRET
+        //   0x120 h1: record x8 and mepc, marker, MRET
+        prog_init;
+        prog[0]  = I_ADDI(5'd3, 5'd0, HANDLER[11:0] | 12'd1);
+        prog[1]  = I_CSRRW(5'd0, CSR_MTVEC, 5'd3);
+        prog[2]  = I_LUI(5'd3, 20'h00030);  // mie bits 16 and 17
+        prog[3]  = I_CSRRW(5'd0, CSR_MIE, 5'd3);
+        prog[4]  = I_LUI(5'd5, MARK_ADDR[31:12]);
+        prog[5]  = I_CSRRSI(5'd0, CSR_MSTATUS, 5'd8);
+        prog[6]  = I_ADDI(5'd8, 5'd8, 12'd1);  // 0x18
+        prog[7]  = I_JAL(5'd0, -21'sd4);  // 0x1C -> 0x18
+        prog[48] = I_JAL(5'd0, 21'd64);  // 0xC0 -> 0x100
+        prog[49] = I_JAL(5'd0, 21'd92);  // 0xC4 -> 0x120
+        prog[64] = I_SW(5'd8, 5'd5, 12'd4);  // 0x100: h0
+        prog[65] = I_CSRRS(5'd4, CSR_MEPC, 5'd0);
+        prog[66] = I_SW(5'd4, 5'd5, 12'd8);
+        prog[67] = NOP;
+        prog[68] = NOP;
+        prog[69] = NOP;
+        prog[70] = NOP;
+        prog[71] = MRET;
+        prog[72] = I_SW(5'd8, 5'd5, 12'd12);  // 0x120: h1
+        prog[73] = I_CSRRS(5'd4, CSR_MEPC, 5'd0);
+        prog[74] = I_SW(5'd4, 5'd5, 12'd16);
+        prog[75] = I_SW(5'd0, 5'd5, 12'd0);
+        prog[76] = MRET;
+        start_case("race - an interrupt pending when MRET re-enables interrupts");
+        run_irq_case(4'd0);
+        while (ack_cnt != 1) @(posedge clk);
+        cpu_irq = 1'b0;
+        while (!(db_awvalid && db_awready && db_awaddr == MARK_ADDR + 32'd8)) @(posedge clk);
+        #1;
+        cpu_irq_vec = 4'd1;  // raised while h0 still runs with MIE off
+        cpu_irq     = 1'b1;
+        while (ack_cnt != 2) @(posedge clk);
+        cpu_irq = 1'b0;
+        while (!marker_seen) @(posedge clk);
+        repeat (40) @(posedge clk);
+        check(dmem.mem[1], dmem.mem[3], "  no loop instruction ran between the two handlers");
+        check(dmem.mem[2], dmem.mem[4], "  vector 1 taken at the address MRET resumed");
+        check(32'h8000_0011, dut.csr_file_inst.mcause_q, "  the second trap was vector 1");
+        check(32'd2, eoi_cnt[31:0], "  two EOIs");
+        check(32'd0, {31'b0, cpu_in_trap}, "  no trap level left open");
+
         // done
         repeat (10) @(posedge clk);
         if (errors == 0) $display("== TRAP CAUSE TESTBENCH: ALL TESTS PASSED ==");
