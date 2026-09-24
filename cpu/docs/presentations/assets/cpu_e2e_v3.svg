@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760">
+<rect width="100%" height="100%" fill="white"/>
+<rect x="20" y="20" width="330" height="130" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="185.0" y="64.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Golden ISA model</text>
+<text x="185.0" y="98.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">isa_reference.py (Python)</text>
+<text x="185.0" y="127.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">independent of the RTL</text>
+<rect x="430" y="20" width="300" height="130" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="580.0" y="64.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Program</text>
+<text x="580.0" y="98.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">1,293 words</text>
+<text x="580.0" y="127.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">instruction memory</text>
+<rect x="820" y="20" width="340" height="130" rx="8" fill="#006B75" stroke="#006B75" stroke-width="2"/>
+<text x="990.0" y="64.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="white" xml:space="preserve">RV32I CPU</text>
+<text x="990.0" y="98.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#D9EEF0" xml:space="preserve">memories with delay</text>
+<text x="990.0" y="127.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#D9EEF0" xml:space="preserve">and backpressure</text>
+<polyline points="350,85 430,85" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="350,85 430,85" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="430,85 416.0,78.5 416.0,91.5" fill="#006B75"/>
+<polyline points="730,85 820,85" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="730,85 820,85" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="820,85 806.0,78.5 806.0,91.5" fill="#006B75"/>
+<rect x="20" y="250" width="330" height="130" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="185.0" y="294.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Expected trace</text>
+<text x="185.0" y="328.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">1,287 steps: PC · rd · value</text>
+<text x="185.0" y="357.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">+ 256 memory words</text>
+<rect x="820" y="250" width="340" height="130" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="990.0" y="294.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Write-back</text>
+<text x="990.0" y="328.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">PC · rd · value</text>
+<text x="990.0" y="357.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">at every retirement</text>
+<polyline points="185,150 185,250" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="185,150 185,250" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="185,250 191.5,236.0 178.5,236.0" fill="#006B75"/>
+<polyline points="990,150 990,250" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="990,150 990,250" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="990,250 996.5,236.0 983.5,236.0" fill="#006B75"/>
+<rect x="430" y="250" width="300" height="130" rx="8" fill="white" stroke="#006B75" stroke-width="2"/>
+<text x="580.0" y="294.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Compare</text>
+<text x="580.0" y="328.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">every step</text>
+<text x="580.0" y="357.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">then all memory words</text>
+<polyline points="350,315 430,315" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="350,315 430,315" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="430,315 416.0,308.5 416.0,321.5" fill="#006B75"/>
+<polyline points="820,315 730,315" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="820,315 730,315" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="730,315 744.0,321.5 744.0,308.5" fill="#006B75"/>
+<rect x="20" y="440" width="1140" height="300" rx="10" fill="#F7FAFA" stroke="#CEDADD" stroke-width="2"/>
+<text x="44" y="482" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#526772" xml:space="preserve">Nominal run: a byte store, then three loads of the same word</text>
+<text x="44" y="530" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#526772" xml:space="preserve">step</text>
+<text x="150" y="530" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#526772" xml:space="preserve">PC</text>
+<text x="300" y="530" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#526772" xml:space="preserve">instruction</text>
+<text x="640" y="530" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#526772" xml:space="preserve">model</text>
+<text x="910" y="530" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700" fill="#526772" xml:space="preserve">CPU</text>
+<line x1="40" y1="544" x2="1140" y2="544" stroke="#CEDADD" stroke-width="2"/>
+<text x="44" y="584" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">660</text>
+<text x="150" y="584" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">00000A50</text>
+<text x="300" y="584" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">sb   x3, 1(x31)</text>
+<text x="640" y="584" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">no write</text>
+<text x="910" y="584" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="700" fill="#006B75" xml:space="preserve">no write</text>
+<text x="1130" y="584" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#006B75" xml:space="preserve">✓</text>
+<text x="44" y="626" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">661</text>
+<text x="150" y="626" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">00000A54</text>
+<text x="300" y="626" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">lb   x14, 1(x31)</text>
+<text x="640" y="626" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">x14 = FFFFFFFF</text>
+<text x="910" y="626" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="700" fill="#006B75" xml:space="preserve">x14 = FFFFFFFF</text>
+<text x="1130" y="626" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#006B75" xml:space="preserve">✓</text>
+<text x="44" y="668" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">662</text>
+<text x="150" y="668" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">00000A58</text>
+<text x="300" y="668" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">lbu  x15, 1(x31)</text>
+<text x="640" y="668" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">x15 = 000000FF</text>
+<text x="910" y="668" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="700" fill="#006B75" xml:space="preserve">x15 = 000000FF</text>
+<text x="1130" y="668" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#006B75" xml:space="preserve">✓</text>
+<text x="44" y="710" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">663</text>
+<text x="150" y="710" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">00000A5C</text>
+<text x="300" y="710" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">lw   x18, 0(x31)</text>
+<text x="640" y="710" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="400" fill="#173442" xml:space="preserve">x18 = 8000FFFF</text>
+<text x="910" y="710" text-anchor="start" font-family="Consolas, DejaVu Sans Mono, monospace" font-size="22" font-weight="700" fill="#006B75" xml:space="preserve">x18 = 8000FFFF</text>
+<text x="1130" y="710" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#006B75" xml:space="preserve">✓</text>
+</svg>

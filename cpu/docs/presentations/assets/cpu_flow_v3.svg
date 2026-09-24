@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="860" viewBox="0 0 560 860">
+<rect width="100%" height="100%" fill="white"/>
+<rect x="20" y="10" width="520" height="165" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="280.0" y="71.6" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">1 · Configure</text>
+<text x="280.0" y="106.05" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">mtvec: handler address</text>
+<text x="280.0" y="135.05" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">mie: PIC sources allowed</text>
+<polyline points="280,175 280,225" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="280,175 280,225" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="280,225 286.5,211.0 273.5,211.0" fill="#006B75"/>
+<rect x="20" y="225" width="520" height="165" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="280.0" y="286.6" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">2 · Enable</text>
+<text x="280.0" y="321.05" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">mstatus.MIE = 1</text>
+<text x="280.0" y="350.05" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">taken between instructions</text>
+<polyline points="280,390 280,440" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="280,390 280,440" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="280,440 286.5,426.0 273.5,426.0" fill="#006B75"/>
+<rect x="20" y="440" width="520" height="165" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="280.0" y="487.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">3 · Enter the handler</text>
+<text x="280.0" y="521.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">hardware saves mepc,</text>
+<text x="280.0" y="550.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">mcause, mtval; clears MIE;</text>
+<text x="280.0" y="579.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">claim to the PIC</text>
+<polyline points="280,605 280,655" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="280,605 280,655" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="280,655 286.5,641.0 273.5,641.0" fill="#006B75"/>
+<rect x="20" y="655" width="520" height="165" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="280.0" y="716.6" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">4 · Return</text>
+<text x="280.0" y="751.0500000000001" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">MRET jumps to mepc</text>
+<text x="280.0" y="780.0500000000001" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">EOI to the PIC</text>
+</svg>

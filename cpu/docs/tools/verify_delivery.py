@@ -35,7 +35,8 @@ for path in (D/'presentations/output').glob('*.pptx'):
                 Image.open(io.BytesIO(png)).verify()
                 ET.fromstring(svg)
                 count+=1
-    expected=5 if v2 else 4
+    # v2 and v3 add the SoC context figure on the title slide.
+    expected=4 if not (v2 or path.stem.endswith('_v3')) else 5
     assert count==expected,(path.name,count)
     assert len(pymupdf.open(path.with_suffix('.pdf')))==pages
     print('PASS:',path.name,f'{pages} slides / {pages} notes / {expected} SVG+PNG assets / {pages}-page PDF')

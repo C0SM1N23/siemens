@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1780" height="610" viewBox="0 0 1780 610">
+<rect width="100%" height="100%" fill="white"/>
+<text x="160" y="36" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">irq_src · 16 lines</text>
+<rect x="20" y="110" width="330" height="190" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="185.0" y="168.4" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#173442" xml:space="preserve">Source conditioning</text>
+<text x="185.0" y="204.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">level / edge per source</text>
+<text x="185.0" y="234.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">HW line OR keyed SW request</text>
+<text x="185.0" y="264.20000000000005" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">INT_ENABLE</text>
+<rect x="470" y="110" width="400" height="190" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="670.0" y="168.4" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#173442" xml:space="preserve">Priority key</text>
+<text x="670.0" y="204.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">10-bit key: urgency ·</text>
+<text x="670.0" y="234.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">priority in band · inverted ID</text>
+<text x="670.0" y="264.20000000000005" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">deadline counter → escalation</text>
+<rect x="990" y="110" width="390" height="190" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1185.0" y="183.4" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#173442" xml:space="preserve">Resolver + offer</text>
+<text x="1185.0" y="219.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">highest eligible key</text>
+<text x="1185.0" y="249.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">registered IRQ + 4-bit vector</text>
+<rect x="1500" y="110" width="260" height="190" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="1630.0" y="184.4" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#173442" xml:space="preserve">CPU</text>
+<text x="1630.0" y="219.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">claim · EOI</text>
+<text x="1630.0" y="248.20000000000002" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">mask</text>
+<rect x="20" y="400" width="330" height="190" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="185.0" y="473.4" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#173442" xml:space="preserve">Register map</text>
+<text x="185.0" y="509.2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">AXI4-Lite slave</text>
+<text x="185.0" y="539.2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">configuration · status</text>
+<rect x="470" y="400" width="910" height="190" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="925.0" y="473.4" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#173442" xml:space="preserve">Nesting stack</text>
+<text x="925.0" y="509.2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">16 levels, limit NEST_MAX · claim pushes ID + key · EOI pops</text>
+<text x="925.0" y="539.2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">active mask · spurious check at claim</text>
+<polyline points="160,50 160,110" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="160,50 160,110" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="160,110 166.5,96.0 153.5,96.0" fill="#006B75"/>
+<polyline points="350,205 470,205" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="350,205 470,205" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="470,205 456.0,198.5 456.0,211.5" fill="#006B75"/>
+<text x="410" y="192" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">requests</text>
+<polyline points="870,205 990,205" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="870,205 990,205" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="990,205 976.0,198.5 976.0,211.5" fill="#006B75"/>
+<text x="930" y="192" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">keys</text>
+<polyline points="1380,175 1500,175" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1380,175 1500,175" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1500,175 1486.0,168.5 1486.0,181.5" fill="#006B75"/>
+<text x="1440" y="162" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">IRQ · vector</text>
+<polyline points="1500,250 1380,250" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1500,250 1380,250" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1380,250 1394.0,256.5 1394.0,243.5" fill="#006B75"/>
+<text x="1440" y="237" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">CPU mask</text>
+<polyline points="1630,300 1630,495 1380,495" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1630,300 1630,495 1380,495" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1380,495 1394.0,501.5 1394.0,488.5" fill="#006B75"/>
+<text x="1645" y="445" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">claim · EOI</text>
+<polyline points="1185,400 1185,300" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1185,400 1185,300" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1185,300 1178.5,314.0 1191.5,314.0" fill="#006B75"/>
+<text x="1170" y="340" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">top key · depth &lt; limit</text>
+<polyline points="840,300 840,400" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="840,300 840,400" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="840,400 846.5,386.0 833.5,386.0" fill="#006B75"/>
+<text x="852" y="340" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">keys</text>
+<polyline points="1320,300 1320,400" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1320,300 1320,400" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="1320,400 1326.5,386.0 1313.5,386.0" fill="#006B75"/>
+<text x="1332" y="340" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">claimed ID</text>
+<polyline points="760,400 760,300" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="760,400 760,300" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="760,300 753.5,314.0 766.5,314.0" fill="#006B75"/>
+<text x="745" y="340" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">active sources</text>
+<polyline points="185,400 185,300" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="185,400 185,300" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="185,300 178.5,314.0 191.5,314.0" fill="#006B75"/>
+<text x="170" y="340" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">configuration</text>
+<polyline points="470,540 350,540" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="470,540 350,540" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="350,540 364.0,546.5 364.0,533.5" fill="#006B75"/>
+<text x="410" y="528" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">status</text>
+<polyline points="350,280 420,280 420,470 470,470" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="350,280 420,280 420,470 470,470" fill="none" stroke="#006B75" stroke-width="3"/>
+<polygon points="470,470 456.0,463.5 456.0,476.5" fill="#006B75"/>
+<text x="428" y="340" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">spurious check</text>
+<polyline points="300,300 300,375 1700,375 1700,300" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="300,300 300,375 1700,375 1700,300" fill="none" stroke="#006B75" stroke-width="3" stroke-dasharray="8 6"/>
+<polygon points="1700,300 1693.5,314.0 1706.5,314.0" fill="#006B75"/>
+<text x="1500" y="367" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">pending mask → mip</text>
+</svg>

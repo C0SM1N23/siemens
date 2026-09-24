@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="870" viewBox="0 0 1320 870">
+<rect width="100%" height="100%" fill="white"/>
+<rect x="30" y="20" width="290" height="95" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="175.0" y="60.6" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Instruction memory</text>
+<text x="175.0" y="96.05" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">read-only RAM</text>
+<rect x="30" y="160" width="290" height="58" rx="6" fill="#F4F7F8" stroke="#8FA7AD" stroke-width="2"/>
+<text x="175.0" y="196.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#173442" xml:space="preserve">ibus decoder</text>
+<rect x="30" y="265" width="290" height="170" rx="8" fill="#006B75" stroke="#006B75" stroke-width="2"/>
+<text x="175.0" y="328.7" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="700" fill="white" xml:space="preserve">RV32I CPU</text>
+<text x="175.0" y="364.84999999999997" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#D9EEF0" xml:space="preserve">3-stage pipeline</text>
+<text x="175.0" y="394.84999999999997" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#D9EEF0" xml:space="preserve">ibus + dbus masters</text>
+<rect x="30" y="575" width="290" height="215" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="175.0" y="646.2" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="700" fill="#173442" xml:space="preserve">PIC</text>
+<text x="175.0" y="682.35" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">16 sources · 4 bands</text>
+<text x="175.0" y="712.35" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">src 0–3: DMA</text>
+<text x="175.0" y="742.35" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">src 4: SRAM · src 7: timer</text>
+<rect x="420" y="20" width="70" height="780" rx="6" fill="#F4F7F8" stroke="#8FA7AD" stroke-width="2"/>
+<text transform="rotate(-90 447.4 410.0)" x="447.4" y="410.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#173442">CPU bus decoder</text>
+<text transform="rotate(-90 476.85 410.0)" x="476.85" y="410.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772">5 windows</text>
+<rect x="670" y="20" width="200" height="58" rx="6" fill="#F4F7F8" stroke="#8FA7AD" stroke-width="2"/>
+<text x="770.0" y="56.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#173442" xml:space="preserve">arbiter 2:1</text>
+<rect x="580" y="112" width="380" height="88" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="770.0" y="149.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Data memory</text>
+<text x="770.0" y="184.54999999999998" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">shared by CPU and DMA</text>
+<rect x="580" y="245" width="380" height="115" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="770.0" y="295.6" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Dual-port SRAM</text>
+<text x="770.0" y="331.05" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">port A: CPU · port B: DMA</text>
+<rect x="580" y="410" width="380" height="100" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="770.0" y="453.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">Machine timer</text>
+<text x="770.0" y="488.55" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">64-bit mtime · compare IRQ</text>
+<rect x="580" y="560" width="380" height="140" rx="8" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
+<text x="770.0" y="608.1" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#173442" xml:space="preserve">DMA</text>
+<text x="770.0" y="643.5500000000001" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">4 channels · register slave</text>
+<text x="770.0" y="673.5500000000001" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="#526772" xml:space="preserve">AXI4 burst master</text>
+<rect x="1070" y="20" width="70" height="350" rx="6" fill="#F4F7F8" stroke="#8FA7AD" stroke-width="2"/>
+<text transform="rotate(-90 1097.4 195.0)" x="1097.4" y="195.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700" fill="#173442">DMA decoder</text>
+<text transform="rotate(-90 1126.85 195.0)" x="1126.85" y="195.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772">2 windows</text>
+<rect x="1010" y="590" width="290" height="90" rx="6" fill="#F4F7F8" stroke="#8FA7AD" stroke-width="2"/>
+<text x="1155.0" y="629.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#173442" xml:space="preserve">AXI4 → AXI4-Lite</text>
+<text x="1155.0" y="656.0" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#526772" xml:space="preserve">bridge</text>
+<polyline points="175,265 175,218" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="175,265 175,218" fill="none" stroke="#173442" stroke-width="5"/>
+<polygon points="175,218 166.55,236.2 183.45,236.2" fill="#173442"/>
+<text x="190" y="250" text-anchor="start" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#173442" xml:space="preserve">ibus</text>
+<polyline points="175,160 175,115" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="175,160 175,115" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="175,115 168.5,129.0 181.5,129.0" fill="#7FA3A9"/>
+<polyline points="320,350 420,350" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="320,350 420,350" fill="none" stroke="#173442" stroke-width="5"/>
+<polygon points="420,350 401.8,341.55 401.8,358.45" fill="#173442"/>
+<text x="370" y="336" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#173442" xml:space="preserve">dbus</text>
+<polyline points="490,49 670,49" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="490,49 670,49" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="670,49 656.0,42.5 656.0,55.5" fill="#7FA3A9"/>
+<polyline points="770,78 770,112" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="770,78 770,112" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="770,112 776.5,98.0 763.5,98.0" fill="#7FA3A9"/>
+<polyline points="490,300 580,300" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="490,300 580,300" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="580,300 566.0,293.5 566.0,306.5" fill="#7FA3A9"/>
+<text x="535" y="288" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#173442" xml:space="preserve">port A</text>
+<polyline points="490,455 580,455" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="490,455 580,455" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="580,455 566.0,448.5 566.0,461.5" fill="#7FA3A9"/>
+<polyline points="490,610 580,610" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="490,610 580,610" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="580,610 566.0,603.5 566.0,616.5" fill="#7FA3A9"/>
+<polyline points="420,690 320,690" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="420,690 320,690" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="320,690 334.0,696.5 334.0,683.5" fill="#7FA3A9"/>
+<text x="370" y="678" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#173442" xml:space="preserve">registers</text>
+<polyline points="960,635 1010,635" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="960,635 1010,635" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="1010,635 996.0,628.5 996.0,641.5" fill="#7FA3A9"/>
+<polyline points="1105,590 1105,370" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1105,590 1105,370" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="1105,370 1098.5,384.0 1111.5,384.0" fill="#7FA3A9"/>
+<polyline points="1070,49 870,49" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1070,49 870,49" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="870,49 884.0,55.5 884.0,42.5" fill="#7FA3A9"/>
+<polyline points="1070,300 960,300" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="1070,300 960,300" fill="none" stroke="#7FA3A9" stroke-width="3"/>
+<polygon points="960,300 974.0,306.5 974.0,293.5" fill="#7FA3A9"/>
+<text x="1015" y="288" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#173442" xml:space="preserve">port B</text>
+<polyline points="44,575 44,435" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="44,575 44,435" fill="none" stroke="#173442" stroke-width="5"/>
+<polygon points="44,435 35.55,453.2 52.45,453.2" fill="#173442"/>
+<polyline points="306,435 306,575" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="306,435 306,575" fill="none" stroke="#173442" stroke-width="5"/>
+<polygon points="306,575 314.45,556.8 297.55,556.8" fill="#173442"/>
+<text x="175" y="492" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">↑ IRQ · vector · pending</text>
+<text x="175" y="532" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="400" fill="#173442" xml:space="preserve">↓ mask · claim · EOI</text>
+<polyline points="960,340 990,340" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="960,340 990,340" fill="none" stroke="#7FA3A9" stroke-width="3" stroke-dasharray="8 6"/>
+<polyline points="960,490 990,490" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="960,490 990,490" fill="none" stroke="#7FA3A9" stroke-width="3" stroke-dasharray="8 6"/>
+<polyline points="960,680 990,680" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="960,680 990,680" fill="none" stroke="#7FA3A9" stroke-width="3" stroke-dasharray="8 6"/>
+<polyline points="990,340 990,840 175,840 175,790" fill="none" stroke="white" stroke-width="9"/>
+<polyline points="990,340 990,840 175,840 175,790" fill="none" stroke="#7FA3A9" stroke-width="3" stroke-dasharray="8 6"/>
+<polygon points="175,790 168.5,804.0 181.5,804.0" fill="#7FA3A9"/>
+<text x="640" y="826" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="400" fill="#173442" xml:space="preserve">interrupt lines: SRAM · timer · DMA ×4</text>
+</svg>

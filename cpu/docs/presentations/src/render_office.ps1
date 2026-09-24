@@ -1,9 +1,10 @@
+param([string]$Filter = '*.pptx')
 $ErrorActionPreference = 'Stop'
 $ppt = New-Object -ComObject PowerPoint.Application
 $issues = @()
 $inspected = 0
 try {
-    foreach ($file in Get-ChildItem output/*.pptx) {
+    foreach ($file in Get-ChildItem output -Filter $Filter) {
         $stem = [IO.Path]::GetFileNameWithoutExtension($file.Name)
         $deck = $ppt.Presentations.Open($file.FullName, -1, 0, 0)
         try {

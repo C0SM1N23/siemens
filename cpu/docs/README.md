@@ -6,15 +6,16 @@ AXI4-Lite. Arhitectura și verificarea SoC sunt în [../../soc/](../../soc/).
 
 ## Documente
 
-| Proiect | Specificație de design | Specificație de verificare | Prezentare (7 slide-uri) | Prezentare v2 (8 slide-uri) |
-|---|---|---|---|---|
-| RV32I | [PDF](Design_Specification_RV32I_CPU.pdf) | [PDF](Verification_Specification_RV32I_CPU.pdf) | [PowerPoint](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei.pptx) · [PDF](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei.pdf) | [PowerPoint](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei_v2.pptx) · [PDF](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei_v2.pdf) |
-| PIC | [PDF](Design_Specification_PIC.pdf) | [PDF](Verification_Specification_PIC.pdf) | [PowerPoint](presentations/output/PIC_Bunea_Cosmin-Andrei.pptx) · [PDF](presentations/output/PIC_Bunea_Cosmin-Andrei.pdf) | [PowerPoint](presentations/output/PIC_Bunea_Cosmin-Andrei_v2.pptx) · [PDF](presentations/output/PIC_Bunea_Cosmin-Andrei_v2.pdf) |
+| Proiect | Specificație de design | Specificație de verificare | Prezentare (7 slide-uri) | Prezentare v2 (8 slide-uri) | Prezentare v3 (7 slide-uri) |
+|---|---|---|---|---|---|
+| RV32I | [PDF](Design_Specification_RV32I_CPU.pdf) | [PDF](Verification_Specification_RV32I_CPU.pdf) | [PowerPoint](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei.pptx) · [PDF](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei.pdf) | [PowerPoint](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei_v2.pptx) · [PDF](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei_v2.pdf) | [PowerPoint](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei_v3.pptx) · [PDF](presentations/output/RV32I_CPU_Bunea_Cosmin-Andrei_v3.pdf) |
+| PIC | [PDF](Design_Specification_PIC.pdf) | [PDF](Verification_Specification_PIC.pdf) | [PowerPoint](presentations/output/PIC_Bunea_Cosmin-Andrei.pptx) · [PDF](presentations/output/PIC_Bunea_Cosmin-Andrei.pdf) | [PowerPoint](presentations/output/PIC_Bunea_Cosmin-Andrei_v2.pptx) · [PDF](presentations/output/PIC_Bunea_Cosmin-Andrei_v2.pdf) | [PowerPoint](presentations/output/PIC_Bunea_Cosmin-Andrei_v3.pptx) · [PDF](presentations/output/PIC_Bunea_Cosmin-Andrei_v3.pdf) |
 
-Specificațiile sunt la revizia 2.1, din 21 septembrie 2026. Prezentările sunt
+Specificațiile sunt la revizia 2.2, din 23 septembrie 2026. Prezentările sunt
 în engleză, gândite pentru aproximativ 10 minute, cu note de prezentator pe
 fiecare slide. Varianta v2 adaugă contextul SoC pe slide-ul de titlu și un
-slide cu deciziile de proiectare.
+slide cu deciziile de proiectare. Varianta v3 pune deciziile pe slide-ul de
+arhitectură și verificarea pe două slide-uri: blocul singur, apoi blocul în sistem.
 
 ## Conținutul directorului
 
@@ -25,7 +26,7 @@ slide cu deciziile de proiectare.
 | `waves/` | 13 ferestre de waveform din simulare, în SVG, PDF și PNG |
 | `waves/manifest.json` | Pentru fiecare fereastră: testbench-ul, intervalul, semnalele și SHA-256 al VCD-ului sursă |
 | `presentations/src/` | Scripturile care construiesc și verifică prezentările |
-| `presentations/assets/` | Figurile folosite doar în v2 |
+| `presentations/assets/` | Figurile folosite în v2 și v3 |
 | `presentations/output/` | Prezentările PPTX și exportul lor PDF |
 | `tools/` | Generatoarele de figuri, waveform-uri și specificații și verificările lor |
 | `build.ps1` | Reconstruiește figurile, waveform-urile și cele patru PDF-uri |
@@ -39,9 +40,11 @@ slide cu deciziile de proiectare.
 | `tools/waveforms.py` | Desenează ferestrele din `waves/raw/*.vcd` și scrie `waves/manifest.json` |
 | `tools/audit_timing.py` | Compară fiecare tranziție desenată cu VCD-ul sursă și o încadrează ca front de ceas, front + 1 ns sau reset |
 | `tools/specs.py`, `tools/spec_content.py` | Conținutul specificațiilor; porturile sunt preluate din `../hdl/` |
-| `tools/deck_v2_figures.py` | Figurile din `presentations/assets/` |
+| `tools/deck_v2_figures.py` | Figurile v2 din `presentations/assets/` |
+| `tools/deck_v3_figures.py` | Figurile v3 din `presentations/assets/`, desenate din VCD-urile de simulare și din `program_isa.hex` |
 | `presentations/src/build.mjs` | Prezentările de 7 slide-uri; codul lor este în `build_v2.mjs` |
 | `presentations/src/build_deck_v2.mjs` | Prezentările v2, de 8 slide-uri |
+| `presentations/src/build_deck_v3.mjs` | Prezentările v3, de 7 slide-uri |
 | `tools/finalize_pptx.py` | Adaugă în fiecare PPTX imaginile PNG de rezervă pentru aplicațiile fără suport SVG |
 | `presentations/src/render_office.ps1` | Exportă PDF-urile din PowerPoint și semnalează textul sau obiectele ieșite din casete ori din slide |
 | `presentations/src/render_saved.mjs` | Aceeași verificare de geometrie, fără PowerPoint |
@@ -72,8 +75,10 @@ Prezentările, din `cpu/docs/presentations`:
 
 ```powershell
 python ../tools/deck_v2_figures.py
+python ../tools/deck_v3_figures.py
 node src/build.mjs
 node src/build_deck_v2.mjs
+node src/build_deck_v3.mjs
 python ../tools/finalize_pptx.py
 ./src/render_office.ps1
 python ../tools/verify_delivery.py

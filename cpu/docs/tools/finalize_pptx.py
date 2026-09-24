@@ -1,5 +1,6 @@
 """Populate PNG fallbacks for the SVGs embedded by artifact-tool."""
 from pathlib import Path
+import sys
 import posixpath
 import xml.etree.ElementTree as ET
 from zipfile import ZipFile, ZIP_DEFLATED
@@ -9,7 +10,8 @@ NS={'p':'http://schemas.openxmlformats.org/presentationml/2006/main',
     'a':'http://schemas.openxmlformats.org/drawingml/2006/main',
     'r':'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
     'rel':'http://schemas.openxmlformats.org/package/2006/relationships'}
-for path in (DOCS/'presentations/output').glob('*.pptx'):
+# Optional arguments name the decks to finalize; by default every deck in output/.
+for path in [Path(a).resolve() for a in sys.argv[1:]] or (DOCS/'presentations/output').glob('*.pptx'):
     with ZipFile(path) as z:
         entries={n:z.read(n) for n in z.namelist() if not n.startswith('/')}
     count=0
