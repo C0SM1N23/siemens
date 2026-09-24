@@ -29,8 +29,9 @@ each master, so simultaneous accesses reach the block's collision logic.
 
 ## Address map
 
-Defined by [soc_addr_map.vh](hdl/soc_addr_map.vh). Each decoder subtracts the
-selected base address before forwarding the transaction.
+Defined by [soc_addr_map.vh](hdl/soc_addr_map.vh). Decoders forward the full
+address; each slave uses only the low bits inside its window, which is enough
+because every window is aligned to its size.
 
 | Target | Base | Window | CPU instruction | CPU data | DMA |
 |---|---|---|---|---|---|
@@ -76,7 +77,7 @@ for an occupied destination and refuses an address while its counter is full.
 `soc/debug/sim/run_pulp_compare.sh` runs both against the same stimulus; see
 [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
-Two behaviours differ from that reference deliberately:
+Two behaviours differ from that reference:
 
 - This decoder decodes the address itself and answers DECERR for an unmapped one.
   Upstream takes the routing decision as an input and places a separate error
@@ -84,6 +85,17 @@ Two behaviours differ from that reference deliberately:
 - Upstream's burst splitter rewrites any failing beat's response to SLVERR. This
   bridge keeps DECERR > SLVERR > OKAY, so a decode error inside a burst is still
   reported as a decode error.
+
+### Masters that finish what they start
+
+A grant is held from the address to the response, and the bridge forwards a
+write address before the burst's data has arrived. The fabric therefore makes
+progress as long as no master starts a write whose data depends on a transfer it
+has not issued yet: such a write would hold the DMEM arbiter while waiting for
+data that can only come through the same arbiter. Neither master in this SoC
+does that. The CPU has one access outstanding, and the DMA reads each block
+completely before it writes it. A future master that overlaps its reads and
+writes needs a fabric that can hold more than one transaction.
 
 Existing parameters remain local to their functional modules. Each procedural
 state signal has one `always` owner. CPU/SoC RTL contains no `timescale`.
@@ -107,5 +119,4 @@ The current PIC targets one CPU. Shared-memory dual-core verification does not
 provide multicore interrupt routing. The common sixteen-source interface is an
 explicit project decision resolving differing original brief widths.
 
-DMA/SRAM findings and pending interface agreement are documented only in
-[../TO_MODIFY.md](../TO_MODIFY.md).
+DMA/SRAM findings are documented in [../TO_MODIFY.md](../TO_MODIFY.md).
