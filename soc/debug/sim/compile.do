@@ -29,3 +29,12 @@ vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_pic_nest.v
 vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_pic_escalate.v
 
 vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_arb.v
+
+# Error paths, reset under traffic and the claim race with the real CPU.
+vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_isolation.v
+vlog +incdir+../../../cpu/debug/hdl +incdir+../../hdl ../hdl/soc_tb_dma_fault.v
+vlog +incdir+../../../cpu/debug/hdl +incdir+../../hdl ../hdl/soc_tb_reset_traffic.v
+vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_pic_spurious.v
+vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_pic_deep_nest.v
+vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_same_addr.v
+vlog +incdir+../../../cpu/debug/hdl ../hdl/soc_tb_fabric_random.v

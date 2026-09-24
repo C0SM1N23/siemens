@@ -1,5 +1,5 @@
 onerror {quit -code 1 -f}
-# 25 runs; parameters are checked after elaboration.
+# 34 runs; parameters are checked after elaboration.
 do ../../../cpu/debug/sim/run_common.do
 do compile.do
 
@@ -28,5 +28,14 @@ run_case soc_tb_timer "soc_tb_timer"
 run_case soc_tb_pic_sources "soc_tb_pic_sources"
 run_case soc_tb_pic_nest "soc_tb_pic_nest"
 run_case soc_tb_pic_escalate "soc_tb_pic_escalate"
+run_case soc_tb_isolation "CPU accesses outside every reachable window"
+run_case soc_tb_dma_fault "DMA transfers meeting error responses"
+run_case soc_tb_reset_traffic "asynchronous reset with transactions in flight"
+run_case soc_tb_pic_spurious "spurious claim with the real CPU"
+run_case soc_tb_pic_deep_nest "sixteen nested interrupts"
+run_case soc_tb_same_addr "CPU and DMA writing the same words"
+foreach seed {1 2 3} {
+    run_case soc_tb_fabric_random "fabric under random traffic, seed $seed" +seed=$seed
+}
 
 echo "REGRESSION PASS: $run_count runs"
