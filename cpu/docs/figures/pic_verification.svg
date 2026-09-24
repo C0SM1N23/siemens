@@ -27,7 +27,7 @@
 <rect x="520" y="492" width="490" height="130" rx="7" fill="#EDF5F5" stroke="#006B75" stroke-width="2"/>
 <text x="765.0" y="531" text-anchor="middle" font-family="Arial, sans-serif" font-size="29" font-weight="700" fill="#173442">Independent reference</text>
 <text x="765.0" y="571" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">pic_reference.py → expected winner</text>
-<text x="765.0" y="603" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">24 band permutations + masks</text>
+<text x="765.0" y="603" text-anchor="middle" font-family="Arial, sans-serif" font-size="23" font-weight="400" fill="#526772">275 cases · all 256 BAND_CONFIG values</text>
 <polyline points="1010,553 1370,553 1370,400" fill="none" stroke="white" stroke-width="10"/>
 <polyline points="1010,553 1370,553 1370,400" fill="none" stroke="#006B75" stroke-width="3"/>
 <polygon points="1370,400 1364.0,413.0 1376.0,413.0" fill="#006B75"/>

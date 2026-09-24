@@ -1,8 +1,8 @@
 \documentclass[11pt]{article}
 \newcommand{\doctitle}{RV32I CPU — Verification Specification}
 \newcommand{\docsubject}{Reproducible stimuli, checks and waveform evidence}
-\newcommand{\docrev}{2.1}
-\newcommand{\docdate}{21 September 2026}
+\newcommand{\docrev}{2.2}
+\newcommand{\docdate}{23 September 2026}
 \input{preamble_spec}
 \begin{document}
 \begin{titlepage}\vspace*{24mm}
@@ -21,10 +21,10 @@
 \needspace{7\baselineskip}
 \subsection{Validity of the document}
 \noindent The documented configuration is the RTL in cpu/hdl and the associated CPU/PIC and SoC simulation environments. Interface adaptations from the supplied briefs are identified in the integration section.\par\medskip
-\noindent Revision 2.1 of 21 September 2026 describes the delivered state of that RTL.\par\medskip
+\noindent Revision 2.2 of 23 September 2026 describes the delivered state of that RTL.\par\medskip
 
 \needspace{7\baselineskip}
-\subsection{Terms and abbreviations}
+\subsection{Definitions of terms and abbreviations}
 {\small
 \begin{longtable}{@{}L{0.2300\dimexpr\linewidth-12pt\relax}L{0.7700\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
@@ -44,25 +44,27 @@ NBA & Nonblocking-assignment update region in simulation. \\ \addlinespace[3pt]
 PIC & Programmable interrupt controller. \\ \addlinespace[3pt]
 RAS & Return-address stack. \\ \addlinespace[3pt]
 S1 / S2 / S3 & Fetch / decode-execute / writeback. \\ \addlinespace[3pt]
-SVA & SystemVerilog Assertions. \\ \addlinespace[3pt]
+SVA & SystemVerilog Assertions. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Relationship with other documents}
 \noindent The documents below are the ones this specification is derived from or read with.\par\medskip
 {\small
-\begin{longtable}{@{}L{0.5000\dimexpr\linewidth-12pt\relax}L{0.5000\dimexpr\linewidth-12pt\relax}@{}}
+\begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.2200\dimexpr\linewidth-36pt\relax}L{0.1800\dimexpr\linewidth-36pt\relax}L{0.2600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
-\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\textbf{Document} & \textbf{Version / date} & \textbf{Author} & \textbf{Relationship} \\ \midrule
 \endfirsthead
 \toprule
-\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\textbf{Document} & \textbf{Version / date} & \textbf{Author} & \textbf{Relationship} \\ \midrule
 \endhead
-RV32I 3-Stage Pipeline CPU.pdf & Supplied project draft; functional requirements and implementation decisions. \\ \addlinespace[3pt]
-Spec table of contents and templates.pdf & Supplied document structure and verification-plan template. \\ \addlinespace[3pt]
-Design Specification — CPU & Companion specification, revision 2.1, 21 September 2026. \\ \addlinespace[3pt]
-RISC-V Unprivileged ISA / Privileged Architecture & v20191213 / v20211203, machine mode \\ \addlinespace[3pt]
-ARM IHI0022E / IEEE 1364-2005 & AXI4-Lite / Verilog RTL. \\ \addlinespace[3pt]
+RV32I 3-Stage Pipeline CPU & Draft, 1 July 2026 & D. Borzasi, Siemens & Functional requirements; see section 2. \\ \addlinespace[3pt]
+Spec table of contents and templates & 2 September 2026 & D. Borzasi, Siemens & Document structure and verification-plan template. \\ \addlinespace[3pt]
+Design Specification — CPU & Rev. 2.2, 23 September 2026 & C.-A. Bunea & Companion document. \\ \addlinespace[3pt]
+RISC-V Unprivileged ISA & 20191213 & RISC-V International & Instruction semantics. \\ \addlinespace[3pt]
+RISC-V Privileged Architecture & 20211203 & RISC-V International & Machine-mode CSRs and traps. \\ \addlinespace[3pt]
+AMBA AXI and ACE Protocol Specification & IHI0022E & Arm & AXI4-Lite ports. \\ \addlinespace[3pt]
+IEEE Std 1364 (Verilog) & 2005 & IEEE & RTL language. \\*
 \bottomrule\end{longtable}}
 
 \needspace{7\baselineskip}
@@ -80,12 +82,12 @@ Fixed-width name & A Verilog module, port, file or script name, spelled as in th
 Signal suffix \_i / \_o & Module input / output, seen from inside that module. \\ \addlinespace[3pt]
 [a:b] & Bit range, most significant bit first. \\ \addlinespace[3pt]
 S1 / S2 / S3 & Pipeline stage names used throughout the document. \\ \addlinespace[3pt]
-posedge +1 ns & A testbench stimulus time, one nanosecond after the sampling edge. \\ \addlinespace[3pt]
+posedge +1 ns & A testbench stimulus time, one nanosecond after the sampling edge. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Verification methodology}
-\subsection{Overview and acceptance}
+\subsection{Overview}
 \noindent A run either passes or fails; this section states what that verdict covers. The first table gives the acceptance conditions applied to every test and the limits of what simulation shows; the second gives the runs behind the results quoted in this document.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.2900\dimexpr\linewidth-12pt\relax}L{0.7100\dimexpr\linewidth-12pt\relax}@{}}
@@ -100,27 +102,36 @@ Device under test & rv32i\_cpu\_top and its RTL modules. \\ \addlinespace[3pt]
 Functional verdict & Every expected value and response must match; errors=0 and test\_done=1 are required. \\ \addlinespace[3pt]
 Protocol verdict & VALID/payload stability, response ordering and outstanding transaction limits; clocked at posedge. \\ \addlinespace[3pt]
 Failure handling & Mismatch, timeout, incomplete test, assertion failure or coverage-gate failure returns a failing run. \\ \addlinespace[3pt]
-Limits of evidence & Directed simulation and reference-model checks, not a formal proof or a synthesis/timing result. \\ \addlinespace[3pt]
+Limits of evidence & Simulation against independent reference models and the official ISA tests; no synthesis or timing result. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.2900\dimexpr\linewidth-12pt\relax}L{0.7100\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
-\textbf{Simulator / flow} & \textbf{Recorded evidence (18–21 September 2026)} \\ \midrule
+\textbf{Simulator / flow} & \textbf{Recorded evidence (23 September 2026)} \\ \midrule
 \endfirsthead
 \toprule
-\textbf{Simulator / flow} & \textbf{Recorded evidence (18–21 September 2026)} \\ \midrule
+\textbf{Simulator / flow} & \textbf{Recorded evidence (23 September 2026)} \\ \midrule
 \endhead
-ModelSim & 22 CPU/PIC configurations; zero mismatches. \\ \addlinespace[3pt]
-Verilator --assert & 16 CPU/PIC benches and the CPU functional-coverage gate. \\ \addlinespace[3pt]
-Integrated SoC & 25 ModelSim configurations and 16 assertion-enabled benches. \\ \addlinespace[3pt]
-PULP comparison & Decoder sequence plus 96 register-slave strobe/order/stall cases and RO/unmapped/reset cases. \\ \addlinespace[3pt]
+ModelSim & 39 CPU/PIC runs; zero mismatches. \\ \addlinespace[3pt]
+Verilator --assert & 17 CPU/PIC benches in 53 runs; merged functional coverage 90/90 bins and every cover property reached. \\ \addlinespace[3pt]
+Integrated SoC & 34 ModelSim runs; 23 assertion-enabled benches in 51 Verilator runs. \\ \addlinespace[3pt]
+riscv-tests & 53 of 58 rv32ui/rv32mi tests pass; the other five need features outside the implemented ISA. \\ \addlinespace[3pt]
+Mutation check & 25 injected RTL defects, each detected by its bench. \\ \addlinespace[3pt]
+PULP comparison & Decoder over ten random seeds plus 96 register-slave strobe/order/stall cases and RO/unmapped/reset cases. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsection{Implementation strategy and reference model}
-\noindent Directed tests exercise individual features and simultaneous events. Program/reference tests check end-to-end results. Protocol checks observe accepted transfers; state checks sample after nonblocking updates.\par\medskip
-\noindent The ISA reference generates an instruction-by-instruction expected trace and memory state. The CPU runs the same sequence with nominal and delayed responders.\par\medskip
-\noindent The verification plan records an ID, scenario, expected result, status and test/checker. Its detailed cases appear in the annex; the environment below identifies the components that execute and check them.\par\medskip
+\needspace{7\baselineskip}
+\subsection{Implementation strategy}
+\noindent Directed tests exercise individual features and simultaneous events; program and reference tests check end-to-end results. Protocol checks observe accepted transfers; state checks sample after nonblocking updates.\par\medskip
+\noindent Seeded random programs and the official riscv-tests extend the directed set. Every bench also runs under Verilator with the assertions bound.\par\medskip
+
+\needspace{7\baselineskip}
+\subsection{Verification plans}
+\noindent The plan in section 4.1 follows the supplied template: ID, title, description, status and test/checker, one row per test.\par\medskip
+
+\needspace{7\baselineskip}
+\subsection{Reference model}
+\noindent isa\_reference.py encodes and interprets RV32I in Python, independently of the RTL and the assembler. For each program it writes the image, the expected PC, destination and value of every completed instruction, and the final data memory. The official riscv-tests are an external reference; each test reports its result through tohost.\par\medskip
 
 \clearpage
 \section{Verification environment}
@@ -141,10 +152,10 @@ Bus stimulus & tb\_axil\_master.vh: register-access tasks; CPU programs supply r
 Memory model & axi\_lite\_mem\_model.v: configurable response delay and repeatable backpressure. \\ \addlinespace[3pt]
 Reference & isa\_reference.py: instruction trace. \\ \addlinespace[3pt]
 Verdict & tb\_check.vh: explicit mismatch count, completion and fatal failure. \\ \addlinespace[3pt]
-Protocol & axi\_lite\_monitor.v for ModelSim; axi\_lite\_sva.sv under Verilator. \\ \addlinespace[3pt]
+Protocol & axi\_lite\_monitor.v for ModelSim; axi\_lite\_sva.sv under Verilator. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Control and drivers}
 \noindent Stimulus is driven one nanosecond after the sampling edge, so that a test never races the design it is checking. The table gives the timing rule for each driven event and the reason for it; the waveform shows the reset case, the one event placed off the clock grid.\par\medskip
 {\small
@@ -159,41 +170,30 @@ clk & 10 ns period in these traces; rising edges are 5, 15, 25… ns. & Defines 
 Shared bus / claim tasks & Drive 1 ns after posedge, in a separate statement. Hold until the sampling edge. & Avoid blocking-assignment races with DUT active/NBA evaluation. \\ \addlinespace[3pt]
 Handshake observation & Sample VALID \&\& READY at posedge before changing stimulus. & Records the transfer that the DUT accepted. \\ \addlinespace[3pt]
 Reset assertion & Dedicated reset tests assert at posedge +2 ns, check at +3 ns. & The check occurs before either the next falling or rising edge. \\ \addlinespace[3pt]
-Reset release & Explicit nanosecond delays, off the clock grid; shared generator releases at 123 ns. & Exercises asynchronous stimulus without a coincident clock event. \\ \addlinespace[3pt]
+Reset release & Explicit nanosecond delays, off the clock grid; shared generator releases at 123 ns. & Exercises asynchronous stimulus without a coincident clock event. \\*
 \bottomrule\end{longtable}}
 
 \noindent Reset is asserted while an instruction request is waiting. ARVALID clears at the reset event, before the next rising edge; after release the fetch request resumes from RESET\_PC.\par
 \begin{figure}[H]\centering\includegraphics[width=\linewidth]{waves/cpu_reset.pdf}\caption{Reset from active state at posedge +2 ns; cleared state is checked at +3 ns.}\end{figure}
-{\small
-\begin{longtable}{@{}L{0.3000\dimexpr\linewidth-12pt\relax}L{0.7000\dimexpr\linewidth-12pt\relax}@{}}
-\toprule
-\textbf{Formatting convention} & \textbf{Code} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Formatting convention} & \textbf{Code} \\ \midrule
-\endhead
-Separate statements & @(posedge clk); followed on the next line by \#1; and then the signal assignments. \\ \addlinespace[3pt]
-Scope of \#1 & Applies to testbench scheduling only. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Clock and reset generator}
+\noindent ck\_rst\_tb.v generates a 10 ns clock and holds reset from time 0 to 123 ns, off the clock edge. rv32i\_tb\_reset drives its own reset pulses between edges.\par\medskip
+\subsubsection{Memory models}
+\noindent axi\_lite\_mem\_model.v serves the instruction and data ports. READ\_LAT and WRITE\_LAT add fixed latency; STALL\_PROB and SEED add seeded random backpressure. Overrides are passed with -G and read back after elaboration.\par\medskip
+\subsubsection{Programs}
+\noindent program\_axi.s, assembled by asm.py, runs on the system bench. isa\_reference.py writes the directed ISA program and, with --random-set, ten random programs, each with its expected trace. run\_riscv\_tests.sh builds the official tests with a RISC-V GCC and links them at address 0.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Monitors and checkers}
-\noindent Checking is split between bus protocol and functional result, so that a failure points at one of the two. The first table lists each checker and what it observes; the second shows how each one is kept from passing without having seen traffic.\par\medskip
-{\small
-\begin{longtable}{@{}L{0.3600\dimexpr\linewidth-12pt\relax}L{0.6400\dimexpr\linewidth-12pt\relax}@{}}
-\toprule
-\textbf{File / mechanism} & \textbf{What it checks} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{File / mechanism} & \textbf{What it checks} \\ \midrule
-\endhead
-axi\_lite\_monitor.v & Passive ModelSim protocol checks and transaction counts; valid traffic must occur. \\ \addlinespace[3pt]
-axi\_lite\_sva.sv & Channel stability, legal response codes, request/response ordering, one outstanding transaction per direction. \\ \addlinespace[3pt]
-rv32i\_cpu\_core\_sva.sv & Pipeline/trap/forwarding invariants. \\ \addlinespace[3pt]
-rv32i\_bind\_core\_sva.sv & bind attaches checker instances to RTL module types. The checkers read DUT signals; they drive nothing and add no port. \\ \addlinespace[3pt]
-rv32i\_bind\_sva.sv & Attaches the nominal CPU functional-coverage model; coverage is separate from the shared assertion bind. \\ \addlinespace[3pt]
-run\_verilator.sh & Compiles assertions with --assert and fails the run on an assertion failure. ModelSim ASE runs the procedural monitors instead; the SVA execute under Verilator. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\noindent Checking is split between bus protocol and functional result, so that a failure points at one of the two.\par\medskip
+\subsubsection{AXI protocol monitor}
+\noindent axi\_lite\_monitor.v checks every transfer on the monitored ports in ModelSim and counts transactions; a run without traffic fails.\par\medskip
+\subsubsection{Assertions}
+\noindent axi\_lite\_sva.sv checks channel stability, legal responses, ordering and one outstanding transaction per direction; rv32i\_cpu\_core\_sva.sv checks pipeline, trap and forwarding invariants. rv32i\_bind\_core\_sva.sv attaches the checkers to the RTL module types with bind; they only read DUT signals. Verilator runs them with --assert; ModelSim ASE runs the procedural monitors.\par\medskip
+\subsubsection{Functional coverage}
+\noindent rv32i\_bind\_sva.sv attaches the coverage model rv32i\_cpu\_func\_cov.sv. Its bin counts are merged over the system and ISA runs, and every bin must be reached; every cover property must be reached as well.\par\medskip
+\subsubsection{Result checkers}
+\noindent tb\_check.vh counts mismatches and ends each run with an explicit verdict. rv32i\_tb\_isa compares the PC, destination and value of every completed instruction with the reference trace, then the whole data memory.\par\medskip
+\subsubsection{Non-vacuous checks}
 {\small
 \begin{longtable}{@{}L{0.3200\dimexpr\linewidth-12pt\relax}L{0.6800\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
@@ -204,10 +204,10 @@ run\_verilator.sh & Compiles assertions with --assert and fails the run on an as
 \endhead
 Valid traffic & Read/write counts and exercised tests prevent a disconnected monitor from being counted as coverage. \\ \addlinespace[3pt]
 Preconditions & RO-write test first creates nonzero state; async-reset test first creates pending/nonzero state. \\ \addlinespace[3pt]
-Negative scenarios & Watch an interval for forbidden offers/claims; do not infer absence from one sample. \\ \addlinespace[3pt]
+Negative scenarios & Watch an interval for forbidden offers/claims; do not infer absence from one sample. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Simulation environment setup}
 \noindent The environment is a fixed folder layout plus a small number of named scripts. The tables give that layout, the exact command for each step in the order it is run, and the tools each step needs.\par\medskip
 \needspace{7\baselineskip}\subsubsection{Structure}
@@ -225,7 +225,7 @@ cpu/debug/sva & Assertion modules and the bind files that attach them to RTL mod
 cpu/debug/sim & Run scripts, file lists, reference models, generated programs and run logs. \\ \addlinespace[3pt]
 soc/hdl & Integration fabric: address decode, arbitration, AXI4-Full to Lite conversion and RAM. \\ \addlinespace[3pt]
 soc/debug/hdl, sva, sim & The same split as above, applied to the integrated SoC. \\ \addlinespace[3pt]
-cpu/docs & Specification sources, generated figures and the waveform windows. \\ \addlinespace[3pt]
+cpu/docs & Specification sources, generated figures and the waveform windows. \\*
 \bottomrule\end{longtable}}
 \needspace{7\baselineskip}\subsubsection{Scripts}
 {\small
@@ -237,13 +237,15 @@ cpu/docs & Specification sources, generated figures and the waveform windows. \\
 \textbf{Step} & \textbf{Working directory} & \textbf{Command / script} & \textbf{Result} \\ \midrule
 \endhead
 1 & Repository root & make asm & Regenerate programs and independent reference vectors. \\ \addlinespace[3pt]
-2 & cpu/debug/sim & vsim -c -do "do regress.do; quit -f" & Compile and run 22 CPU/PIC configurations. \\ \addlinespace[3pt]
-3 & cpu/debug/sim (Bash / WSL) & bash run\_verilator.sh & Lint, functional coverage and 16 benches with SVA. \\ \addlinespace[3pt]
-4 & soc/debug/sim & vsim -c -do "do regress.do; quit -f" & 25 integration configurations. \\ \addlinespace[3pt]
-5 & Repository root (Bash / WSL) & bash soc/debug/sim/run\_verilator.sh & SoC lint and 16 assertion-enabled benches. \\ \addlinespace[3pt]
+2 & cpu/debug/sim & vsim -c -do "do regress.do; quit -f" & Compile and run 39 CPU/PIC runs. \\ \addlinespace[3pt]
+3 & cpu/debug/sim (Bash / WSL) & bash run\_verilator.sh & Lint, 17 benches in 53 runs with SVA, coverage and cover gates. \\ \addlinespace[3pt]
+4 & soc/debug/sim & vsim -c -do "do regress.do; quit -f" & 34 integration runs. \\ \addlinespace[3pt]
+5 & Repository root (Bash / WSL) & bash soc/debug/sim/run\_verilator.sh & SoC lint and 23 assertion-enabled benches in 51 runs. \\ \addlinespace[3pt]
 6 & soc/debug/sim (Bash / WSL) & bash run\_pulp\_compare.sh & Pinned external decoder/register comparison. \\ \addlinespace[3pt]
-7 & cpu/debug/sim & vsim -c -do "do waves.do" & Run 8 checked benches and export VCD traces. \\ \addlinespace[3pt]
-8 & Repository root & python cpu/docs/tools/waveforms.py & SVG/PDF/PNG figures and source-window manifest. \\ \addlinespace[3pt]
+7 & Repository root (Bash / WSL) & bash cpu/debug/sim/run\_riscv\_tests.sh & Official rv32ui/rv32mi tests. \\ \addlinespace[3pt]
+8 & Repository root & python cpu/debug/sim/mutation\_check.py & 25 injected RTL defects. \\ \addlinespace[3pt]
+9 & cpu/debug/sim & vsim -c -do "do waves.do" & Run 8 checked benches and export VCD traces. \\ \addlinespace[3pt]
+10 & Repository root & python cpu/docs/tools/waveforms.py & SVG/PDF/PNG figures and source-window manifest. \\*
 \bottomrule\end{longtable}}
 \needspace{7\baselineskip}\subsubsection{Setup and configuration}
 {\small
@@ -257,8 +259,9 @@ cpu/docs & Specification sources, generated figures and the waveform windows. \\
 ModelSim & vsim/vlog on PATH; run from the named simulation directory so file lists resolve. \\ \addlinespace[3pt]
 Verilator & Verilator 5.050 used for the recorded run; C++ build tools, Bash and Python 3 are required. \\ \addlinespace[3pt]
 PULP & Git and network only for the initial checkout; explicit revision pins recorded in the runner. \\ \addlinespace[3pt]
+RISC-V GCC & A bare-metal riscv*-elf toolchain; the riscv-tests revision is pinned in the runner. \\ \addlinespace[3pt]
 Wave rendering & Python with matplotlib; raw VCD files produced by waves.do. \\ \addlinespace[3pt]
-Configuration & Latency/stall overrides are read back after elaboration; seeds are fixed for repeatability. \\ \addlinespace[3pt]
+Configuration & Latency/stall overrides are read back after elaboration; seeds are fixed for repeatability. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
@@ -268,23 +271,24 @@ Configuration & Latency/stall overrides are read back after elaboration; seeds a
 {\small
 \begin{longtable}{@{}L{0.0800\dimexpr\linewidth-48pt\relax}L{0.1600\dimexpr\linewidth-48pt\relax}L{0.3700\dimexpr\linewidth-48pt\relax}L{0.1000\dimexpr\linewidth-48pt\relax}L{0.2900\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
-\textbf{ID} & \textbf{Title} & \textbf{Expected result / scope} & \textbf{Status} & \textbf{Test / checker} \\ \midrule
+\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test / checker} \\ \midrule
 \endfirsthead
 \toprule
-\textbf{ID} & \textbf{Title} & \textbf{Expected result / scope} & \textbf{Status} & \textbf{Test / checker} \\ \midrule
+\textbf{ID} & \textbf{Title} & \textbf{Description} & \textbf{Status} & \textbf{Test / checker} \\ \midrule
 \endhead
 CPU-01 & CPU integration & Arithmetic, logic, load/store, trap/IRQ/WFI programs; memory/register results and protocol monitors. & PASS & rv32i\_tb\_cpu\_axi \\ \addlinespace[3pt]
-CPU-02 & ISA reference & 1287-instruction independently generated reference trace; nominal, delayed and stalled memories. & PASS & rv32i\_tb\_isa \\ \addlinespace[3pt]
+CPU-02 & ISA reference & Independently generated reference traces: a directed program of 1,287 instructions and ten seeded random programs of 47,862 in total; nominal, delayed and stalled memories. & PASS & rv32i\_tb\_isa \\ \addlinespace[3pt]
 CPU-03 & ALU & ALU operations, signed/unsigned boundaries and shifts. & PASS & rv32i\_tb\_alu \\ \addlinespace[3pt]
 CPU-04 & Predictor / RAS & Tagged lookup, direction update, collisions, RAS push/pop/overflow/disabled setting and reset. & PASS & rv32i\_tb\_bp \\ \addlinespace[3pt]
-CPU-05 & Exceptions / traps & All implemented synchronous causes; precedence, wrong-path errors and precise architectural state. & PASS & rv32i\_tb\_traps \\ \addlinespace[3pt]
+CPU-05 & Exceptions / traps & All implemented synchronous causes; precedence, wrong-path errors and precise architectural state; an interrupt and an exception on one instruction; an interrupt pending when MRET re-enables interrupts. & PASS & rv32i\_tb\_traps \\ \addlinespace[3pt]
 CPU-06 & CSR access & CSR legality, fixed fields, write suppression, reserved modes and reset values. & PASS & rv32i\_tb\_csr\_ro \\ \addlinespace[3pt]
 CPU-07 & Counters & Explicit write versus increment; half preservation, carry, CSRRS/CSRRC and fixed event IDs. & PASS & rv32i\_tb\_counters \\ \addlinespace[3pt]
 CPU-08 & Two harts & Two distinct HART\_IDs on shared memory arbitration; no result corruption. & PASS & rv32i\_tb\_dual\_core \\ \addlinespace[3pt]
 CPU-09 & Asynchronous reset & Reset between edges during fetch/load stall, nonzero GPR state, clock stopped, and resumed execution. & PASS & rv32i\_tb\_reset \\ \addlinespace[3pt]
+CPU-10 & Official ISA tests & Official rv32ui/rv32mi tests at a pinned revision: 53 pass at nominal timing and 40\% backpressure; five that need features outside the implemented ISA must fail. & PASS & rv32i\_tb\_riscv\_tests \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Critical sequences}
 
 \noindent The load holds S2 while its request or response is pending. At the RVALID/RREADY handshake, the data is available and s2\_advance permits the instruction to enter writeback.\par
@@ -302,10 +306,10 @@ CPU-09 & Asynchronous reset & Reset between edges during fetch/load stall, nonze
 \endhead
 IRQ during load & No accepted IRQ until active LSU transaction is complete. \\ \addlinespace[3pt]
 Wrong-path response error & Response is drained; wrong-path instruction cannot write GPR/CSR or trap. \\ \addlinespace[3pt]
-Store channel skew & AW and W can complete in either order; one B response completes the store. \\ \addlinespace[3pt]
+Store channel skew & AW and W can complete in either order; one B response completes the store. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{External AXI reference}
 \noindent The AXI4-Lite front-end is compared against a published implementation to check the interpretation of the protocol. The first table states what was compared and on what evidence; the second names every difference found and what it means.\par\medskip
 {\small
@@ -318,7 +322,7 @@ Store channel skew & AW and W can complete in either order; one B response compl
 \endhead
 soc\_axi\_lite\_dec vs axi\_lite\_demux & Two mapped targets, MaxTrans=1; independent progress and response timing. & Compare ordered data/response records and per-target address counts. \\ \addlinespace[3pt]
 axi\_lite\_slave vs axi\_lite\_regs & 32-bit words; four RW words and one RO word; same byte strobes. & 96 cases = 16 WSTRB masks × 3 AW/W orders × 2 response-stall settings. \\ \addlinespace[3pt]
-Additional register cases & RO write, unmapped access, reset and post-reset access. & Same access-class response and no forbidden state update; each side checked against expected data. \\ \addlinespace[3pt]
+Additional register cases & RO write, unmapped access, reset and post-reset access. & Same access-class response and no forbidden state update; each side checked against expected data. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.2500\dimexpr\linewidth-12pt\relax}L{0.7500\dimexpr\linewidth-12pt\relax}@{}}
@@ -333,7 +337,7 @@ Unmapped read data & Our front-end returns zero; pinned PULP axi\_lite\_regs ret
 Address aliases & Different register-bank sizing; equality claimed only for the explicit compared address profile. \\ \addlinespace[3pt]
 AXI4-Full & The PULP run does not establish equivalence of the DMA or soc\_axi\_full2lite to every upstream AXI4 module. \\ \addlinespace[3pt]
 Converter & Local soc\_tb\_full2lite and soc\_tb\_full2lite\_err check supported burst handling and errors. Local write error aggregation preserves DECERR over SLVERR; PULP is not a cycle-exact reference for that policy. \\ \addlinespace[3pt]
-Versions & axi: 70b8e54fd460e3308e58be596ceb3566a6e3576e; common\_cells: 03d98106aa19952a10360d2230def85144a0008b. \\ \addlinespace[3pt]
+Versions & axi: 70b8e54fd460e3308e58be596ceb3566a6e3576e; common\_cells: 03d98106aa19952a10360d2230def85144a0008b. \\*
 \bottomrule\end{longtable}}
 \noindent Reference: \url{https://github.com/pulp-platform/axi}.
 

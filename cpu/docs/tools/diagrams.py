@@ -64,7 +64,7 @@ def environment(kind):
         d.line([(385,286),(610,286)],'stimulus at posedge +1 ns',496,260,18)
         d.line([(960,286),(1180,286)])
         d.text(1070,244,['protocol: posedge','state: after NBA'],18)
-        d.box(520,492,490,130,'Independent reference',['pic_reference.py → expected winner','24 band permutations + masks'])
+        d.box(520,492,490,130,'Independent reference',['pic_reference.py → expected winner','275 cases · all 256 BAND_CONFIG values'])
         d.line([(1010,553),(1370,553),(1370,400)],'expected source / pending',1220,537,21)
         d.line([(520,553),(210,553),(210,400)])
         d.text(355,537,'input vectors',21)

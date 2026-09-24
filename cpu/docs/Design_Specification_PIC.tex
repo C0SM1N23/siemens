@@ -1,8 +1,8 @@
 \documentclass[11pt]{article}
 \newcommand{\doctitle}{PIC — Design Specification}
 \newcommand{\docsubject}{Programmable interrupt controller · interface and register contract}
-\newcommand{\docrev}{2.1}
-\newcommand{\docdate}{21 September 2026}
+\newcommand{\docrev}{2.2}
+\newcommand{\docdate}{23 September 2026}
 \input{preamble_spec}
 \begin{document}
 \begin{titlepage}\vspace*{24mm}
@@ -21,10 +21,10 @@
 \needspace{7\baselineskip}
 \subsection{Validity of the document}
 \noindent The documented configuration is the RTL in cpu/hdl and the associated CPU/PIC and SoC simulation environments. Interface adaptations from the supplied briefs are identified in the integration section.\par\medskip
-\noindent Revision 2.1 of 21 September 2026 describes the delivered state of that RTL.\par\medskip
+\noindent Revision 2.2 of 23 September 2026 describes the delivered state of that RTL.\par\medskip
 
 \needspace{7\baselineskip}
-\subsection{Terms and abbreviations}
+\subsection{Definitions of terms and abbreviations}
 {\small
 \begin{longtable}{@{}L{0.2300\dimexpr\linewidth-12pt\relax}L{0.7700\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
@@ -40,25 +40,26 @@ EOI & End of interrupt; completes one service level. \\ \addlinespace[3pt]
 IRQ & Interrupt request. \\ \addlinespace[3pt]
 NBA & Nonblocking-assignment update region in simulation. \\ \addlinespace[3pt]
 PIC & Programmable interrupt controller. \\ \addlinespace[3pt]
-SVA & SystemVerilog Assertions. \\ \addlinespace[3pt]
+SVA & SystemVerilog Assertions. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Relationship with other documents}
 \noindent The documents below are the ones this specification is derived from or read with.\par\medskip
 {\small
-\begin{longtable}{@{}L{0.5000\dimexpr\linewidth-12pt\relax}L{0.5000\dimexpr\linewidth-12pt\relax}@{}}
+\begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.2200\dimexpr\linewidth-36pt\relax}L{0.1800\dimexpr\linewidth-36pt\relax}L{0.2600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
-\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\textbf{Document} & \textbf{Version / date} & \textbf{Author} & \textbf{Relationship} \\ \midrule
 \endfirsthead
 \toprule
-\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\textbf{Document} & \textbf{Version / date} & \textbf{Author} & \textbf{Relationship} \\ \midrule
 \endhead
-Programmable Interrupt Controller with Advanced Scheduling & Supplied project draft; functional requirements and implementation decisions. \\ \addlinespace[3pt]
-Spec table of contents and templates.pdf & Supplied document structure and verification-plan template. \\ \addlinespace[3pt]
-Verification Specification — PIC & Companion specification, revision 2.1, 21 September 2026. \\ \addlinespace[3pt]
-ARM AMBA AXI protocol & IHI0022E, AXI4-Lite. \\ \addlinespace[3pt]
-IEEE 1364-2005 & Verilog RTL. \\ \addlinespace[3pt]
+Programmable Interrupt Controller with Advanced Scheduling & Draft, 26 June 2026 & D. Borzasi, Siemens & Functional requirements; see section 2. \\ \addlinespace[3pt]
+Spec table of contents and templates & 2 September 2026 & D. Borzasi, Siemens & Document structure and verification-plan template. \\ \addlinespace[3pt]
+Verification Specification — PIC & Rev. 2.2, 23 September 2026 & C.-A. Bunea & Companion document. \\ \addlinespace[3pt]
+Design Specification — RV32I CPU & Rev. 2.2, 23 September 2026 & C.-A. Bunea & Other side of the CPU–PIC interrupt link. \\ \addlinespace[3pt]
+AMBA AXI and ACE Protocol Specification & IHI0022E & Arm & AXI4-Lite ports. \\ \addlinespace[3pt]
+IEEE Std 1364 (Verilog) & 2005 & IEEE & RTL language. \\*
 \bottomrule\end{longtable}}
 
 \needspace{7\baselineskip}
@@ -76,24 +77,13 @@ Fixed-width name & A Verilog module, port, file or script name, spelled as in th
 Signal suffix \_i / \_o & Module input / output, seen from inside that module. \\ \addlinespace[3pt]
 [a:b] & Bit range, most significant bit first. \\ \addlinespace[3pt]
 Source slot & One of the 16 arbitration identities; x or n denotes its index 0–15. \\ \addlinespace[3pt]
-posedge +1 ns & A testbench stimulus time, one nanosecond after the sampling edge. \\ \addlinespace[3pt]
+posedge +1 ns & A testbench stimulus time, one nanosecond after the sampling edge. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Specifications and system integration}
 \subsection{Requirements and integration}
-\noindent The first table names the brief and the RTL that this section compares. The second sets each requirement of the brief against the contract implemented for it, including the points where the two differ.\par\medskip
-{\small
-\begin{longtable}{@{}L{0.4800\dimexpr\linewidth-12pt\relax}L{0.5200\dimexpr\linewidth-12pt\relax}@{}}
-\toprule
-\textbf{Source} & \textbf{Role} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Source} & \textbf{Role} \\ \midrule
-\endhead
-Programmable Interrupt Controller with Advanced Scheduling & Original internship brief in cpu/docs/brief/. \\ \addlinespace[3pt]
-cpu/hdl/pic.v and axi\_lite\_slave.v & Implemented interface and register-access behaviour. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\noindent The table sets each requirement of the brief Programmable Interrupt Controller with Advanced Scheduling against the contract implemented in pic.v and axi\_lite\_slave.v. In the SoC, the register port sits on the CPU data decoder; sources 0–3 are the DMA channels, 4 the SRAM and 7 the timer, and the remaining inputs are tied low.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.1500\dimexpr\linewidth-24pt\relax}L{0.3500\dimexpr\linewidth-24pt\relax}L{0.5000\dimexpr\linewidth-24pt\relax}@{}}
 \toprule
@@ -109,22 +99,12 @@ Spurious requests & Detect a source withdrawn before acknowledgement. & Claim-ti
 Deadlines & Per-source service deadline and automatic escalation. & 16-bit cycle count; jump or next-more-urgent-band policy; optional repeated escalation. \\ \addlinespace[3pt]
 Software trigger & Protect injection; define clear and HW/SW collision. & 0xA5A5 key; key byte strobes required; zero or claim clears request. \\ \addlinespace[3pt]
 Register port & AXI4-Lite slave; documented register map. & 32-bit data/address; 256-byte window; independent AW/W collection. \\ \addlinespace[3pt]
-Reset / target & Active-low asynchronous reset; behavioural RTL simulation. & posedge clk\_i; reset disables all sources; no synthesis result claimed. \\ \addlinespace[3pt]
+Reset / target & Active-low asynchronous reset; behavioural RTL simulation. & posedge clk\_i; reset disables all sources; no synthesis result claimed. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Configuration and integration limits}
-\noindent The module has no Verilog parameters; every configurable quantity is either fixed in the RTL or programmed through a register. The tables separate the two, then state what an integrator has to guarantee outside the block.\par\medskip
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\noindent The module has no Verilog parameters: every quantity is either fixed in the RTL or programmed through a register. The first table lists the fixed quantities; the second states what an integrator has to guarantee outside the block.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3500\dimexpr\linewidth-12pt\relax}L{0.6500\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
@@ -136,7 +116,7 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 Source slots & 16; each merges a hardware line and software request. \\ \addlinespace[3pt]
 Priority bands & 4; configurable urgency, not additional modules. \\ \addlinespace[3pt]
 Physical nesting depth & 16; run-time NEST\_MAX defaults to 8. \\ \addlinespace[3pt]
-AXI width & 32-bit address/data; four strobes; three protection bits; two response bits. \\ \addlinespace[3pt]
+AXI width & 32-bit address/data; four strobes; three protection bits; two response bits. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.2600\dimexpr\linewidth-12pt\relax}L{0.7400\dimexpr\linewidth-12pt\relax}@{}}
@@ -149,13 +129,12 @@ AXI width & 32-bit address/data; four strobes; three protection bits; two respon
 Address window & Decode exactly a 256-byte window. Only address bits [7:2] are used; upper bits alias and low bits select the containing word. \\ \addlinespace[3pt]
 IRQ input synchrony & irq\_src\_i must be synchronous to clk\_i; synchronize asynchronous peripheral sources outside the PIC. \\ \addlinespace[3pt]
 CPU handshake & Claim refers to the offer sampled one cycle earlier. Never assert claim and EOI together. \\ \addlinespace[3pt]
-Depth limit & A lower NEST\_MAX does not discard existing active contexts; it suppresses new offers until sufficient EOIs occur. \\ \addlinespace[3pt]
 One CPU & One offer / mask / claim / EOI interface per PIC instance. \\ \addlinespace[3pt]
 Protection & AWPROT/ARPROT accepted and ignored; no access-control mechanism in this block. \\ \addlinespace[3pt]
-Implementation target & Behavioural RTL simulation. No synthesis / frequency claim. \\ \addlinespace[3pt]
+Implementation target & Behavioural RTL simulation. No synthesis / frequency claim. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Interface adaptations}
 \noindent The integrated CPU/PIC interface resolves the different source counts in the two drafts. The following choices define the implemented connection and arbitration timing.\par\medskip
 {\small
@@ -168,21 +147,22 @@ Implementation target & Behavioural RTL simulation. No synthesis / frequency cla
 \endhead
 CPU brief IRQ interface & 8 request bits / 3-bit ID / 8 acknowledge bits become one offer, 4-bit source ID, 16-bit pending/mask and scalar claim/EOI. \\ \addlinespace[3pt]
 Claim / completion & Claim starts active service and consumes latched requests. The added EOI input completes service and pops one context. \\ \addlinespace[3pt]
-Resolution pipeline & The PIC brief describes staged resolution. This RTL resolves eligibility and the priority key combinationally and registers the offer; there are no successive registered arbitration stages. \\ \addlinespace[3pt]
+Resolution pipeline & The PIC brief describes staged resolution. This RTL resolves eligibility and the priority key combinationally and registers the offer; there are no successive registered arbitration stages. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \newgeometry{top=15mm,bottom=15mm,left=16mm,right=16mm}
 \begin{landscape}
 \thispagestyle{plain}
-\section{Architecture}
+\section{Overview of overall structure}
 
 \noindent An enabled HW or software request enters priority selection. The registered offer identifies the candidate; claim saves its ID and priority, while EOI restores the previous active context. The return paths carry masks, the saved priority threshold and the depth limit.\par
 \begin{figure}[H]\centering\includegraphics[width=\linewidth,height=132mm,keepaspectratio]{figures/pic_essential.pdf}\caption{Architectural view: HW/SW requests share 16 source slots; the stack records active service contexts.}\end{figure}
 
 \end{landscape}
 \restoregeometry
-\clearpage
+\sectionmark{Overview of overall structure}
+\needspace{7\baselineskip}
 \subsection{Arbitration and service contract}
 \noindent Arbitration answers one question per cycle: which enabled source, if any, may be offered to the CPU. The table fixes how the winner is chosen, when a candidate may preempt an active context, and what the claim records.\par\medskip
 {\small
@@ -196,10 +176,10 @@ Resolution pipeline & The PIC brief describes staged resolution. This RTL resolv
 Priority key & Band urgency first, then higher intra-band priority, then lower source ID. \\ \addlinespace[3pt]
 Preemption & A candidate must be enabled, CPU-unmasked, inactive and strictly more urgent than the active top context. \\ \addlinespace[3pt]
 Recorded context & Claim snapshots the selected source ID and priority. Reconfiguring an active source does not change that saved threshold. \\ \addlinespace[3pt]
-Offer & cpu\_irq\_o and cpu\_irq\_vec\_o are registered together; pending\_o is a separate combinational mask. \\ \addlinespace[3pt]
+Offer & cpu\_irq\_o and cpu\_irq\_vec\_o are registered together; pending\_o is a separate combinational mask. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Source aggregation and offer timing}
 \noindent The controller maintains one service identity per source slot. HW and SW requests for the same slot share configuration, priority, deadline and active state.\par\medskip
 {\small
@@ -216,10 +196,10 @@ Same-cycle events & A fresh edge wins over clearing the previous edge on claim. 
 Priority key & Four configurable 2-bit band urgencies, a per-source 4-bit intra-band priority, then inverted 4-bit ID. Select the largest key; lower source ID wins the final tie. \\ \addlinespace[3pt]
 Reconfiguration & Changing an active source configuration affects future arbitration; the active stack entry keeps the key captured at claim until that context is popped. \\ \addlinespace[3pt]
 Offer latency & Request conditioning and key comparison are combinational; IRQ/vector are registered at posedge. The claim consumes a one-cycle delayed copy of the offered vector. \\ \addlinespace[3pt]
-Depth enforcement & Only an inactive, enabled, CPU-unmasked source above the saved top key is eligible. depth < NEST\_MAX is additionally required for an offer; an eligible blocked source sets OVF. \\ \addlinespace[3pt]
+Depth enforcement & Only an inactive, enabled, CPU-unmasked source above the saved top key is eligible. depth < NEST\_MAX is additionally required for an offer; an eligible blocked source sets OVF. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Spurious and deadline policy}
 \noindent The service decision uses the request state at claim. Deadline accounting covers enabled requests waiting for service, including requests masked at the CPU.\par\medskip
 {\small
@@ -235,10 +215,10 @@ Fast-clearing source & A level pulse gone before claim meets the same spurious c
 Deadline storage / count & SRCx\_CONFIG[31:16] stores the 16-bit cycle deadline. Each slot counts while enabled pending and inactive; zero disables counting. CPU masking does not pause the timer. \\ \addlinespace[3pt]
 Escalation & At deadline, either jump to the configured target band or select the next strictly greater programmed urgency. MULTI enables another escalation at each further deadline; the effective band cannot advance beyond the highest urgency. \\ \addlinespace[3pt]
 After service / idle & On the first edge observing no wait, clear the counter and wait-local escalation flag and restore the configured band. Sticky INT\_STATUS.ESC remains until software clears it. \\ \addlinespace[3pt]
-Software injection & Write 0xA5A50001 to SRCx\_SW\_TRIG with WSTRB[3:2]=11 and WSTRB[0]=1. Clear explicitly with bit 0=0, or automatically by claim. A software-only request follows the same deadline policy as hardware. \\ \addlinespace[3pt]
+Software injection & Write 0xA5A50001 to SRCx\_SW\_TRIG with WSTRB[3:2]=11 and WSTRB[0]=1. Clear explicitly with bit 0=0, or automatically by claim. A software-only request follows the same deadline policy as hardware. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Level request, claim and EOI}
 
 \noindent Source 3 is offered and claimed once. Claim increases the active depth; after the source clears, EOI returns the controller to depth zero.\par
@@ -255,10 +235,10 @@ Enabled level high & Source becomes pending. cpu\_irq\_o is registered on the ne
 Claim & Push the previously offered source; mark it active; active sources are excluded from offers. \\ \addlinespace[3pt]
 Source clears & The handler removes the peripheral cause before return. \\ \addlinespace[3pt]
 EOI & Pop exactly one level. EOI on an empty stack is ignored. \\ \addlinespace[3pt]
-Source remains high after EOI & It can become eligible again; PIC does not clear the external peripheral. \\ \addlinespace[3pt]
+Source remains high after EOI & It can become eligible again; PIC does not clear the external peripheral. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Preemption and nesting}
 
 \noindent Source 9 preempts source 8. The active mask keeps both sources during nesting; the first EOI restores source 8 and the second empties the stack. The offer vector is meaningful while cpu\_irq\_o is high.\par
@@ -275,10 +255,10 @@ Higher priority arrives & It may be offered while the current source is active. 
 Second claim & Depth increases from 1 to 2; outer source remains active. \\ \addlinespace[3pt]
 Inner EOI & Depth returns to 1; outer priority threshold is restored. \\ \addlinespace[3pt]
 At NEST\_MAX & No new offer; an eligible blocked source sets OVF. \\ \addlinespace[3pt]
-Reband active source & Saved priority threshold is unchanged until that context is popped. \\ \addlinespace[3pt]
+Reband active source & Saved priority threshold is unchanged until that context is popped. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Edge capture and spurious claims}
 
 \noindent A second source edge is sampled with the claim of the first event. The edge latch remains set, and the source is offered again after EOI.\par
@@ -296,10 +276,10 @@ Reband active source & Saved priority threshold is unchanged until that context 
 \endhead
 Disabled edge source & A rising edge remains latched; enabling later exposes it. Level-mode reset slots capture no edges. \\ \addlinespace[3pt]
 Claim with a new edge & New edge takes precedence over consuming the previous pending edge. \\ \addlinespace[3pt]
-Spurious claim & The previously offered source is no longer pending when claimed; log globally and per source; unwind with normal EOI. \\ \addlinespace[3pt]
+Spurious claim & The previously offered source is no longer pending when claimed; log globally and per source; unwind with normal EOI. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Deadline escalation}
 
 \noindent Source 1 initially wins the tie. Source 2 reaches its ten-cycle deadline; the escalation event changes its effective priority, and the registered offer changes to source 2 on the following edge.\par
@@ -315,16 +295,16 @@ Spurious claim & The previously offered source is no longer pending when claimed
 DEADLINE=0 & Timer disabled and held at zero. \\ \addlinespace[3pt]
 Nonzero deadline & Count while enabled pending and not active. CPU masking does not stop the pending timer. \\ \addlinespace[3pt]
 MODE=0 & Jump to TARGET when deadline expires. \\ \addlinespace[3pt]
-MODE=1 & Move to the next strictly greater urgency from BAND\_CONFIG, not simply band number minus one. \\ \addlinespace[3pt]
+MODE=1 & Move to the next strictly greater urgency in BAND\_CONFIG, which need not be the next lower band number. \\ \addlinespace[3pt]
 MULTI=1 & Repeat at each deadline. In bump mode, the effective band stays unchanged if no higher urgency exists. \\ \addlinespace[3pt]
 Claim / no longer pending & Clear elapsed wait and escalation state; configured priority applies again. \\ \addlinespace[3pt]
-Status & SRCx\_STATUS.ESC is wait-local; INT\_STATUS.ESC is sticky until RW1C. \\ \addlinespace[3pt]
+Status & SRCx\_STATUS.ESC is wait-local; INT\_STATUS.ESC is sticky until RW1C. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Interfaces}
 \subsection{Hardware interface}
-\noindent All ports share one clock domain and one asynchronous reset. The table gives the direction, width and meaning of every port: the 16 source inputs, the CPU handshake that carries the offer back and the claim and EOI forward, and the AXI4-Lite register window.\par\medskip
+\noindent All ports are digital and synchronous to the rising edge of clk\_i; rst\_n\_i is the only asynchronous input. The ports are the 16 source inputs, the CPU handshake (offer to the CPU, claim and EOI back) and the AXI4-Lite register port.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -360,10 +340,10 @@ Status & SRCx\_STATUS.ESC is wait-local; INT\_STATUS.ESC is sticky until RW1C. \
 \texttt{s\_axi\_rdata\_o} & output & 32 & Read payload. \\ \addlinespace[3pt]
 \texttt{s\_axi\_rresp\_o} & output & 2 & Read response: OKAY=00, SLVERR=10, DECERR=11. \\ \addlinespace[3pt]
 \texttt{s\_axi\_rvalid\_o} & output & 1 & Read response is valid; hold until handshake. \\ \addlinespace[3pt]
-\texttt{s\_axi\_rready\_i} & input & 1 & Receiver can accept the read response. \\ \addlinespace[3pt]
+\texttt{s\_axi\_rready\_i} & input & 1 & Receiver can accept the read response. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{Reset and register-access contract}
 
 \noindent The controller starts with active nested service and enabled sources. Reset clears both depth and INT\_ENABLE between clock edges; the test checks the state one nanosecond after assertion.\par
@@ -381,10 +361,10 @@ Reset state & INT\_ENABLE=0, depth=0, all source requests inactive; BAND\_CONFIG
 Transactions & One outstanding read and one outstanding write. AW and W may arrive independently, in either order. \\ \addlinespace[3pt]
 Read / write response & OKAY for a mapped permitted access. SLVERR for unmapped read/write or a write to RO. Rejected read data is zero. \\ \addlinespace[3pt]
 Writes & WSTRB applies per byte as described in each field. No strobe does not authorize an otherwise forbidden write. \\ \addlinespace[3pt]
-Reset during transfer & Captured AW/W and pending B/R responses are cleared; no pre-reset response is replayed afterwards. \\ \addlinespace[3pt]
+Reset during transfer & Captured AW/W and pending B/R responses are cleared; no pre-reset response is replayed afterwards. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Software interface}
 \noindent Every software-visible control and status bit of the controller lives in one 256-byte AXI4-Lite window. The map lists each offset with its access class and reset value; the subsections that follow give the fields of each register.\par\medskip
 {\small
@@ -405,7 +385,7 @@ Reset during transfer & Captured AW/W and pending B/R responses are cleared; no 
 0xD0 & SPURIOUS\_LOG & RW1C & 0x00000000 & Per-source spurious flags. \\ \addlinespace[3pt]
 0xD4 & ESCALATION\_CFG & RW & 0x00000000 & Escalation policy. \\ \addlinespace[3pt]
 0xD8 & INT\_ENABLE & RW & 0x00000000 & Source enables. \\ \addlinespace[3pt]
-0xDC & INT\_STATUS & RW1C & 0x00000000 & Global event flags. \\ \addlinespace[3pt]
+0xDC & INT\_STATUS & RW1C & 0x00000000 & Global event flags. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.2600\dimexpr\linewidth-12pt\relax}L{0.7400\dimexpr\linewidth-12pt\relax}@{}}
@@ -417,12 +397,11 @@ Reset during transfer & Captured AW/W and pending B/R responses are cleared; no 
 \endhead
 Per-source offsets & x ranges from 0 to 15. Configuration=4x; software trigger=0x40+4x; status=0x80+4x. \\ \addlinespace[3pt]
 Reserved addresses & 0xE0–0xFC return SLVERR. \\ \addlinespace[3pt]
-Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: value coerced to a legal setting; RAZ/WI: read zero / write ignored. \\ \addlinespace[3pt]
+Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: value coerced to a legal setting; RAZ/WI: read zero / write ignored. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: SRCx\_CONFIG}
-\subsection*{SRCx\_CONFIG — 0x00 + 4x}
+\needspace{7\baselineskip}
+\subsubsection{SRCx\_CONFIG — 0x00 + 4x}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -436,12 +415,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 [7:4] & INTRA & RW & 0 & Higher value means higher priority within equal band urgency. \\ \addlinespace[3pt]
 [3] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
 [2:1] & BAND & RW & 0 & Band index 0–3; urgency comes from BAND\_CONFIG. \\ \addlinespace[3pt]
-[0] & TRIG & RW & 0 & 0: level. 1: latch rising edges until claim. \\ \addlinespace[3pt]
+[0] & TRIG & RW & 0 & 0: level. 1: latch rising edges until claim. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: SRCx\_SW\_TRIG}
-\subsection*{SRCx\_SW\_TRIG — 0x40 + 4x}
+\needspace{7\baselineskip}
+\subsubsection{SRCx\_SW\_TRIG — 0x40 + 4x}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -452,12 +430,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 \endhead
 [31:16] & KEY & WO / RAZ & 0 & 0xA5A5 plus WSTRB[3:2]=11 is required to set SWREQ. \\ \addlinespace[3pt]
 [15:1] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
-[0] & SWREQ & RW + HW clear & 0 & Set with key; zero clears without key. WSTRB[0] required. Claim clears; a simultaneous new set is retained. \\ \addlinespace[3pt]
+[0] & SWREQ & RW + HW clear & 0 & Set with key; zero clears without key. WSTRB[0] required. Claim clears; a simultaneous new set is retained. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: SRCx\_STATUS}
-\subsection*{SRCx\_STATUS — 0x80 + 4x}
+\needspace{7\baselineskip}
+\subsubsection{SRCx\_STATUS — 0x80 + 4x}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -472,12 +449,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 [3] & SPUR & RO & 0 & This active service level was claimed after its source disappeared. \\ \addlinespace[3pt]
 [2] & ESC & RO & 0 & Escalated during the present wait; clears when claimed / no longer pending. \\ \addlinespace[3pt]
 [1] & ACTIVE & RO & 0 & Source occupies a nesting level. \\ \addlinespace[3pt]
-[0] & PEND & RO & 0 & Enabled HW/SW request, including a held level during its handler. \\ \addlinespace[3pt]
+[0] & PEND & RO & 0 & Enabled HW/SW request, including a held level during its handler. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: BAND\_CONFIG}
-\subsection*{BAND\_CONFIG — 0xC0}
+\needspace{7\baselineskip}
+\subsubsection{BAND\_CONFIG — 0xC0}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -490,12 +466,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 [7:6] & BAND3\_URG & RW & 0 & Urgency of band 3. \\ \addlinespace[3pt]
 [5:4] & BAND2\_URG & RW & 1 & Urgency of band 2. \\ \addlinespace[3pt]
 [3:2] & BAND1\_URG & RW & 2 & Urgency of band 1. \\ \addlinespace[3pt]
-[1:0] & BAND0\_URG & RW & 3 & Urgency of band 0. Higher urgency wins. \\ \addlinespace[3pt]
+[1:0] & BAND0\_URG & RW & 3 & Urgency of band 0. Higher urgency wins. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: NEST\_STATUS}
-\subsection*{NEST\_STATUS — 0xC4}
+\needspace{7\baselineskip}
+\subsubsection{NEST\_STATUS — 0xC4}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -509,12 +484,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 [15:12] & Reserved & RO & 0 & Reads zero. \\ \addlinespace[3pt]
 [11:8] & TOP\_ID & RO & 0 & Top active source ID; zero when depth is zero. \\ \addlinespace[3pt]
 [7:5] & Reserved & RO & 0 & Reads zero. \\ \addlinespace[3pt]
-[4:0] & DEPTH & RO & 0 & Active nesting levels, 0–16. \\ \addlinespace[3pt]
+[4:0] & DEPTH & RO & 0 & Active nesting levels, 0–16. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: NEST\_MAX}
-\subsection*{NEST\_MAX — 0xC8}
+\needspace{7\baselineskip}
+\subsubsection{NEST\_MAX — 0xC8}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -524,12 +498,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
 [31:5] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
-[4:0] & LIMIT & RW / WARL & 8 & Clamp 0 to 1 and values above 16 to 16. Requires WSTRB[0]. Lowering the limit does not unwind active handlers. \\ \addlinespace[3pt]
+[4:0] & LIMIT & RW / WARL & 8 & Clamp 0 to 1 and values above 16 to 16. Requires WSTRB[0]. Lowering the limit does not unwind active handlers. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: ACTIVE\_VEC}
-\subsection*{ACTIVE\_VEC — 0xCC}
+\needspace{7\baselineskip}
+\subsubsection{ACTIVE\_VEC — 0xCC}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -541,12 +514,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 [31:9] & Reserved & RO & 0 & Reads zero. \\ \addlinespace[3pt]
 [8] & VALID & RO & 0 & At least one source is in service. \\ \addlinespace[3pt]
 [7:4] & Reserved & RO & 0 & Reads zero. \\ \addlinespace[3pt]
-[3:0] & ID & RO & 0 & Top active source; meaningful when VALID=1. \\ \addlinespace[3pt]
+[3:0] & ID & RO & 0 & Top active source; meaningful when VALID=1. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: SPURIOUS\_LOG}
-\subsection*{SPURIOUS\_LOG — 0xD0}
+\needspace{7\baselineskip}
+\subsubsection{SPURIOUS\_LOG — 0xD0}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -556,12 +528,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
 [31:16] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
-[15:0] & FLAGS & RW1C & 0 & One sticky bit per spurious source. WSTRB[1:0] qualify clear. New hardware set wins over clear. \\ \addlinespace[3pt]
+[15:0] & FLAGS & RW1C & 0 & One sticky bit per spurious source. WSTRB[1:0] qualify clear. New hardware set wins over clear. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: ESCALATION\_CFG}
-\subsection*{ESCALATION\_CFG — 0xD4}
+\needspace{7\baselineskip}
+\subsubsection{ESCALATION\_CFG — 0xD4}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -575,12 +546,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 [7:5] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
 [4] & MODE & RW & 0 & 0: jump to TARGET. 1: next strictly more urgent band. \\ \addlinespace[3pt]
 [3:2] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
-[1:0] & TARGET & RW & 0 & Destination band for jump mode. \\ \addlinespace[3pt]
+[1:0] & TARGET & RW & 0 & Destination band for jump mode. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: INT\_ENABLE}
-\subsection*{INT\_ENABLE — 0xD8}
+\needspace{7\baselineskip}
+\subsubsection{INT\_ENABLE — 0xD8}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -590,12 +560,11 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
 [31:16] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
-[15:0] & ENABLE & RW & 0 & One source enable per bit; byte strobes apply. CPU mask is a separate filter. \\ \addlinespace[3pt]
+[15:0] & ENABLE & RW & 0 & One source enable per bit; byte strobes apply. CPU mask is a separate filter. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
-\subsubsection{Register fields: INT\_STATUS}
-\subsection*{INT\_STATUS — 0xDC}
+\needspace{7\baselineskip}
+\subsubsection{INT\_STATUS — 0xDC}
 {\small
 \begin{longtable}{@{}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1800\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.1200\dimexpr\linewidth-48pt\relax}L{0.4600\dimexpr\linewidth-48pt\relax}@{}}
 \toprule
@@ -607,10 +576,10 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 [31:3] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
 [2] & OVF & RW1C & 0 & Eligible source blocked by depth limit. \\ \addlinespace[3pt]
 [1] & ESC & RW1C & 0 & At least one deadline escalation occurred. \\ \addlinespace[3pt]
-[0] & SPUR & RW1C & 0 & At least one spurious claim occurred. New hardware event wins over a same-cycle clear. \\ \addlinespace[3pt]
+[0] & SPUR & RW1C & 0 & At least one spurious claim occurred. New hardware event wins over a same-cycle clear. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{Programming sequences}
 \noindent A source is configured while it is disabled, enabled once its policy is set, then claimed and completed by the handler. The second table names the registers that make that state observable while the system is running.\par\medskip
 {\small
@@ -628,7 +597,7 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 5 & SRCx\_SW\_TRIG (0x40+4x) & Set: WDATA=0xA5A50001 with WSTRB=0xD or 0xF. Clear: bit 0=0 with WSTRB[0]=1. \\ \addlinespace[3pt]
 6 & cpu\_irq\_ack\_i & Claim one cycle after observing the offered request/vector. \\ \addlinespace[3pt]
 7 & Peripheral / cpu\_irq\_eoi\_i & Clear the cause, then issue one EOI when the handler returns. \\ \addlinespace[3pt]
-8 & INT\_STATUS / SPURIOUS\_LOG & Read events and write ones to the flags that should be cleared. \\ \addlinespace[3pt]
+8 & INT\_STATUS / SPURIOUS\_LOG & Read events and write ones to the flags that should be cleared. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.3800\dimexpr\linewidth-12pt\relax}L{0.6200\dimexpr\linewidth-12pt\relax}@{}}
@@ -640,12 +609,12 @@ Access classes & RW: read/write; RO: read-only; RW1C: write-one-to-clear; WARL: 
 \endhead
 Pending / active / elapsed & SRCx\_STATUS. \\ \addlinespace[3pt]
 Current handler & ACTIVE\_VEC.VALID and ID. \\ \addlinespace[3pt]
-Nested contexts & NEST\_STATUS.DEPTH and TOP\_ID; software cannot read the whole stack. \\ \addlinespace[3pt]
+Nested contexts & NEST\_STATUS.DEPTH and TOP\_ID; software cannot read the whole stack. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Reuse and reusability}
-\noindent This block reuses no external component. The table is what another developer needs in order to use it: which files to compile, what to connect, what to tie off and which checks to run after integration.\par\medskip
+\noindent The one reused component is the register front end axi\_lite\_slave (section 6.1), which the machine timer also uses. Reusing the controller:\par\medskip
 {\small
 \begin{longtable}{@{}L{0.2500\dimexpr\linewidth-12pt\relax}L{0.7500\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
@@ -659,24 +628,18 @@ Instantiate & pic has no Verilog module parameters; all configuration uses regis
 Connect & Map its 256-byte AXI window and connect 16 synchronous IRQ lines. Tie unused lines low. \\ \addlinespace[3pt]
 CPU link & Connect request 1, vector 4, mask/pending 16 and claim/EOI 1 each. The original CPU brief differs; use the interface documented here. \\ \addlinespace[3pt]
 Reset & Reset PIC, master and fabric together; keep a consistent reset domain for in-flight transactions. \\ \addlinespace[3pt]
-Verify & Run the PIC benches in regress.do and the bound-assertion flow run\_verilator.sh; check the final address map. \\ \addlinespace[3pt]
+Verify & Run the PIC benches in regress.do and the bound-assertion flow run\_verilator.sh; check the final address map. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Design of submodules}
+\noindent Submodule ports are synchronous to the rising edge of clk\_i and rst\_n\_i resets asynchronously; combinational modules have neither.\par\medskip
+\addtocontents{toc}{\protect\setcounter{tocdepth}{2}}
+\needspace{7\baselineskip}
 \subsection{axi\_lite\_slave}
 Collects independent AW/W channels and maps register-access acceptance to AXI response codes.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -711,9 +674,26 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{wr\_ok\_i} & input & 1 & Offset is writable; low selects SLVERR. Peripheral must qualify state updates. \\ \addlinespace[3pt]
 \texttt{rd\_addr\_o} & output & 6 & Register word offset ARADDR[7:2]. \\ \addlinespace[3pt]
 \texttt{rd\_data\_i} & input & 32 & Register read value for rd\_addr\_o. \\ \addlinespace[3pt]
-\texttt{rd\_ok\_i} & input & 1 & Offset is readable; low selects SLVERR. \\ \addlinespace[3pt]
+\texttt{rd\_ok\_i} & input & 1 & Offset is readable; low selects SLVERR. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent AW and W are captured independently and one register-write pulse is issued after both are available. BRESP is retained until BREADY. An AR handshake samples the peripheral read mux and RRESP, which remain stable until RREADY. Register acceptance selects OKAY or SLVERR.\par\medskip
+
+\addtocontents{toc}{\protect\setcounter{tocdepth}{3}}
+\clearpage
+\section{List of bugs and workarounds}
+\noindent No open RTL defects are known at revision 2.2. Limitations that software and follow-up projects have to work around:\par\medskip
+{\small
+\begin{longtable}{@{}L{0.5000\dimexpr\linewidth-12pt\relax}L{0.5000\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Limitation} & \textbf{Workaround} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Limitation} & \textbf{Workaround} \\ \midrule
+\endhead
+A level request that drops before the claim produces a spurious claim. & Use edge mode for short pulses. The handler reads SRCx\_STATUS.SPUR and still sends the EOI. \\ \addlinespace[3pt]
+A software trigger needs WSTRB[3:2] and WSTRB[0]. & Arm it with a 32-bit store; byte and halfword stores cannot set a request. \\ \addlinespace[3pt]
+Lowering NEST\_MAX below the current depth keeps the open levels. & Offers resume once EOIs bring the depth below the limit; change NEST\_MAX while no source is in service for immediate effect. \\*
+\bottomrule\end{longtable}}
 
 \end{document}

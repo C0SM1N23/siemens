@@ -1,8 +1,8 @@
 \documentclass[11pt]{article}
 \newcommand{\doctitle}{RV32I CPU — Design Specification}
 \newcommand{\docsubject}{Three-stage processor · RTL interface and programming contract}
-\newcommand{\docrev}{2.1}
-\newcommand{\docdate}{21 September 2026}
+\newcommand{\docrev}{2.2}
+\newcommand{\docdate}{23 September 2026}
 \input{preamble_spec}
 \begin{document}
 \begin{titlepage}\vspace*{24mm}
@@ -21,10 +21,10 @@
 \needspace{7\baselineskip}
 \subsection{Validity of the document}
 \noindent The documented configuration is the RTL in cpu/hdl and the associated CPU/PIC and SoC simulation environments. Interface adaptations from the supplied briefs are identified in the integration section.\par\medskip
-\noindent Revision 2.1 of 21 September 2026 describes the delivered state of that RTL.\par\medskip
+\noindent Revision 2.2 of 23 September 2026 describes the delivered state of that RTL.\par\medskip
 
 \needspace{7\baselineskip}
-\subsection{Terms and abbreviations}
+\subsection{Definitions of terms and abbreviations}
 {\small
 \begin{longtable}{@{}L{0.2300\dimexpr\linewidth-12pt\relax}L{0.7700\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
@@ -44,25 +44,28 @@ NBA & Nonblocking-assignment update region in simulation. \\ \addlinespace[3pt]
 PIC & Programmable interrupt controller. \\ \addlinespace[3pt]
 RAS & Return-address stack. \\ \addlinespace[3pt]
 S1 / S2 / S3 & Fetch / decode-execute / writeback. \\ \addlinespace[3pt]
-SVA & SystemVerilog Assertions. \\ \addlinespace[3pt]
+SVA & SystemVerilog Assertions. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Relationship with other documents}
 \noindent The documents below are the ones this specification is derived from or read with.\par\medskip
 {\small
-\begin{longtable}{@{}L{0.5000\dimexpr\linewidth-12pt\relax}L{0.5000\dimexpr\linewidth-12pt\relax}@{}}
+\begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.2200\dimexpr\linewidth-36pt\relax}L{0.1800\dimexpr\linewidth-36pt\relax}L{0.2600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
-\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\textbf{Document} & \textbf{Version / date} & \textbf{Author} & \textbf{Relationship} \\ \midrule
 \endfirsthead
 \toprule
-\textbf{Reference} & \textbf{Version / role} \\ \midrule
+\textbf{Document} & \textbf{Version / date} & \textbf{Author} & \textbf{Relationship} \\ \midrule
 \endhead
-RV32I 3-Stage Pipeline CPU.pdf & Supplied project draft; functional requirements and implementation decisions. \\ \addlinespace[3pt]
-Spec table of contents and templates.pdf & Supplied document structure and verification-plan template. \\ \addlinespace[3pt]
-Verification Specification — CPU & Companion specification, revision 2.1, 21 September 2026. \\ \addlinespace[3pt]
-RISC-V Unprivileged ISA / Privileged Architecture & v20191213 / v20211203, machine mode \\ \addlinespace[3pt]
-ARM IHI0022E / IEEE 1364-2005 & AXI4-Lite / Verilog RTL. \\ \addlinespace[3pt]
+RV32I 3-Stage Pipeline CPU & Draft, 1 July 2026 & D. Borzasi, Siemens & Functional requirements; see section 2. \\ \addlinespace[3pt]
+Spec table of contents and templates & 2 September 2026 & D. Borzasi, Siemens & Document structure and verification-plan template. \\ \addlinespace[3pt]
+Verification Specification — CPU & Rev. 2.2, 23 September 2026 & C.-A. Bunea & Companion document. \\ \addlinespace[3pt]
+Design Specification — PIC & Rev. 2.2, 23 September 2026 & C.-A. Bunea & Other side of the CPU–PIC interrupt link. \\ \addlinespace[3pt]
+RISC-V Unprivileged ISA & 20191213 & RISC-V International & Instruction semantics. \\ \addlinespace[3pt]
+RISC-V Privileged Architecture & 20211203 & RISC-V International & Machine-mode CSRs and traps. \\ \addlinespace[3pt]
+AMBA AXI and ACE Protocol Specification & IHI0022E & Arm & AXI4-Lite ports. \\ \addlinespace[3pt]
+IEEE Std 1364 (Verilog) & 2005 & IEEE & RTL language. \\*
 \bottomrule\end{longtable}}
 
 \needspace{7\baselineskip}
@@ -80,24 +83,13 @@ Fixed-width name & A Verilog module, port, file or script name, spelled as in th
 Signal suffix \_i / \_o & Module input / output, seen from inside that module. \\ \addlinespace[3pt]
 [a:b] & Bit range, most significant bit first. \\ \addlinespace[3pt]
 S1 / S2 / S3 & Pipeline stage names used throughout the document. \\ \addlinespace[3pt]
-posedge +1 ns & A testbench stimulus time, one nanosecond after the sampling edge. \\ \addlinespace[3pt]
+posedge +1 ns & A testbench stimulus time, one nanosecond after the sampling edge. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Specifications and system integration}
 \subsection{Requirements and integration}
-\noindent The first table names the brief and the RTL that this section compares. The second sets each requirement of the brief against the contract implemented for it, including the points where the two differ.\par\medskip
-{\small
-\begin{longtable}{@{}L{0.4300\dimexpr\linewidth-12pt\relax}L{0.5700\dimexpr\linewidth-12pt\relax}@{}}
-\toprule
-\textbf{Source} & \textbf{Role} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Source} & \textbf{Role} \\ \midrule
-\endhead
-RV32I 3-Stage Pipeline CPU.pdf & Original internship brief, locally stored in cpu/docs/brief/. \\ \addlinespace[3pt]
-cpu/hdl/rv32i\_cpu\_top.v & Implemented top-level contract documented here. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\noindent The table sets each requirement of the brief RV32I 3-Stage Pipeline CPU against the contract implemented in rv32i\_cpu\_top, including the points where the two differ. In the SoC, the instruction port reaches the instruction memory, the data port reaches data memory, the SRAM and the peripheral registers through the SoC decoder, and the interrupt link connects directly to the PIC; the address map is in soc/README.md.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.1400\dimexpr\linewidth-24pt\relax}L{0.3700\dimexpr\linewidth-24pt\relax}L{0.4900\dimexpr\linewidth-24pt\relax}@{}}
 \toprule
@@ -113,21 +105,22 @@ Memory & Independent AXI4-Lite instruction/data masters. & Read-only instruction
 Exceptions & Define causes, entry, return and flush precedence. & Precise instruction-boundary traps; faulting instruction does not commit. \\ \addlinespace[3pt]
 Register file & 32 × 32 bits, two reads, one write; x0 = 0. & Combinational reads; S3 write; all GPRs reset to zero. \\ \addlinespace[3pt]
 Reset / target & Active-low asynchronous reset; behavioural RTL simulation. & posedge clk\_i; asynchronous assertion of rst\_n\_i; no synthesis result claimed. \\ \addlinespace[3pt]
-IRQ integration & CPU brief: 8 requests, 3-bit ID, 8-bit acknowledgement. & Implemented PIC contract: 16 sources, scalar request/claim, 4-bit ID and EOI. \\ \addlinespace[3pt]
+IRQ integration & CPU brief: 8 requests, 3-bit ID, 8-bit acknowledgement. & Implemented PIC contract: 16 sources, scalar request/claim, 4-bit ID and EOI. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \newgeometry{top=15mm,bottom=15mm,left=16mm,right=16mm}
 \begin{landscape}
 \thispagestyle{plain}
-\section{Architecture}
+\section{Overview of overall structure}
 
 \noindent Follow the instruction from S1 through IF/DX to S2, then through DX/WB to S3. The lower paths carry writeback forwarding, execution status, predictor updates and redirects; the LSU completes a memory access before S2 advances.\par
 \begin{figure}[H]\centering\includegraphics[width=\linewidth,height=132mm,keepaspectratio]{figures/cpu_essential.pdf}\caption{Three stages with pipeline boundaries, data paths and essential control feedback; widths are in bits. PIC and memories are external.}\end{figure}
 
 \end{landscape}
 \restoregeometry
-\clearpage
+\sectionmark{Overview of overall structure}
+\needspace{7\baselineskip}
 \subsection{Pipeline and control contract}
 \noindent Each stage owns one part of an instruction, and only S2 decides when an instruction is finished. The table states what each stage is responsible for, and which redirect wins when several are requested in the same cycle.\par\medskip
 {\small
@@ -141,10 +134,10 @@ IRQ integration & CPU brief: 8 requests, 3-bit ID, 8-bit acknowledgement. & Impl
 S1 & One outstanding instruction read; predictor selects next PC; wrong-path responses are drained and discarded. \\ \addlinespace[3pt]
 S2 & Decode, execute and complete memory access. CSR side effects / instruction retirement occur at completion. \\ \addlinespace[3pt]
 S3 & Write result to the destination GPR. Forward this value to dependent S2 operands. \\ \addlinespace[3pt]
-Redirect priority & Synchronous trap / accepted interrupt, then MRET, then branch correction; redirect requires S2 to advance. \\ \addlinespace[3pt]
+Redirect priority & Synchronous trap / accepted interrupt, then MRET, then branch correction; redirect requires S2 to advance. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Instruction groups}
 \noindent Integer instructions execute in order. Loads and stores complete in S2; CSR effects also commit there, while GPR writeback occurs in S3.\par\medskip
 {\small
@@ -162,10 +155,10 @@ Compare & SLT/SLTI, SLTU/SLTIU. \\ \addlinespace[3pt]
 Control transfer & BEQ, BNE, BLT, BGE, BLTU, BGEU, JAL and JALR. \\ \addlinespace[3pt]
 Load / store & LB, LH, LW, LBU, LHU; SB, SH, SW. Naturally aligned accesses only. \\ \addlinespace[3pt]
 System & ECALL, EBREAK, FENCE as a no-op; CSRRW/CSRRS/CSRRC and immediate variants; MRET and WFI. \\ \addlinespace[3pt]
-Unsupported encoding & Illegal-instruction exception, including M/A/C instructions and FENCE.I. \\ \addlinespace[3pt]
+Unsupported encoding & Illegal-instruction exception, including M/A/C instructions and FENCE.I. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Branch prediction}
 \noindent Prediction chooses the next fetch address; S2 remains responsible for resolving the instruction and committing any predictor update.\par\medskip
 {\small
@@ -181,10 +174,10 @@ Unseen branch & Invalid entry or tag miss predicts not taken, selecting PC+4. Ea
 Misprediction & At S2, compare predicted direction with the resolved direction; for a taken transfer also compare targets. A mismatch redirects fetch when S2 advances. \\ \addlinespace[3pt]
 Update point & A live, non-faulting branch/jump updates direction, tag and target at S2 completion, including the correcting edge. Wrong-path or trapping instructions do not train the table. \\ \addlinespace[3pt]
 Trap entry / return & BTB/BHT and RAS are preserved across traps and MRET; reset clears them. \\ \addlinespace[3pt]
-Call / return & RAS\_DEPTH=8 by default; zero disables the stack. JAL/JALR hints use x1/x5. Return entries use the stack top, falling back to the BTB target when empty. Full pushes replace the oldest entry; empty pops have no effect. \\ \addlinespace[3pt]
+Call / return & RAS\_DEPTH=8 by default; zero disables the stack. JAL/JALR hints use x1/x5. Return entries use the stack top, falling back to the BTB target when empty. Full pushes replace the oldest entry; empty pops have no effect. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Trap entry, return and competing events}
 \noindent Trap acceptance cancels the current S2 instruction and redirects younger fetch work. Older S3 work can still complete; the saved PC identifies where software must resume.\par\medskip
 {\small
@@ -202,10 +195,10 @@ Data transfer in progress & lsu\_active prevents IRQ acceptance until the outsta
 Nested service & Trap entry clears MIE. Software must save trap CSRs and handler context before enabling nested interrupts. A 16-level trap-kind stack distinguishes interrupt returns from exception returns; software must keep combined depth at or below 16. \\ \addlinespace[3pt]
 MRET & Restore MIE from MPIE, set MPIE, redirect to mepc and pop one trap level. Emit EOI only if the popped level was an interrupt; cpu\_in\_trap remains high while any level is open. \\ \addlinespace[3pt]
 MIE write versus IRQ & Arbitration uses the current MIE value. With MIE=0, a CSR write enabling it completes before later acceptance. With MIE=1 and an eligible offer, IRQ preempts the CSR instruction; that instruction can execute after return. \\ \addlinespace[3pt]
-WFI & Hold S2 until a locally enabled offer exists. Wakeup does not require global MIE; entering the interrupt handler does. \\ \addlinespace[3pt]
+WFI & Hold S2 until a locally enabled offer exists. Wakeup does not require global MIE; entering the interrupt handler does. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Stall, forwarding and flush}
 \noindent Centralized pipeline control decides advancement and invalidation. A stalled memory instruction holds its operands in S2 while S3 receives bubbles after older work completes.\par\medskip
 {\small
@@ -221,10 +214,10 @@ Data access / WFI & lsu\_busy or wfi\_wait holds IF/DX. S3 valid is cleared whil
 Load-use dependency & S2 waits for the load response. Once the load reaches S3, its result forwards to either matching S2 operand; no extra load-use bubble is needed. x0 is excluded from forwarding. \\ \addlinespace[3pt]
 Stall and redirect & A redirect is gated by s2\_advance, so the active data access completes first. At the advancing edge, trap/MRET/correction determines the new fetch address and IF/DX receives a bubble. \\ \addlinespace[3pt]
 Wrong-path fetch & An accepted AR cannot be cancelled. An outstanding wrong-path response is drained and discarded; it cannot create a GPR write or instruction-access exception. \\ \addlinespace[3pt]
-Pipeline registers & IF/DX stores instruction, PC, prediction and fault with valid. DX/WB stores the destination and result choices with valid. Reset clears valid bits and initializes the instruction to ADDI x0,x0,0; invalid payloads cannot execute. \\ \addlinespace[3pt]
+Pipeline registers & IF/DX stores instruction, PC, prediction and fault with valid. DX/WB stores the destination and result choices with valid. Reset clears valid bits and initializes the instruction to ADDI x0,x0,0; invalid payloads cannot execute. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Independent memory ports}
 \noindent Instruction fetch and the LSU have separate AXI channel state. They can progress concurrently; the pipeline consumes their results in order.\par\medskip
 {\small
@@ -237,13 +230,13 @@ Pipeline registers & IF/DX stores instruction, PC, prediction and fault with val
 \endhead
 Both ports stalled & Hold each VALID and payload until its own READY. S2 retains the data operation; a fetched instruction can be held until S2 becomes available. \\ \addlinespace[3pt]
 Read / write errors & Instruction RRESP[1] becomes instruction-access fault (cause 1). Data RRESP[1]/BRESP[1] becomes load/store access fault (5/7); the faulting instruction cannot write its destination. \\ \addlinespace[3pt]
-Future AXI4 integration & An external Lite-to-Full wrapper can emit single-beat transactions with fixed ID, LEN=0, SIZE=2 and no outstanding reordering. Bursts or multiple outstanding instructions would require new request tracking and verification; the current CPU ports remain AXI4-Lite. \\ \addlinespace[3pt]
+Future AXI4 integration & An external Lite-to-Full wrapper can emit single-beat transactions with fixed ID, LEN=0, SIZE=2 and no outstanding reordering. Bursts or multiple outstanding instructions would require new request tracking and verification; the current CPU ports remain AXI4-Lite. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Interfaces}
 \subsection{Hardware interface}
-\noindent The two memory ports and PIC link are independent interfaces on the same clock domain. Capacity parameters do not change their external bus widths.\par\medskip
+\noindent The two memory ports and the PIC link are independent interfaces. All ports are digital and synchronous to the rising edge of clk\_i; rst\_n\_i is the only asynchronous input.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
 \toprule
@@ -255,20 +248,9 @@ Future AXI4 integration & An external Lite-to-Full wrapper can emit single-beat 
 RESET\_PC & 32'h0000\_0000 & Word-aligned first fetch address. \\ \addlinespace[3pt]
 HART\_ID & 32'd0 & Value returned by mhartid. \\ \addlinespace[3pt]
 BP\_ENTRIES & 128 & BTB/BHT entries; power of two, at least 2. \\ \addlinespace[3pt]
-RAS\_DEPTH & 8 & Return-address stack entries; zero disables it. \\ \addlinespace[3pt]
+RAS\_DEPTH & 8 & Return-address stack entries; zero disables it. \\*
 \bottomrule\end{longtable}}
-{\small
-\begin{longtable}{@{}L{0.2600\dimexpr\linewidth-12pt\relax}L{0.7400\dimexpr\linewidth-12pt\relax}@{}}
-\toprule
-\textbf{Width class} & \textbf{Contract} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Width class} & \textbf{Contract} \\ \midrule
-\endhead
-Architectural widths & Instructions, addresses and data are fixed at 32 bits; GPR indices are 5 bits. \\ \addlinespace[3pt]
-Interrupt widths & 16 mask/pending bits, 4-bit source ID. These are fixed widths, not module parameters. \\ \addlinespace[3pt]
-Prediction capacity & BP\_ENTRIES and RAS\_DEPTH change internal capacity, not external bus widths. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\noindent Instructions, addresses and data are 32 bits and GPR indices 5 bits. The interrupt link has 16 mask and pending bits and a 4-bit source ID. BP\_ENTRIES and RAS\_DEPTH set internal capacity only; no port width depends on a parameter.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -312,10 +294,10 @@ Prediction capacity & BP\_ENTRIES and RAS\_DEPTH change internal capacity, not e
 \texttt{irq\_mask\_o} & output & 16 & mie[31:16], sent to the PIC resolver. \\ \addlinespace[3pt]
 \texttt{cpu\_irq\_ack\_o} & output & 1 & Registered one-cycle claim to PIC. \\ \addlinespace[3pt]
 \texttt{cpu\_irq\_eoi\_o} & output & 1 & One-cycle EOI on return from an interrupt. \\ \addlinespace[3pt]
-\texttt{cpu\_in\_trap\_o} & output & 1 & CPU has an active trap context. \\ \addlinespace[3pt]
+\texttt{cpu\_in\_trap\_o} & output & 1 & CPU has an active trap context. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{Reset contract}
 \noindent Reset must leave the core in a state software can start from, without needing a clock edge to get there. The table lists what reset forces; the waveform below shows it interrupting a fetch that is already in progress.\par\medskip
 {\small
@@ -331,13 +313,13 @@ Assertion & Asynchronous active-low rst\_n\_i; no clock edge required for assert
 Outputs & AXI request VALID signals, IRQ claim/EOI and trap-active state are inactive. \\ \addlinespace[3pt]
 Architectural state & GPRs=0; PC=RESET\_PC; mstatus=0x1800; other stored CSRs/counters=0, except documented fixed values. \\ \addlinespace[3pt]
 mip & Combinational pending input, not a reset storage element. Zero requires irq\_pending\_i=0. \\ \addlinespace[3pt]
-Integration & Distribute reset to CPU and bus responders. Release it with the system reset controller; release between clock edges is also supported. \\ \addlinespace[3pt]
+Integration & Distribute reset to CPU and bus responders. Release it with the system reset controller; release between clock edges is also supported. \\*
 \bottomrule\end{longtable}}
 
 \noindent Reset is asserted while an instruction request is waiting. ARVALID clears at the reset event, before the next rising edge; after release the fetch request resumes from RESET\_PC.\par
 \begin{figure}[H]\centering\includegraphics[width=\linewidth]{waves/cpu_reset.pdf}\caption{Instruction request interrupted by asynchronous reset at 27 ns.}\end{figure}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{Instruction AXI4-Lite interface}
 
 \noindent ARVALID remains asserted until the instruction address is accepted. The R handshake supplies the instruction to IF/DX; the address trace shows the next sequential fetch.\par
@@ -355,10 +337,10 @@ Handshake & Transfer at posedge when VALID and READY are both high; retain VALID
 Outstanding requests & At most one; issuing the next AR may overlap completion of the prior R. \\ \addlinespace[3pt]
 Protection & ARPROT=111: instruction, non-secure, privileged. \\ \addlinespace[3pt]
 Errors & SLVERR/DECERR become an instruction-access fault in S2. A wrong-path fault is discarded. \\ \addlinespace[3pt]
-Redirect & An accepted request cannot be cancelled. Retain its route / drain the response before using the new path. \\ \addlinespace[3pt]
+Redirect & An accepted request cannot be cancelled. Retain its route / drain the response before using the new path. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{Data AXI4-Lite interface}
 
 \noindent The load holds S2 while its request or response is pending. At the RVALID/RREADY handshake, the data is available and s2\_advance permits the instruction to enter writeback.\par
@@ -378,10 +360,10 @@ Transactions & One load or store outstanding; byte, halfword and word accesses. 
 Byte lanes & WSTRB selects bytes; reads extract/sign-extend according to the instruction. \\ \addlinespace[3pt]
 Misalignment & Detected before bus issue; misaligned accesses trap. \\ \addlinespace[3pt]
 Errors & SLVERR/DECERR produce load/store access faults; destination is not committed. \\ \addlinespace[3pt]
-Protection & AWPROT/ARPROT=011: data, non-secure, privileged. \\ \addlinespace[3pt]
+Protection & AWPROT/ARPROT=011: data, non-secure, privileged. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{Interrupts and redirects}
 
 \noindent The interrupt arrives while the LSU is active. Marker 2 identifies the accepted load response; marker 3 shows the registered claim and trap-active state at the next instruction boundary.\par
@@ -400,10 +382,10 @@ Protection & AWPROT/ARPROT=011: data, non-secure, privileged. \\ \addlinespace[3
 Interrupt eligibility & mstatus.MIE and the enabled source must allow it; acceptance waits for an instruction boundary, including completion of an active LSU transfer. \\ \addlinespace[3pt]
 Cause & External source n uses mcause=0x80000000 | (16+n). \\ \addlinespace[3pt]
 Claim / EOI & Claim is sent after the offer is sampled. EOI is sent when returning from an interrupt; a synchronous exception return does not pop the PIC. \\ \addlinespace[3pt]
-Nested software & Save mepc, mstatus and handler context before enabling nested interrupts; restore before MRET. \\ \addlinespace[3pt]
+Nested software & Save mepc, mstatus and handler context before enabling nested interrupts; restore before MRET. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{Software interface}
 \noindent The CSR file is the only software-visible interface of the core, and it is reached through CSR instructions rather than through the AXI ports. The map lists every implemented address with its access class and reset value; the subsections that follow give the fields of each register.\par\medskip
 {\small
@@ -430,7 +412,7 @@ Nested software & Save mepc, mstatus and handler context before enabling nested 
 0xB03–0xB07 / 0xB83–0xB87 & mhpmcounter3..7 / high & RW & 0 & 64-bit event counts. \\ \addlinespace[3pt]
 0xB08–0xB1F / 0xB88–0xB9F & mhpmcounter8..31 / high & WARL / fixed & 0 & Unused counters; writes ignored. \\ \addlinespace[3pt]
 0xF11–0xF13 & mvendorid / marchid / mimpid & RO & 0 & Identification values. \\ \addlinespace[3pt]
-0xF14 & mhartid & RO & HART\_ID & Instance identifier. \\ \addlinespace[3pt]
+0xF14 & mhartid & RO & HART\_ID & Instance identifier. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-12pt\relax}L{0.6600\dimexpr\linewidth-12pt\relax}@{}}
@@ -442,10 +424,10 @@ Nested software & Save mepc, mstatus and handler context before enabling nested 
 \endhead
 Unknown address / read-only write & Illegal-instruction exception; CSR addresses are not memory-mapped AXI addresses. \\ \addlinespace[3pt]
 CSRRW / CSRRS / CSRRC & Replace / set / clear; immediate variants use zero-extended zimm. Zero-source CSRRS/CSRRC do not write. \\ \addlinespace[3pt]
-Unimplemented inhibit & 0x320 (mcountinhibit) is absent and traps. \\ \addlinespace[3pt]
+Unimplemented inhibit & 0x320 (mcountinhibit) is absent and traps. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{CSR fields: status and interrupt enables}
 \subsection*{mstatus — 0x300}
 {\small
@@ -459,7 +441,7 @@ Unimplemented inhibit & 0x320 (mcountinhibit) is absent and traps. \\ \addlinesp
 [31:13], [10:8], [6:4], [2:0] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
 [12:11] & MPP & fixed & 3 & Machine mode only. \\ \addlinespace[3pt]
 [7] & MPIE & RW + HW & 0 & Saved MIE; MRET sets it to 1. \\ \addlinespace[3pt]
-[3] & MIE & RW + HW & 0 & Global enable; trap clears it; MRET restores MPIE. \\ \addlinespace[3pt]
+[3] & MIE & RW + HW & 0 & Global enable; trap clears it; MRET restores MPIE. \\*
 \bottomrule\end{longtable}}
 \subsection*{mie — 0x304}
 {\small
@@ -471,7 +453,7 @@ Unimplemented inhibit & 0x320 (mcountinhibit) is absent and traps. \\ \addlinesp
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
 [31:16] & ENABLE & RW & 0 & 16 source-enable bits; exported as irq\_mask\_o. \\ \addlinespace[3pt]
-[15:0] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\ \addlinespace[3pt]
+[15:0] & Reserved & RAZ/WI & 0 & Reads zero; writes ignored. \\*
 \bottomrule\end{longtable}}
 \subsection*{mip — 0x344}
 {\small
@@ -483,10 +465,10 @@ Unimplemented inhibit & 0x320 (mcountinhibit) is absent and traps. \\ \addlinesp
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
 [31:16] & PENDING & RO & input & Reflects irq\_pending\_i; zero when the connected PIC is reset. \\ \addlinespace[3pt]
-[15:0] & Reserved & RO & 0 & Reads zero. \\ \addlinespace[3pt]
+[15:0] & Reserved & RO & 0 & Reads zero. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{CSR fields: trap vector and return}
 \subsection*{mtvec — 0x305}
 {\small
@@ -498,7 +480,7 @@ Unimplemented inhibit & 0x320 (mcountinhibit) is absent and traps. \\ \addlinesp
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
 [31:2] & BASE & RW & 0 & Word-aligned handler base. \\ \addlinespace[3pt]
-[1:0] & MODE & RW / WARL & 0 & 0 direct; 1 vectored. Values 2/3 read back as direct. \\ \addlinespace[3pt]
+[1:0] & MODE & RW / WARL & 0 & 0 direct; 1 vectored. Values 2/3 read back as direct. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.4400\dimexpr\linewidth-12pt\relax}L{0.5600\dimexpr\linewidth-12pt\relax}@{}}
@@ -510,7 +492,7 @@ Unimplemented inhibit & 0x320 (mcountinhibit) is absent and traps. \\ \addlinesp
 \endhead
 Synchronous exception & BASE in both modes. \\ \addlinespace[3pt]
 External interrupt, direct & BASE. \\ \addlinespace[3pt]
-External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3pt]
+External interrupt, vectored & BASE + 4 × (16 + source ID). \\*
 \bottomrule\end{longtable}}
 \subsection*{mepc — 0x341}
 {\small
@@ -522,7 +504,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
 [31:2] & RETURN\_PC & RW + HW & 0 & Saved PC; software may update the return location. \\ \addlinespace[3pt]
-[1:0] & Alignment & fixed & 0 & Reads zero; writes discarded. \\ \addlinespace[3pt]
+[1:0] & Alignment & fixed & 0 & Reads zero; writes discarded. \\*
 \bottomrule\end{longtable}}
 \subsection*{mscratch — 0x340}
 {\small
@@ -533,10 +515,10 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \toprule
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
-[31:0] & VALUE & RW & 0 & Software-owned scratch word. \\ \addlinespace[3pt]
+[31:0] & VALUE & RW & 0 & Software-owned scratch word. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{CSR fields: causes and fault payload}
 \subsection*{mcause — 0x342}
 {\small
@@ -549,7 +531,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \endhead
 [31] & INTERRUPT & RW + HW & 0 & Trap entry sets 1 for interrupt, 0 for synchronous exception. \\ \addlinespace[3pt]
 [30:5] & Software bits & RW & 0 & Hardware trap entry writes zero; software writes are retained by this RTL. \\ \addlinespace[3pt]
-[4:0] & CODE & RW + HW & 0 & Hardware cause code; external source n is 16+n. \\ \addlinespace[3pt]
+[4:0] & CODE & RW + HW & 0 & Hardware cause code; external source n is 16+n. \\*
 \bottomrule\end{longtable}}
 \subsection*{mtval — 0x343}
 {\small
@@ -560,7 +542,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \toprule
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
-[31:0] & VALUE & RW + HW & 0 & Faulting address or illegal instruction; zero where the cause supplies no payload. \\ \addlinespace[3pt]
+[31:0] & VALUE & RW + HW & 0 & Faulting address or illegal instruction; zero where the cause supplies no payload. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.2000\dimexpr\linewidth-12pt\relax}L{0.8000\dimexpr\linewidth-12pt\relax}@{}}
@@ -576,10 +558,10 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 3 & EBREAK. \\ \addlinespace[3pt]
 4 / 6 & Load / store address misalignment. \\ \addlinespace[3pt]
 5 / 7 & Load / store access fault. \\ \addlinespace[3pt]
-11 & ECALL from machine mode. \\ \addlinespace[3pt]
+11 & ECALL from machine mode. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{CSR fields: identity and capability}
 \subsection*{misa — 0x301}
 {\small
@@ -592,7 +574,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \endhead
 [31:30] & MXL & fixed WARL & 1 & 32-bit architecture; writes ignored. \\ \addlinespace[3pt]
 [29:9], [7:0] & Other extensions & fixed WARL & 0 & Not advertised; writes ignored. \\ \addlinespace[3pt]
-[8] & I & fixed WARL & 1 & RV32I base integer set. \\ \addlinespace[3pt]
+[8] & I & fixed WARL & 1 & RV32I base integer set. \\*
 \bottomrule\end{longtable}}
 \subsection*{mvendorid / marchid / mimpid — 0xF11 / 0xF12 / 0xF13}
 {\small
@@ -603,7 +585,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \toprule
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
-[31:0] & VALUE & RO & 0 & No implementation-specific identifier assigned. \\ \addlinespace[3pt]
+[31:0] & VALUE & RO & 0 & No implementation-specific identifier assigned. \\*
 \bottomrule\end{longtable}}
 \subsection*{mhartid — 0xF14}
 {\small
@@ -614,10 +596,10 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \toprule
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
-[31:0] & VALUE & RO & HART\_ID & Instance parameter; use unique values for multiple harts. \\ \addlinespace[3pt]
+[31:0] & VALUE & RO & HART\_ID & Instance parameter; use unique values for multiple harts. \\*
 \bottomrule\end{longtable}}
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{CSR fields: counters and events}
 \subsection*{mcycle / minstret / mhpmcounter3..7 — low and high CSR addresses in map}
 {\small
@@ -628,7 +610,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \toprule
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
-[31:0] & LOW / HIGH & RW & 0 & Each address accesses one half of a 64-bit counter. Explicit writes suppress that cycle’s event increment and preserve the other half. \\ \addlinespace[3pt]
+[31:0] & LOW / HIGH & RW & 0 & Each address accesses one half of a 64-bit counter. Explicit writes suppress that cycle’s event increment and preserve the other half. \\*
 \bottomrule\end{longtable}}
 \subsection*{mhpmevent3..7 — 0x323–0x327}
 {\small
@@ -639,7 +621,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \toprule
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
-[31:0] & EVENT & fixed WARL & 1..5 & Fixed event IDs; writes accepted and ignored. \\ \addlinespace[3pt]
+[31:0] & EVENT & fixed WARL & 1..5 & Fixed event IDs; writes accepted and ignored. \\*
 \bottomrule\end{longtable}}
 \subsection*{Unused HPM counters / selectors — addresses in map}
 {\small
@@ -650,7 +632,7 @@ External interrupt, vectored & BASE + 4 × (16 + source ID). \\ \addlinespace[3p
 \toprule
 \textbf{Bits} & \textbf{Field} & \textbf{Access type} & \textbf{Reset} & \textbf{Description} \\ \midrule
 \endhead
-[31:0] & VALUE & fixed WARL & 0 & Reads zero; writes accepted and ignored. \\ \addlinespace[3pt]
+[31:0] & VALUE & fixed WARL & 0 & Reads zero; writes accepted and ignored. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.3000\dimexpr\linewidth-12pt\relax}L{0.7000\dimexpr\linewidth-12pt\relax}@{}}
@@ -666,20 +648,11 @@ mhpmcounter3 & Mispredicted control transfer. \\ \addlinespace[3pt]
 mhpmcounter4 & S2 has no valid instruction. \\ \addlinespace[3pt]
 mhpmcounter5 & Data transaction active. \\ \addlinespace[3pt]
 mhpmcounter6 & Trap entry. \\ \addlinespace[3pt]
-mhpmcounter7 & WFI sleep cycle. \\ \addlinespace[3pt]
+mhpmcounter7 & WFI sleep cycle. \\*
 \bottomrule\end{longtable}}
-{\small
-\begin{longtable}{@{}L{0.3000\dimexpr\linewidth-12pt\relax}L{0.7000\dimexpr\linewidth-12pt\relax}@{}}
-\toprule
-\textbf{Read 64-bit value} & \textbf{Procedure} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Read 64-bit value} & \textbf{Procedure} \\ \midrule
-\endhead
-Stable snapshot & Read high, low, high; retry when the two high reads differ. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\noindent A 64-bit counter is read high, low, high; the read is repeated when the two high values differ.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsubsection{Programming sequence}
 \noindent The order below is the one the hardware assumes: a handler address and the masks must exist before delivery is enabled. The second table lists the limits that software written for this core has to respect.\par\medskip
 {\small
@@ -695,7 +668,7 @@ Stable snapshot & Read high, low, high; retry when the two high reads differ. \\
 3 & Configure PIC source type, band and INT\_ENABLE. & Sources can become pending. \\ \addlinespace[3pt]
 4 & Set mie[16+n], then mstatus.MIE. & CPU can accept source n at an instruction boundary. \\ \addlinespace[3pt]
 5 & Handler services and clears the peripheral; MRET returns. & CPU generates EOI for an interrupt return. \\ \addlinespace[3pt]
-6 & For nesting, save trap CSRs/context before re-enabling MIE. & Inner handler cannot overwrite the outer return state. \\ \addlinespace[3pt]
+6 & For nesting, save trap CSRs/context before re-enabling MIE. & Inner handler cannot overwrite the outer return state. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-12pt\relax}L{0.6600\dimexpr\linewidth-12pt\relax}@{}}
@@ -706,16 +679,14 @@ Stable snapshot & Read high, low, high; retry when the two high reads differ. \\
 \textbf{Integration constraint} & \textbf{Consequence} \\ \midrule
 \endhead
 No M/A/C extensions, caches or MMU & Do not emit unsupported instructions; target machine-mode RV32I with the documented CSR extensions. \\ \addlinespace[3pt]
-FENCE.I absent & Self-modifying instruction streams are unsupported; ordinary FENCE is a no-op in this in-order design. \\ \addlinespace[3pt]
-No unaligned memory accesses & Software must use naturally aligned halfword/word operands. \\ \addlinespace[3pt]
 Protection constant & The core does not switch bus privilege/security attributes. \\ \addlinespace[3pt]
 Reset and source synchrony & Clock/reset must reach the full transaction path; asynchronous external IRQ lines need synchronization outside this block. \\ \addlinespace[3pt]
-Behavioural verification target & No area, frequency, power or physical timing result is specified. \\ \addlinespace[3pt]
+Behavioural verification target & No area, frequency, power or physical timing result is specified. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Reuse and reusability}
-\noindent This block reuses no external component. The table is what another developer needs in order to use it: which files to compile, what to connect, what to tie off and which checks to run after integration.\par\medskip
+\noindent The core contains no third-party component. rv32i\_alu, rv32i\_imm\_gen, rv32i\_decode and rv32i\_regfile can be reused unchanged in another RV32I datapath; rv32i\_branch\_predictor is sized by ENTRIES and RAS\_DEPTH. Reusing the whole core:\par\medskip
 {\small
 \begin{longtable}{@{}L{0.2300\dimexpr\linewidth-12pt\relax}L{0.7700\dimexpr\linewidth-12pt\relax}@{}}
 \toprule
@@ -729,14 +700,17 @@ Instantiation & Instantiate rv32i\_cpu\_top and override RESET\_PC, HART\_ID, BP
 Memory & Connect ibus to instruction memory and dbus to the memory/peripheral fabric. Honour all five data-port channels independently. \\ \addlinespace[3pt]
 Interrupts & Connect the documented scalar request, 4-bit vector, masks, pending set and claim/EOI pair. \\ \addlinespace[3pt]
 Tie-offs & Without interrupts: cpu\_irq\_i=0, cpu\_irq\_vec\_i=0 and irq\_pending\_i=0. \\ \addlinespace[3pt]
-Verification & Run regress.do and run\_verilator.sh, then test the integration map and slave latency of the target system. \\ \addlinespace[3pt]
+Verification & Run regress.do and run\_verilator.sh, then test the integration map and slave latency of the target system. \\*
 \bottomrule\end{longtable}}
 
 \clearpage
 \section{Design of submodules}
+\noindent Submodule ports are synchronous to the rising edge of clk\_i and rst\_n\_i resets asynchronously; combinational modules have neither.\par\medskip
+\addtocontents{toc}{\protect\setcounter{tocdepth}{2}}
+\needspace{7\baselineskip}
 \subsection{rv32i\_fetch\_unit}
 Fetches instructions; retains outstanding AXI requests across redirect and discards wrong-path responses.
-\subsubsection*{Interface description}
+\subsubsection{Interface description}
 {\small
 \begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
 \toprule
@@ -745,7 +719,7 @@ Fetches instructions; retains outstanding AXI requests across redirect and disca
 \toprule
 \textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
 \endhead
-RESET\_PC & 32'h0000\_0000 & Word-aligned first fetch address. \\ \addlinespace[3pt]
+RESET\_PC & 32'h0000\_0000 & Word-aligned first fetch address. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
@@ -776,15 +750,15 @@ RESET\_PC & 32'h0000\_0000 & Word-aligned first fetch address. \\ \addlinespace[
 \texttt{instr\_pc\_o} & output & 32 & Byte address of the fetched instruction. \\ \addlinespace[3pt]
 \texttt{pred\_taken\_o} & output & 1 & Tagged predictor hit with taken direction. \\ \addlinespace[3pt]
 \texttt{pred\_target\_o} & output & 32 & Predicted target address; used only when pred\_taken\_o is high. \\ \addlinespace[3pt]
-\texttt{fetch\_fault\_o} & output & 1 & Instruction response reported an AXI error. \\ \addlinespace[3pt]
+\texttt{fetch\_fault\_o} & output & 1 & Instruction response reported an AXI error. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent An address request is retained until AR handshake, then inflight tracks the owed R response. A returned instruction is either consumed by S2 or retained in the holding slot. Redirect drops held data and marks an owed response for discard; the next request uses the redirected PC when the slot is free.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_branch\_predictor}
 Predicts direction and target; learns completed control transfers; handles call/return hints.
-\subsubsection*{Interface description}
+\subsubsection{Interface description}
 {\small
 \begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
 \toprule
@@ -794,7 +768,7 @@ Predicts direction and target; learns completed control transfers; handles call/
 \textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
 \endhead
 ENTRIES & 128 & Power-of-two BTB/BHT entries; at least 2. \\ \addlinespace[3pt]
-RAS\_DEPTH & 8 & Return-address stack entries; zero disables it. \\ \addlinespace[3pt]
+RAS\_DEPTH & 8 & Return-address stack entries; zero disables it. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
@@ -816,25 +790,16 @@ RAS\_DEPTH & 8 & Return-address stack entries; zero disables it. \\ \addlinespac
 \texttt{update\_is\_ret\_i} & input & 1 & Mark entry as a return. \\ \addlinespace[3pt]
 \texttt{update\_call\_i} & input & 1 & Push return address. \\ \addlinespace[3pt]
 \texttt{update\_ret\_i} & input & 1 & Pop return address. \\ \addlinespace[3pt]
-\texttt{update\_link\_i} & input & 32 & Return address PC+4. \\ \addlinespace[3pt]
+\texttt{update\_link\_i} & input & 32 & Return address PC+4. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
-\noindent The lookup is combinational and an update is committed on posedge. The prediction and update policies, including aliases, cold entries and trap preservation, are specified under Branch prediction.\par\medskip
+\subsubsection{Functional description}
+\noindent The lookup is combinational and an update is committed on posedge. The prediction and update policies, including aliases, cold entries and trap preservation, are specified in section 3.3.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_decode}
 Extracts register indices, opcode, function fields and CSR address from the instruction.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -849,25 +814,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{funct3\_o} & output & 3 & Instruction function field, bits [14:12]. \\ \addlinespace[3pt]
 \texttt{rs1\_o} & output & 5 & First source GPR index from instruction bits [19:15]. \\ \addlinespace[3pt]
 \texttt{rs2\_o} & output & 5 & Second source GPR index from instruction bits [24:20]. \\ \addlinespace[3pt]
-\texttt{funct7\_o} & output & 7 & Instruction function field, bits [31:25]. \\ \addlinespace[3pt]
+\texttt{funct7\_o} & output & 7 & Instruction function field, bits [31:25]. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent Field extraction is purely combinational: opcode, funct3, funct7, the three register indices and the CSR address are sliced from fixed instruction bit positions. The module applies no legality check; an unsupported encoding is rejected by rv32i\_control.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_control}
 Decodes instruction controls and rejects unsupported encodings.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -897,25 +853,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{ecall\_o} & output & 1 & Decoded ECALL requests an environment-call exception. \\ \addlinespace[3pt]
 \texttt{ebreak\_o} & output & 1 & Decoded EBREAK requests a breakpoint exception. \\ \addlinespace[3pt]
 \texttt{wfi\_o} & output & 1 & Decoded WFI; S2 waits for an enabled interrupt offer. \\ \addlinespace[3pt]
-\texttt{illegal\_o} & output & 1 & Encoding is not supported by the implemented instruction set. \\ \addlinespace[3pt]
+\texttt{illegal\_o} & output & 1 & Encoding is not supported by the implemented instruction set. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent A case over the opcode, refined by funct3 and funct7, produces the control set for one instruction. An encoding that matches no supported case asserts illegal\_o and leaves the write-enable and memory controls inactive, so a rejected instruction cannot change architectural state.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_imm\_gen}
 Forms and sign-extends I/S/B/U/J immediates.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -925,25 +872,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \textbf{Signal} & \textbf{Dir.} & \textbf{Width (bits)} & \textbf{Meaning} \\ \midrule
 \endhead
 \texttt{instr\_i} & input & 32 & 32-bit instruction word to decode or check. \\ \addlinespace[3pt]
-\texttt{imm\_out\_o} & output & 32 & Immediate expanded to 32 bits for the decoded instruction format. \\ \addlinespace[3pt]
+\texttt{imm\_out\_o} & output & 32 & Immediate expanded to 32 bits for the decoded instruction format. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent The immediate format is selected from the opcode: I, S, B, U or J. Each form is assembled from its instruction bit fields and sign-extended to 32 bits, with the implicit zero bit added for the B and J displacements.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_regfile}
 Stores 32 general-purpose registers; ignores x0 writes; reads x0 as zero.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -960,25 +898,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{rd\_data\_i} & input & 32 & Register write data. \\ \addlinespace[3pt]
 \texttt{RegWrite\_i} & input & 1 & Write-enable for nonzero destination register. \\ \addlinespace[3pt]
 \texttt{rs1\_data\_o} & output & 32 & First register operand. \\ \addlinespace[3pt]
-\texttt{rs2\_data\_o} & output & 32 & Second register operand. \\ \addlinespace[3pt]
+\texttt{rs2\_data\_o} & output & 32 & Second register operand. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent Both read ports are combinational, so an operand is available in the cycle it is addressed. A write commits at posedge when RegWrite\_i is high and the destination is nonzero; index zero is never written and always reads as zero. Reset clears all 32 registers.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_alu\_top}
 Selects operands and decodes the concrete ALU operation.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -994,25 +923,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{ALUOp\_i} & input & 4 & Generic operation class from rv32i\_control; encodings are in rv32i\_defines.vh. \\ \addlinespace[3pt]
 \texttt{funct3\_i} & input & 3 & Instruction function field; selects operation or memory size/sign. \\ \addlinespace[3pt]
 \texttt{funct7\_i} & input & 7 & Instruction function field; distinguishes arithmetic and shift variants. \\ \addlinespace[3pt]
-\texttt{result\_o} & output & 32 & 32-bit ALU result for the selected operation. \\ \addlinespace[3pt]
+\texttt{result\_o} & output & 32 & 32-bit ALU result for the selected operation. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent The unit selects the second operand between rs2 and the immediate, then translates the generic operation class from the decoder, together with funct3 and funct7, into the concrete ALU function. It holds no state.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_alu}
 Computes 32-bit arithmetic, logic, shifts and signed/unsigned comparisons.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -1024,25 +944,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{operand\_a\_i} & input & 32 & First 32-bit ALU operand. \\ \addlinespace[3pt]
 \texttt{operand\_b\_i} & input & 32 & Second 32-bit ALU operand. \\ \addlinespace[3pt]
 \texttt{alu\_ctrl\_i} & input & 4 & Concrete ALU function; encodings are listed in the shared defines. \\ \addlinespace[3pt]
-\texttt{result\_o} & output & 32 & 32-bit ALU result for the selected operation. \\ \addlinespace[3pt]
+\texttt{result\_o} & output & 32 & 32-bit ALU result for the selected operation. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent One combinational block computes the selected function over the two operands: addition and subtraction, the bitwise operations, logical and arithmetic shifts by the low five bits of the second operand, and the signed and unsigned comparisons that produce a zero-or-one result.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_branch\_unit}
 Resolves branch/jump direction and target; clears JALR target bit 0.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -1060,25 +971,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{Branch\_i} & input & 1 & Enable conditional-branch evaluation. \\ \addlinespace[3pt]
 \texttt{Jump\_i} & input & 1 & Enable unconditional JAL/JALR evaluation. \\ \addlinespace[3pt]
 \texttt{branch\_target\_o} & output & 32 & Resolved branch/jump target; JALR bit 0 is cleared. \\ \addlinespace[3pt]
-\texttt{pc\_src\_o} & output & 1 & Next PC takes branch\_target\_o instead of the sequential address. \\ \addlinespace[3pt]
+\texttt{pc\_src\_o} & output & 1 & Next PC takes branch\_target\_o instead of the sequential address. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent The comparison of the two register operands is combined with the decoded branch condition, or with an unconditional jump, to produce pc\_src\_o. The target is the instruction PC plus the displacement, except for JALR, where it is the first operand plus the immediate with bit 0 cleared.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_lsu}
 Performs byte/halfword/word accesses, byte strobes, read extraction and error reporting.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -1117,25 +1019,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{dbus\_rdata\_i} & input & 32 & Read payload. \\ \addlinespace[3pt]
 \texttt{dbus\_rresp\_i} & input & 2 & Read response: OKAY=00, SLVERR=10, DECERR=11. \\ \addlinespace[3pt]
 \texttt{dbus\_rvalid\_i} & input & 1 & Read response is valid; hold until handshake. \\ \addlinespace[3pt]
-\texttt{dbus\_rready\_o} & output & 1 & Receiver can accept the read response. \\ \addlinespace[3pt]
+\texttt{dbus\_rready\_o} & output & 1 & Receiver can accept the read response. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent S\_IDLE accepts a legal request and selects S\_RD or S\_WR. S\_RD waits for address acceptance and an R handshake; S\_WR collects AW and W independently, then waits for B. The response handshake returns the unit to S\_IDLE and releases S2. Request address, write data and strobes remain latched during the transaction.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_exception\_unit}
 Selects the synchronous trap cause and associated value.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -1163,15 +1056,15 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{exception\_o} & output & 1 & A synchronous exception is selected for the current instruction. \\ \addlinespace[3pt]
 \texttt{cause\_o} & output & 5 & Selected synchronous exception code from the cause table. \\ \addlinespace[3pt]
 \texttt{tval\_o} & output & 32 & mtval payload for the selected cause. \\ \addlinespace[3pt]
-\texttt{mem\_misaligned\_o} & output & 1 & Address is not naturally aligned; the AXI issue is blocked. \\ \addlinespace[3pt]
+\texttt{mem\_misaligned\_o} & output & 1 & Address is not naturally aligned; the AXI issue is blocked. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent Candidate causes are evaluated for the instruction in S2 and one is selected by fixed priority: fetch fault, illegal instruction, environment call or breakpoint, then address misalignment, then a completed data access that returned an error. The selected cause also determines the mtval payload. A misaligned address is reported before the transaction is issued, so a faulting access never reaches the bus.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_csr\_file}
 Implements machine-mode control, status and performance counters.
-\subsubsection*{Interface description}
+\subsubsection{Interface description}
 {\small
 \begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
 \toprule
@@ -1180,7 +1073,7 @@ Implements machine-mode control, status and performance counters.
 \toprule
 \textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
 \endhead
-HART\_ID & 32'd0 & Value returned by mhartid. \\ \addlinespace[3pt]
+HART\_ID & 32'd0 & Value returned by mhartid. \\*
 \bottomrule\end{longtable}}
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
@@ -1214,25 +1107,16 @@ HART\_ID & 32'd0 & Value returned by mhartid. \\ \addlinespace[3pt]
 \texttt{ev\_mispredict\_i} & input & 1 & Branch misprediction event. \\ \addlinespace[3pt]
 \texttt{ev\_ibus\_wait\_i} & input & 1 & S2 lacks a valid instruction. \\ \addlinespace[3pt]
 \texttt{ev\_dbus\_stall\_i} & input & 1 & Data transaction active. \\ \addlinespace[3pt]
-\texttt{ev\_wfi\_sleep\_i} & input & 1 & WFI sleep cycle. \\ \addlinespace[3pt]
+\texttt{ev\_wfi\_sleep\_i} & input & 1 & WFI sleep cycle. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent A CSR instruction reads the pre-write value. RW replaces bits, RS sets bits and RC clears bits; immediate forms zero-extend the five-bit operand. Trap entry has priority over software writes. Counter writes take priority over increment and preserve the unaddressed half.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_hazard\_unit}
 Controls advance/flush and detects S3-to-S2 forwarding; an active LSU keeps S2 stalled.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -1258,25 +1142,16 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{if\_dx\_bubble\_o} & output & 1 & The value loaded into IF/DX is a bubble. \\ \addlinespace[3pt]
 \texttt{dx\_squash\_o} & output & 1 & The S2 instruction must not commit to S3. \\ \addlinespace[3pt]
 \texttt{fwd\_rs1\_o} & output & 1 & Use S3 writeback data as the first S2 register operand. \\ \addlinespace[3pt]
-\texttt{fwd\_rs2\_o} & output & 1 & Use S3 writeback data as the second S2 register operand. \\ \addlinespace[3pt]
+\texttt{fwd\_rs2\_o} & output & 1 & Use S3 writeback data as the second S2 register operand. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent The unit forms s2\_advance from LSU/WFI blocking conditions. An advancing redirect inserts an IF/DX bubble; trap entry additionally suppresses S2 writeback. Forwarding matches the valid S3 destination against each S2 source, excluding x0.\par\medskip
 
-\clearpage
+\needspace{7\baselineskip}
 \subsection{rv32i\_writeback\_mux}
 Selects ALU/CSR result, loaded data or PC+4 for register writeback.
-\subsubsection*{Interface description}
-{\small
-\begin{longtable}{@{}L{0.2500\dimexpr\linewidth-24pt\relax}L{0.2300\dimexpr\linewidth-24pt\relax}L{0.5200\dimexpr\linewidth-24pt\relax}@{}}
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endfirsthead
-\toprule
-\textbf{Parameter} & \textbf{Default} & \textbf{Meaning / valid setting} \\ \midrule
-\endhead
-None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
-\bottomrule\end{longtable}}
+\subsubsection{Interface description}
+\noindent No parameters.\par\medskip
 {\small
 \begin{longtable}{@{}L{0.3400\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.1000\dimexpr\linewidth-36pt\relax}L{0.4600\dimexpr\linewidth-36pt\relax}@{}}
 \toprule
@@ -1289,10 +1164,28 @@ None & — & All port widths are fixed in this module. \\ \addlinespace[3pt]
 \texttt{mem\_data\_i} & input & 32 & Completed load value after size/sign extraction. \\ \addlinespace[3pt]
 \texttt{pc\_plus4\_i} & input & 32 & Sequential next PC, used as the JAL/JALR link value. \\ \addlinespace[3pt]
 \texttt{MemtoReg\_i} & input & 2 & Writeback source: 00 ALU/CSR; 01 load; 10 PC+4. \\ \addlinespace[3pt]
-\texttt{wb\_data\_o} & output & 32 & Selected 32-bit value to write to the destination GPR. \\ \addlinespace[3pt]
+\texttt{wb\_data\_o} & output & 32 & Selected 32-bit value to write to the destination GPR. \\*
 \bottomrule\end{longtable}}
-\subsubsection*{Functional description}
+\subsubsection{Functional description}
 \noindent The select encoding chooses among the ALU or CSR result, the extended load data and the sequential PC+4 link value. The chosen value is what S3 writes to the destination register and what the forwarding path returns to S2.\par\medskip
+
+\addtocontents{toc}{\protect\setcounter{tocdepth}{3}}
+\clearpage
+\section{List of bugs and workarounds}
+\noindent No open RTL defects are known at revision 2.2. Limitations that software and follow-up projects have to work around:\par\medskip
+{\small
+\begin{longtable}{@{}L{0.5000\dimexpr\linewidth-12pt\relax}L{0.5000\dimexpr\linewidth-12pt\relax}@{}}
+\toprule
+\textbf{Limitation} & \textbf{Workaround} \\ \midrule
+\endfirsthead
+\toprule
+\textbf{Limitation} & \textbf{Workaround} \\ \midrule
+\endhead
+FENCE.I is not implemented and traps as an illegal instruction. & Load instruction memory before the core executes from it; code cannot modify itself. \\ \addlinespace[3pt]
+Misaligned loads and stores trap (cause 4 / 6). & Align the data, or emulate the access in the trap handler. \\ \addlinespace[3pt]
+The user counters cycle, time and instret (0xC00–0xC02) and mcountinhibit (0x320) are absent and trap. & Read mcycle and minstret in machine mode. \\ \addlinespace[3pt]
+The trap-kind stack holds 16 levels, interrupts and exceptions combined. & Keep the combined nesting depth at or below 16, for example through NEST\_MAX. \\*
+\bottomrule\end{longtable}}
 
 \clearpage
 \section{Annex}
@@ -1346,7 +1239,7 @@ CAUSE\_LD\_MISALIGN & 5'd4 & Trap cause \\ \addlinespace[3pt]
 CAUSE\_LD\_FAULT & 5'd5 & Trap cause \\ \addlinespace[3pt]
 CAUSE\_ST\_MISALIGN & 5'd6 & Trap cause \\ \addlinespace[3pt]
 CAUSE\_ST\_FAULT & 5'd7 & Trap cause \\ \addlinespace[3pt]
-CAUSE\_ECALL\_M & 5'd11 & Trap cause \\ \addlinespace[3pt]
+CAUSE\_ECALL\_M & 5'd11 & Trap cause \\*
 \bottomrule\end{longtable}}
 
 \end{document}

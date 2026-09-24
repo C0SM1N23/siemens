@@ -73,7 +73,7 @@
 % Tighter gap before section entries keeps each table of contents on one page.
 \usepackage{etoolbox}
 \makeatletter
-\patchcmd{\l@section}{\addvspace{1.0em \@plus\p@}}{\addvspace{0.45em \@plus\p@}}{}{\PackageWarning{spec}{TOC spacing patch failed}}
+\patchcmd{\l@section}{\addvspace{1.0em \@plus\p@}}{\addvspace{0.2em \@plus\p@}}{}{\PackageWarning{spec}{TOC spacing patch failed}}
 \makeatother
 
 % --- macros ----------------------------------------------------------------
