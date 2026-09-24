@@ -145,9 +145,9 @@ async function build(kind){
  :'1:20. Every register here is defined by the project. SRCn_CONFIG sets trigger, band, priority and deadline for each source; BAND_CONFIG and ESCALATION_CFG set the shared policy; NEST_MAX limits the depth. A software trigger needs the key 0xA5A5 written with both upper byte strobes, so a partial write cannot arm a channel. RW1C clears logged events, and a hardware event in the same cycle is kept. Addresses are offsets in a 256-byte window; n is 0 to 15.');
 
  const cards=cpu?[
-  ['Independent model','1,287 instructions compared step by step'],
+  ['Independent model','49,149 instructions in 11 programs, compared step by step'],
   ['Latency and backpressure','Memories delay replies and stall channels'],
-  ['Mutation suite','16 injected RTL defects; each makes a named bench fail']
+  ['Mutation suite','25 injected RTL defects; each makes a named bench fail']
  ]:[
   ['Independent model','All 24 band orders, with masks and ties'],
   ['Same-cycle events','Edge at claim, masked source, strobed key'],
@@ -156,10 +156,10 @@ async function build(kind){
  add(p,kind,6,'Verification',cpu?'The environment checks results, bus protocol and its own tests':'The priority rules are checked against an independent model',column({width:'fill',height:'fill',gap:0},[
   await asset('figures/'+kind+'_verification',1780,540),gapV(22),
   grid({width:'fill',height:'fill',columns:[fr(1),fr(1),fr(1)],rows:[fr(1)],columnGap:28},cards.map(([h,b])=>card(column({width:'fill',height:'hug',gap:10},[T(h,33,{bold:true,color:ACC}),T(b,29)])))),
-  gapV(14),T('ModelSim: 22 CPU/PIC configurations   ·   Verilator: 16 benches with assertions bound to the RTL',24,{color:MUT})
+  gapV(14),T('ModelSim: 39 CPU/PIC runs   ·   Verilator: 17 benches, 53 runs with assertions bound to the RTL',24,{color:MUT})
  ]),
- cpu?'1:30. Stimulus and program go into the DUT; expected values and observations go into the checks. The ISA model is written separately from the RTL and gives the expected state after each of 1,287 instructions. The memories add delay and backpressure, so the same program also exercises stalls. Assertions are attached with bind and check pipeline and AXI rules. The mutation suite inserts a known defect into the RTL and requires a named bench to fail; all 16 are rejected.'
- :'1:30. The Python model computes the expected winner and pending set for all 24 orders of band urgency, with enable masks, CPU masks and ties. Directed tests cover the timing cases the model cannot: a new edge in the claim cycle, a masked source next to lower-priority ones, a key written with partial strobes, nesting, deadlines and reset. The AXI4-Lite front-end is compared with the PULP axi_lite_regs module on 96 strobe, order and stall cases. The three PIC cases of the mutation suite are all rejected.');
+ cpu?'1:30. Stimulus and program go into the DUT; expected values and observations go into the checks. The ISA model is written separately from the RTL and gives the expected state after each instruction: a directed program and ten random ones, 49,149 instructions in all. The memories add delay and backpressure, so the same program also exercises stalls. Assertions are attached with bind and check pipeline and AXI rules. The mutation suite inserts a known defect into the RTL and requires a named bench to fail; all 25 are rejected.'
+ :'1:30. The Python model computes the expected winner and pending set for all 24 orders of band urgency, with enable masks, CPU masks and ties. Directed tests cover the timing cases the model cannot: a new edge in the claim cycle, a masked source next to lower-priority ones, a key written with partial strobes, nesting, deadlines and reset. The AXI4-Lite front-end is compared with the PULP axi_lite_regs module on 96 strobe, order and stall cases. The four PIC cases of the mutation suite are all rejected.');
 
  const w=cpu?'waves/cpu_irq':'presentations/assets/pic_escalation_marked';
  if(cpu&&!manifest.find(x=>x.file==='cpu_irq'))throw Error('cpu_irq window missing from manifest');

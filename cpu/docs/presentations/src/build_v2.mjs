@@ -107,7 +107,7 @@ async function build(kind){
  :'1:20. Follow configuration, enabling, claim and EOI. SRCn_CONFIG fixes the behaviour of each source; BAND_CONFIG and ESCALATION_CFG set the shared policy. NEST_MAX limits the active services, and the status registers expose the context. A software trigger writes 0xA5A50001 with the strobes for the key bytes and the set bit. The handler removes the cause before the EOI. RW1C clears the logged events; a hardware event arriving in the same cycle is kept. Every address in the table is an offset inside the 256-byte window; n is 0 to 15.');
 
  const evidence=cpu?[
- ['Independent model','1,287 instructions with expected results'],
+ ['Independent model','49,149 instructions with expected results'],
  ['Protocol + state','AXI monitors, scoreboard and SVA through bind'],
  ['Critical cases','IRQ in stall · flush with AXI response · async reset']
  ]:[
@@ -116,9 +116,9 @@ async function build(kind){
  ['Critical cases','edge + claim · nesting · deadline · async reset']
  ];
  const proof=row({width:fill,height:200,gap:55},evidence.map(([h,b])=>col([t(h,35,true,65,ACC),t(b,29,false,115)],563,200,6)));
- add(p,kind,5,'Verification','The functional result and the bus protocol are checked separately',col([await asset('figures/'+kind+'_verification',1800,525),proof,t('ModelSim: 22 CPU/PIC configurations   ·   Verilator: 16 benches with assertions',24,false,40,MUT)],1800,790,12),
+ add(p,kind,5,'Verification','The functional result and the bus protocol are checked separately',col([await asset('figures/'+kind+'_verification',1800,525),proof,t('ModelSim: 39 CPU/PIC runs   ·   Verilator: 17 benches, 53 runs with assertions',24,false,40,MUT)],1800,790,12),
  cpu?'1:40. Show the two paths in the diagram: program and stimulus into the DUT, expected results and observations into the checks. The ISA model is independent of the RTL; the memories can delay responses and apply backpressure. The monitors check the transfers, the scoreboard checks the architectural effect, and the SVA attached through bind check the pipeline rules. The hardest cases combine events: an IRQ during a load, a response arriving after a redirect, a counter write meeting an increment. Reset is asserted 2 ns after a rising edge and checked at plus 3 ns, including from an active state. The next slide shows one complete case.'
- :'1:40. Follow the independent reference into the stimulus and the checks. The Python model computes the winner for 24 orderings of the bands, together with masks and ties. The directed tests add the temporal part: claim, EOI, a coincident edge, the stack limit, deadlines and reset. AXI is checked separately; the PULP comparison covers the decoder and a register profile with 96 WSTRB / AW-W / backpressure combinations, plus error and reset cases. It is not a proof of equivalence with the whole PULP library.');
+ :'1:40. Follow the independent reference into the stimulus and the checks. The Python model computes the winner for 24 orderings of the bands, together with masks and ties. The directed tests add the temporal part: claim, EOI, a coincident edge, the stack limit, deadlines and reset. AXI is checked separately; the PULP comparison covers the decoder and a register profile with 96 WSTRB / AW-W / backpressure combinations, plus error and reset cases.');
 
  const w=manifest.find(x=>x.file===(cpu?'cpu_irq':'pic_nesting'));
  const events=cpu?[
