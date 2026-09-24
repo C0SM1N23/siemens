@@ -1,5 +1,7 @@
 // Testbench inputs change 1 ns after posedge; handshakes sample at posedge.
 // Architectural retirement trace against isa_reference.py.
+// +isa=<prefix> selects the program: <prefix>.hex, its retirement trace, final
+// data memory and step count. The default is the directed program_isa.
 `timescale 1ns / 1ps
 module rv32i_tb_isa #(
     parameter READ_LAT   = 0,
@@ -8,7 +10,7 @@ module rv32i_tb_isa #(
     localparam [31:0] IMEM_BASE = 32'h0;
     localparam [31:0] DMEM_BASE = 32'h2000;
     localparam IWORDS = 2048;
-    `include "program_isa_count.vh"
+    localparam MAX_STEPS = 16384;  // isa_reference.py refuses longer programs
     // clock / reset
     reg clk = 1'b0;
     reg rst_n = 1'b0;
@@ -34,8 +36,11 @@ module rv32i_tb_isa #(
 
     integer        errors = 0;
     integer        i;
-    reg     [95:0] expected    [0:ISA_STEPS-1];
+    reg     [95:0] expected    [0:MAX_STEPS-1];
     reg     [31:0] expected_mem[        0:255];
+    reg     [31:0] step_count  [          0:0];
+    reg     [ 8*64-1:0] prefix;
+    integer        isa_steps = MAX_STEPS;
     `include "tb_check.vh"
 
 rv32i_cpu_top #(
@@ -82,7 +87,7 @@ rv32i_cpu_top #(
     // instruction memory: read-only from the CPU, written directly by the bench
     axi_lite_mem_model #(
         .WORDS     (IWORDS),
-        .INIT_FILE ("program_isa.hex"),
+        .INIT_FILE (""),
         .BASE      (IMEM_BASE),
         .READ_LAT  (READ_LAT),
         .STALL_PROB(STALL_PROB),
@@ -141,8 +146,15 @@ rv32i_cpu_top #(
 
     // Load the independent trace and initialize the byte-addressed data memory.
     initial begin
-        $readmemh("program_isa_trace.hex", expected);
-        $readmemh("program_isa_mem.hex", expected_mem);
+        if (!$value$plusargs("isa=%s", prefix)) prefix = "program_isa";
+        #1;  // after the memory models have initialised their arrays
+        $readmemh({prefix, ".hex"}, imem.mem);
+        $readmemh({prefix, "_trace.hex"}, expected);
+        $readmemh({prefix, "_mem.hex"}, expected_mem);
+        $readmemh({prefix, "_count.hex"}, step_count);
+        isa_steps = step_count[0];
+        if (isa_steps < 1 || isa_steps > MAX_STEPS) $fatal(1, "ISA: bad step count %0d", isa_steps);
+        $display("ISA program %0s: %0d instructions", prefix, isa_steps);
         for (i = 0; i < 256; i = i + 1) dmem.mem[i] = 0;
         repeat (4) begin
             @(posedge clk);
@@ -157,16 +169,16 @@ rv32i_cpu_top #(
                       ? {27'b0, dut.dxwb_rd_q} : 32'b0;
     wire [31:0] actual_value = actual_rd != 0 ? dut.wb_data : 32'b0;
     always @(posedge clk) begin
-        if (rst_n && dut.dxwb_valid_q && step < ISA_STEPS) step <= step + 1;
+        if (rst_n && dut.dxwb_valid_q && step < isa_steps) step <= step + 1;
     end
     always @(posedge clk) begin
-        if (rst_n && dut.dxwb_valid_q && step < ISA_STEPS) begin
+        if (rst_n && dut.dxwb_valid_q && step < isa_steps) begin
             if ({dut.dxwb_pc4_q - 32'd4, actual_rd, actual_value} !== expected[step]) begin
                 $display("FAIL: ISA step=%0d expected=%024h got=%08h_%08h_%08h", step,
                          expected[step], dut.dxwb_pc4_q - 32'd4, actual_rd, actual_value);
                 errors = errors + 1;
             end
-            if (step == ISA_STEPS - 1) begin
+            if (step == isa_steps - 1) begin
                 for (i = 0; i < 256; i = i + 1)
                 if (dmem.mem[i] !== expected_mem[i]) begin
                     $display("FAIL: ISA memory word=%0d expected=%08h got=%08h", i,
@@ -174,7 +186,7 @@ rv32i_cpu_top #(
                     errors = errors + 1;
                 end
                 if (errors != 0) $fatal(1, "ISA: %0d mismatches", errors);
-                $display("== ISA TRACE: ALL TESTS PASSED (%0d instructions) ==", ISA_STEPS);
+                $display("== ISA TRACE: ALL TESTS PASSED (%0d instructions) ==", isa_steps);
                 finish_test;
             end
         end
