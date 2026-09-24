@@ -1,5 +1,5 @@
 onerror {quit -code 1 -f}
-# 22 runs; parameters are checked after elaboration.
+# 39 runs; parameters are checked after elaboration.
 do run_common.do
 do compile.do
 
@@ -15,6 +15,21 @@ run_case pic_tb_reset "pic_tb_reset"
 run_case rv32i_tb_reset "CPU asynchronous reset and stopped clock"
 run_case pic_tb_ro "pic_tb_ro"
 run_case pic_tb_status "pic_tb_status"
+
+# Constrained-random PIC traffic, each trace replayed through pic_model.py.
+# Python is $PYTHON when set, otherwise python3 (on Windows, python through cmd).
+if {[info exists ::env(PYTHON)]} {
+    set py [list $::env(PYTHON)]
+} elseif {$tcl_platform(platform) eq "windows"} {
+    set py [list cmd /c python]
+} else {
+    set py [list python3]
+}
+foreach seed {1 2 3 4} {
+    run_case pic_tb_random "PIC random traffic, seed $seed" +seed=$seed +cycles=20000
+    if {[catch {exec {*}$py pic_model.py pic_random.trace} out]} {echo $out; quit -code 1 -f}
+    echo $out
+}
 run_case mtimer_tb_regs "mtimer_tb_regs"
 run_case rv32i_tb_counters "counter write priority and carry"
 run_case rv32i_tb_csr_ro "rv32i_tb_csr_ro"
@@ -26,5 +41,14 @@ run_case rv32i_tb_isa "ISA reference: nominal"
 run_case rv32i_tb_isa "ISA reference: latency" -G/rv32i_tb_isa/READ_LAT=2
 run_case rv32i_tb_isa "ISA reference: backpressure 25%" -G/rv32i_tb_isa/STALL_PROB=25
 run_case rv32i_tb_isa "ISA reference: backpressure 40%" -G/rv32i_tb_isa/STALL_PROB=40
+
+# Ten constrained-random programs from isa_reference.py --random-set, then three
+# of them again at stressed bus timing.
+foreach seed {1 2 3 4 5 6 7 8 9 10} {
+    run_case rv32i_tb_isa "ISA random program $seed" +isa=program_isa_r$seed
+}
+run_case rv32i_tb_isa "ISA random program 1: latency" -G/rv32i_tb_isa/READ_LAT=2 +isa=program_isa_r1
+run_case rv32i_tb_isa "ISA random program 2: backpressure 25%" -G/rv32i_tb_isa/STALL_PROB=25 +isa=program_isa_r2
+run_case rv32i_tb_isa "ISA random program 3: backpressure 40%" -G/rv32i_tb_isa/STALL_PROB=40 +isa=program_isa_r3
 
 echo "REGRESSION PASS: $run_count runs"
