@@ -50,7 +50,6 @@ module soc_tb_pulp_regs;
         .rd_data_i      (rd_addr < 4 ? words[rd_addr[1:0]] : rd_addr == 4 ? 32'h13579BDF : 32'b0),
         .rd_ok_i        (rd_addr <= 4)
     );
-    // Required negative edge: active-low asynchronous reset only.
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             for (integer j = 0; j < 4; j++) words[j] <= 0;

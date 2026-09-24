@@ -49,7 +49,6 @@ module rv32i_tb_reset;
     assign db_rdata = 0;
     assign db_rresp = 0;
 
-    // Negative edge is required here only for the active-low asynchronous reset.
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             response_valid <= 0;
