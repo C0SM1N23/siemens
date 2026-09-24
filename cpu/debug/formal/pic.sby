@@ -1,0 +1,47 @@
+# PIC: invariants by induction (prove), stack consistency to depth 24 (stack),
+# reachability (cover).
+[tasks]
+prove
+stack
+cover
+
+[options]
+prove: mode prove
+prove: aigsmt z3
+stack: mode bmc
+stack: depth 24
+stack: aigsmt z3
+cover: mode cover
+cover: depth 20
+
+[engines]
+prove: abc pdr
+stack: abc bmc3
+cover: smtbmc z3
+
+[script]
+stack: read -define STACK
+read -formal axi_lite_slave.v
+read -formal pic.v
+read -formal pic_formal.sv
+prep -top pic_formal
+flatten
+connect -set h_depth \dut.depth
+connect -set h_nest_max \dut.nest_max
+connect -set h_active \dut.active
+connect -set h_spurious \dut.spurious
+connect -set h_sw_pend \dut.sw_pend
+connect -set h_eligible \dut.eligible
+connect -set h_req \dut.req
+connect -set h_int_enable \dut.int_enable
+connect -set h_reg_wr \dut.reg_wr
+connect -set h_offer_val \dut.offer_val
+connect -set h_reg_waddr \dut.reg_waddr
+connect -set h_reg_wdata \dut.reg_wdata
+connect -set h_reg_wstrb \dut.reg_wstrb
+connect -set h_res_id \dut.res_id
+
+[files]
+../../hdl/axi_lite_slave.v
+../../hdl/pic.v
+pic_formal.sv
