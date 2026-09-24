@@ -56,7 +56,7 @@ module mtimer_tb_regs;
     integer        first_read_cycle;
     integer        i;
     reg     [31:0] rd;
-    reg [31:0] a0, b0;
+    reg [31:0] a0, b0, cmp_lo;
     `include "tb_check.vh"
     `include "tb_axil_master.vh"
 
@@ -278,7 +278,8 @@ mtimer dut (
         if ($test$plusargs("verbose"))
             $display("           the compare cannot be satisfied and cannot false-fire");
         axil_read(MTIME_LO, RESP_OKAY);
-        axil_write(MTIMECMP_LO, rd + 32'd60, RESP_OKAY);
+        cmp_lo = rd + 32'd60;
+        axil_write(MTIMECMP_LO, cmp_lo, RESP_OKAY);
         check(32'd0, {31'b0, irq}, "  no false fire after writing only the low half");
         axil_write(MTIMECMP_HI, 32'h0000_0000, RESP_OKAY);
         if ($test$plusargs("verbose"))
@@ -290,6 +291,10 @@ mtimer dut (
             i = i + 1;
         end
         check(32'd1, {31'b0, irq}, "  irq rises when mtime reaches mtimecmp");
+        // irq is registered: it rises at the edge that takes mtime from mtimecmp
+        // to mtimecmp + 1. A compare that waited for mtime > mtimecmp would show
+        // mtimecmp + 2 here.
+        check(cmp_lo + 32'd1, dut.mtime_q[31:0], "  irq rises at mtime == mtimecmp, not a cycle later");
         if ($test$plusargs("verbose")) $display("           (fired after %0d cycles)", i);
 
         if ($test$plusargs("verbose"))
