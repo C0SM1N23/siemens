@@ -19,7 +19,11 @@
 module soc_lite_seq_master #(
     parameter [31:0] ADDR_A   = 32'h0000_0000,
     parameter [31:0] ADDR_B   = 32'h0000_1000,
-    parameter integer MAX_REC = 16
+    parameter integer MAX_REC = 16,
+    // After the fixed sequence, this many random transactions drawn from
+    // +pulp_seed=N. The draws depend only on the seed, never on timing, so two
+    // instances with the same seed issue the same sequence.
+    parameter integer RANDOM_TXNS = 0
 ) (
     input clk_i,
     input rst_n_i,
@@ -254,8 +258,107 @@ module soc_lite_seq_master #(
         issue_read(ADDR_B);
         take_read;
 
+        random_sequence;
+
         repeat (4) @(posedge clk_i);
         done_o = 1'b1;
     end
+
+    // Random addresses anywhere in the two 4 KiB windows, random data, and the
+    // same three shapes as above: a plain transaction, a read offered on top of
+    // an unread read response, and a write offered on top of one.
+    integer rseed;
+    function [31:0] draw;
+        input integer n;
+        draw = ($random(rseed) & 32'h7FFF_FFFF) % n;
+    endfunction
+    function [31:0] draw_addr;
+        input integer unused;
+        draw_addr = (draw(2) ? ADDR_B : ADDR_A) + {draw(1024), 2'b00};
+    endfunction
+
+    task random_sequence;
+        integer n, shape, gap;
+        reg [31:0] a, b, d;
+        reg w_first;
+        integer skew;
+        begin
+            if (!$value$plusargs("pulp_seed=%d", rseed)) rseed = 1;
+            for (n = 0; n < RANDOM_TXNS; n = n + 1) begin
+                shape = draw(4);
+                a = draw_addr(0);
+                b = draw_addr(0);
+                d = $random(rseed);
+                w_first = draw(2);
+                skew = draw(3);
+                gap = 1 + draw(4);
+                case (shape)
+                    0: begin
+                        issue_read(a);
+                        take_read;
+                    end
+                    1: begin
+                        issue_write(a, d, w_first, skew);
+                        take_write;
+                    end
+                    2: begin  // a second read offered while the first response waits
+                        issue_read(a);
+                        repeat (gap) begin
+                            @(posedge clk_i);
+                            #1;
+                        end
+                        araddr_o  = b;
+                        arvalid_o = 1'b1;
+                        repeat (gap) begin
+                            @(posedge clk_i);
+                            #1;
+                        end
+                        take_read;
+                        @(posedge clk_i);
+                        while (!arready_i) @(posedge clk_i);
+                        #1;
+                        arvalid_o = 1'b0;
+                        take_read;
+                    end
+                    default: begin  // a write offered while a read response waits
+                        issue_read(a);
+                        repeat (gap) begin
+                            @(posedge clk_i);
+                            #1;
+                        end
+                        fork
+                            begin
+                                awaddr_o  = b;
+                                wdata_o   = d;
+                                wstrb_o   = 4'hF;
+                                awvalid_o = 1'b1;
+                                wvalid_o  = 1'b1;
+                            end
+                            begin
+                                @(posedge clk_i);
+                                while (!(awvalid_o && awready_i)) @(posedge clk_i);
+                                #1;
+                                awvalid_o = 1'b0;
+                            end
+                            begin
+                                @(posedge clk_i);
+                                while (!(wvalid_o && wready_i)) @(posedge clk_i);
+                                #1;
+                                wvalid_o = 1'b0;
+                            end
+                            begin
+                                repeat (gap) begin
+                                    @(posedge clk_i);
+                                    #1;
+                                end
+                                take_read;
+                            end
+                        join
+                        take_write;
+                    end
+                endcase
+            end
+        end
+    endtask
 
 endmodule

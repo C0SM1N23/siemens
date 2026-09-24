@@ -77,9 +77,14 @@ for TOP in soc_tb_pulp_compare soc_tb_pulp_regs; do
         "../hdl/$TOP.sv" \
         > "build_$TOP.log" 2>&1 || { tail -60 "build_$TOP.log"; exit 1; }
 
-    "./obj_dir/$TOP/V$TOP" "$@" 2>&1 | tee "run_$TOP.log"
-
-    grep -q 'ALL TESTS PASSED' "run_$TOP.log" || { echo "FAIL: comparison did not pass"; exit 1; }
-    grep -Eq '%Error|FAIL:' "run_$TOP.log" && { echo "FAIL: errors in the comparison run"; exit 1; }
+    # The decoder comparison runs its fixed sequence and then 300 random
+    # transactions, once per seed; the register comparison is exhaustive.
+    SEEDS=(1)
+    [ "$TOP" = soc_tb_pulp_compare ] && SEEDS=(1 2 3 4 5 6 7 8 9 10)
+    for seed in "${SEEDS[@]}"; do
+        "./obj_dir/$TOP/V$TOP" "+pulp_seed=$seed" "$@" 2>&1 | tee "run_$TOP.log"
+        grep -q 'ALL TESTS PASSED' "run_$TOP.log" || { echo "FAIL: comparison did not pass (seed $seed)"; exit 1; }
+        grep -Eq '%Error|FAIL:' "run_$TOP.log" && { echo "FAIL: errors in the comparison run (seed $seed)"; exit 1; }
+    done
 done
-echo "PULP COMPARISON PASS: decoder and register slave"
+echo "PULP COMPARISON PASS: decoder over 10 random seeds, and register slave"

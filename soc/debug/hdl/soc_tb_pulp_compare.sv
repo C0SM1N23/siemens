@@ -30,7 +30,9 @@
 module soc_tb_pulp_compare;
 
     localparam integer N = 2;
-    localparam integer MAX_REC = 16;
+    // the fixed sequence (at most 16 records) and RANDOM_TXNS random ones (at most two each)
+    localparam integer RANDOM_TXNS = 300;
+    localparam integer MAX_REC = 16 + 2 * RANDOM_TXNS;
     localparam [31:0] ADDR_A = 32'h0000_0000;
     localparam [31:0] ADDR_B = 32'h0000_1000;
     localparam [31:0] WIN_MASK = 32'hFFFF_F000;
@@ -62,7 +64,8 @@ module soc_tb_pulp_compare;
     soc_lite_seq_master #(
         .ADDR_A (ADDR_A),
         .ADDR_B (ADDR_B),
-        .MAX_REC(MAX_REC)
+        .MAX_REC(MAX_REC),
+        .RANDOM_TXNS(RANDOM_TXNS)
     ) seq_a (
         .clk_i      (clk),
         .rst_n_i    (rst_n),
@@ -157,7 +160,8 @@ module soc_tb_pulp_compare;
     soc_lite_seq_master #(
         .ADDR_A (ADDR_A),
         .ADDR_B (ADDR_B),
-        .MAX_REC(MAX_REC)
+        .MAX_REC(MAX_REC),
+        .RANDOM_TXNS(RANDOM_TXNS)
     ) seq_b (
         .clk_i      (clk),
         .rst_n_i    (rst_n),
@@ -300,7 +304,7 @@ module soc_tb_pulp_compare;
     endgenerate
 
     // ----------------------------------------------------------- comparison
-    integer i;
+    integer i, reads;
 
     initial begin
         $display("== SoC DECODER vs pulp-platform/axi axi_lite_demux (MaxTrans=1) ==");
@@ -337,10 +341,11 @@ module soc_tb_pulp_compare;
                          a_ar_cnt[i], b_ar_cnt[i], a_aw_cnt[i], b_aw_cnt[i]);
         end
 
-        // the sequence reads A three times and B four times; if either side had
-        // re-pointed a route the totals would move between the slaves
-        check(32'd3, a_ar_cnt[0], "ours: slave 0 saw its three reads");
-        check(32'd4, a_ar_cnt[1], "ours: slave 1 saw its four reads");
+        // every completed read reached exactly one slave once, on both sides
+        reads = 0;
+        for (i = 0; i < a_rec_count; i = i + 1) if (a_rec_kind[i*2+:2] == 2'd0) reads = reads + 1;
+        check(reads, a_ar_cnt[0] + a_ar_cnt[1], "ours: one slave read per completed read");
+        check(reads, b_ar_cnt[0] + b_ar_cnt[1], "upstream: one slave read per completed read");
 
         if (errors == 0) $display("\n== PULP COMPARISON: ALL TESTS PASSED ==");
         else $display("\n== PULP COMPARISON: %0d MISMATCH(ES) ==", errors);
@@ -364,7 +369,7 @@ module soc_tb_pulp_compare;
     endtask
 
     initial begin
-        #50000;
+        #5000000;
         $display("\n== PULP COMPARISON: TIMED OUT (ours done=%0b upstream done=%0b) ==", a_done,
                  b_done);
         dump("ours", a_rec_count, a_rec_kind, a_rec_data, a_rec_resp);
